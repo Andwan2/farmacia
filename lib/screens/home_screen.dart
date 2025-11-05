@@ -5,77 +5,111 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  Future<Map<String, String>> fetchEmpleadoInfo() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return {'nombre': 'Empleado', 'cargo': 'Desconocido'};
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Farmacia R')),
+      drawer: const SideMenu(),
+      body: const Center(child: Text('Selecciona una opción del menú')),
+    );
+  }
+}
 
-    // Paso 1: obtener id_empleado desde Usuario
-    final usuario = await Supabase.instance.client
-        .from('Usuario')
-        .select('id_empleado')
-        .eq('id_usuario', userId)
-        .single();
+class SideMenu extends StatefulWidget {
+  const SideMenu({super.key});
 
-    final idEmpleado = usuario['id_empleado'];
-    if (idEmpleado == null) return {'nombre': 'Empleado', 'cargo': 'Desconocido'};
+  @override
+  State<SideMenu> createState() => _SideMenuState();
+}
 
-    // Paso 2: obtener nombre y cargo desde Empleado
-    final empleado = await Supabase.instance.client
-        .from('Empleado')
-        .select('Nombre_Empleado, id_cargo_empleado')
-        .eq('id_empleado', idEmpleado)
-        .single();
+class _SideMenuState extends State<SideMenu> {
+  final Map<String, bool> expanded = {
+    'Inventario': false,
+    'Ventas': false,
+    'Compras': false,
+    'Proveedores': false,
+    'Clientes': false,
+    'Empleados': false,
+    'Reportes': false,
+  };
 
-    final nombre = empleado['Nombre_Empleado'] ?? 'Empleado';
-    final idCargo = empleado['id_cargo_empleado'];
-
-    // Paso 3: obtener nombre del cargo
-    final cargoData = await Supabase.instance.client
-        .from('Cargo_Empleado')
-        .select('Cargo')
-        .eq('id_cargo_empleado', idCargo)
-        .single();
-
-    final cargo = cargoData['Cargo'] ?? 'Desconocido';
-
-    return {'nombre': nombre, 'cargo': cargo};
+  void toggle(String key) {
+    setState(() {
+      expanded[key] = !(expanded[key] ?? false);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pantalla Principal'),
-        actions: [
-          FutureBuilder<Map<String, String>>(
-            future: fetchEmpleadoInfo(),
-            builder: (context, snapshot) {
-              final nombre = snapshot.data?['nombre'] ?? 'Empleado';
-              final cargo = snapshot.data?['cargo'] ?? 'Desconocido';
-
-              return Row(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Text('$nombre ($cargo)', style: const TextStyle(fontSize: 16)),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.logout),
-                    tooltip: 'Cerrar sesión',
-                    onPressed: () async {
-                      await Supabase.instance.client.auth.signOut();
-                      context.go('/login');
-                    },
-                  ),
-                ],
-              );
+    return Drawer(
+      child: ListView(
+        padding: const EdgeInsets.all(8),
+        children: [
+          const DrawerHeader(child: Text('Menú Principal')),
+          buildSection('Inventario', [
+            ('Ver inventario', '/inventario/ver'),
+            ('Agregar productos', '/inventario/agregar'),
+            ('Actualizar stock', '/inventario/actualizar'),
+          ]),
+          buildSection('Ventas', [
+            ('Movimientos de venta', '/ventas/movimientos'),
+            ('Nueva venta', '/ventas/nueva'),
+          ]),
+          buildSection('Compras', [
+            ('Historial de compras', '/compras/historial'),
+            ('Nueva compra', '/compras/nueva'),
+          ]),
+          buildSection('Proveedores', [
+            ('Detalles de proveedor', '/proveedores/detalles'),
+            ('Historial de compras', '/proveedores/historial'),
+          ]),
+          buildSection('Clientes', [
+            ('Registrar cliente', '/clientes/registrar'),
+            ('Editar cliente', '/clientes/editar'),
+            ('Historial de compras', '/clientes/historial'),
+          ]),
+          buildSection('Empleados', [
+            ('Registrar empleado', '/empleados/registrar'),
+            ('Editar empleado', '/empleados/editar'),
+            ('Control de accesos', '/empleados/accesos'),
+          ]),
+          buildSection('Reportes', [
+            ('Reporte de venta', '/reportes/ventas'),
+            ('Reporte de compras', '/reportes/compras'),
+            ('Alertas de stock bajo', '/reportes/stock'),
+            ('Alertas generales', '/reportes/alertas'),
+          ]),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('Cerrar sesión'),
+            onTap: () async {
+              await Supabase.instance.client.auth.signOut();
+              Navigator.pop(context); // Cierra el Drawer
+              context.go('/login');   // Redirige al login
             },
           ),
         ],
       ),
-      body: const Center(
-        child: Text('Bienvenido al sistema de farmacia'),
-      ),
+    );
+  }
+
+  Widget buildSection(String title, List<(String, String)> items) {
+    final isOpen = expanded[title] ?? false;
+    return ExpansionTile(
+      title: Text(title),
+      initiallyExpanded: isOpen,
+      onExpansionChanged: (_) => toggle(title),
+      children: items.map((item) {
+        final (label, route) = item;
+        return ListTile(
+          title: Text(label),
+          onTap: () {
+            Navigator.pop(context); // Cierra el Drawer
+            context.go(route);      // Navega a la ruta
+          },
+        );
+      }).toList(),
     );
   }
 }
