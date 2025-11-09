@@ -47,37 +47,37 @@ class _SideMenuState extends State<SideMenu> {
         children: [
           const DrawerHeader(child: Text('Menú Principal')),
           buildSection('Inventario', [
-            ('Ver inventario', '/inventario/ver'),
-            ('Agregar productos', '/inventario/agregar'),
-            ('Actualizar stock', '/inventario/actualizar'),
+            MenuItem(label: 'Ver inventario', route: '/inventario/ver'),
+            MenuItem(label: 'Agregar productos', route: '/inventario/agregar'),
+            MenuItem(label: 'Actualizar stock', route: '/inventario/actualizar'),
           ]),
           buildSection('Ventas', [
-            ('Movimientos de venta', '/ventas/movimientos'),
-            ('Nueva venta', '/ventas/nueva'),
+            MenuItem(label: 'Movimientos de venta', route: '/ventas/movimientos'),
+            MenuItem(label: 'Nueva venta', route: '/ventas/nueva'),
           ]),
           buildSection('Compras', [
-            ('Historial de compras', '/compras/historial'),
-            ('Nueva compra', '/compras/nueva'),
+            MenuItem(label: 'Historial de compras', route: '/compras/historial'),
+            MenuItem(label: 'Nueva compra', route: '/compras/nueva'),
           ]),
           buildSection('Proveedores', [
-            ('Detalles de proveedor', '/proveedores/detalles'),
-            ('Historial de compras', '/proveedores/historial'),
+            MenuItem(label: 'Detalles de proveedor', route: '/proveedores/detalles'),
+            MenuItem(label: 'Historial de compras', route: '/proveedores/historial'),
           ]),
           buildSection('Clientes', [
-            ('Registrar cliente', '/clientes/registrar'),
-            ('Editar cliente', '/clientes/editar'),
-            ('Historial de compras', '/clientes/historial'),
+            MenuItem(label: 'Registrar cliente', route: '/clientes/registrar'),
+            MenuItem(label: 'Editar cliente', route: '/clientes/editar'),
+            MenuItem(label: 'Historial de compras', route: '/clientes/historial'),
           ]),
           buildSection('Empleados', [
-            ('Registrar empleado', '/empleados/registrar'),
-            ('Editar empleado', '/empleados/editar'),
-            ('Control de accesos', '/empleados/accesos'),
+            MenuItem(label: 'Registrar empleado', route: '/empleados/registrar'),
+            MenuItem(label: 'Editar empleado', route: '/empleados/editar'),
+            MenuItem(label: 'Control de accesos', route: '/empleados/accesos'),
           ]),
           buildSection('Reportes', [
-            ('Reporte de venta', '/reportes/ventas'),
-            ('Reporte de compras', '/reportes/compras'),
-            ('Alertas de stock bajo', '/reportes/stock'),
-            ('Alertas generales', '/reportes/alertas'),
+            MenuItem(label: 'Reporte de venta', route: '/reportes/ventas'),
+            MenuItem(label: 'Reporte de compras', route: '/reportes/compras'),
+            MenuItem(label: 'Alertas de stock bajo', route: '/reportes/stock'),
+            MenuItem(label: 'Alertas generales', route: '/reportes/alertas'),
           ]),
           const Divider(),
           ListTile(
@@ -94,22 +94,29 @@ class _SideMenuState extends State<SideMenu> {
     );
   }
 
-  Widget buildSection(String title, List<(String, String)> items) {
+  Widget buildSection(String title, List<MenuItem> items) {
     final isOpen = expanded[title] ?? false;
     return ExpansionTile(
       title: Text(title),
       initiallyExpanded: isOpen,
       onExpansionChanged: (_) => toggle(title),
       children: items.map((item) {
-        final (label, route) = item;
         return ListTile(
-          title: Text(label),
+          title: Text(item.label),
           onTap: () {
             Navigator.pop(context); // Cierra el Drawer
-            context.go(route);      // Navega a la ruta
+            context.go(item.route);      // Navega a la ruta
           },
         );
       }).toList(),
     );
   }
 }
+
+class MenuItem {
+  final String label;
+  final String route;
+
+  MenuItem({required this.label, required this.route});
+}
+

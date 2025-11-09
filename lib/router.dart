@@ -29,12 +29,14 @@ final GoRouter router = GoRouter(
   routes: <RouteBase>[
     GoRoute(
       path: '/login',
+      name: 'login',
       builder: (BuildContext context, GoRouterState state) {
         return const LoginScreen();
       },
     ),
     GoRoute(
       path: '/home',
+      name: 'home',
       builder: (BuildContext context, GoRouterState state) {
         return const HomeScreen();
       },
@@ -43,18 +45,21 @@ final GoRouter router = GoRouter(
     // 📦 Rutas del módulo Inventario
     GoRoute(
       path: '/inventario/ver',
+      name: 'inventario-ver',
       builder: (BuildContext context, GoRouterState state) {
         return const InventarioVerScreen();
       },
     ),
     GoRoute(
       path: '/inventario/agregar',
+      name: 'inventario-agregar',
       builder: (BuildContext context, GoRouterState state) {
         return const InventarioAgregarScreen();
       },
     ),
     GoRoute(
       path: '/inventario/actualizar',
+      name: 'inventario-actualizar',
       builder: (BuildContext context, GoRouterState state) {
         return const InventarioActualizarScreen();
       },

@@ -6,7 +6,8 @@ class InventarioAgregarScreen extends StatefulWidget {
   const InventarioAgregarScreen({super.key});
 
   @override
-  State<InventarioAgregarScreen> createState() => _InventarioAgregarScreenState();
+  State<InventarioAgregarScreen> createState() =>
+      _InventarioAgregarScreenState();
 }
 
 class _InventarioAgregarScreenState extends State<InventarioAgregarScreen> {
@@ -15,6 +16,7 @@ class _InventarioAgregarScreenState extends State<InventarioAgregarScreen> {
   final precioController = TextEditingController();
   final stockController = TextEditingController();
   final fechaController = TextEditingController();
+  final formKey = GlobalKey<FormState>();
   final supabase = Supabase.instance.client;
 
   Future<void> seleccionarFecha() async {
@@ -31,32 +33,29 @@ class _InventarioAgregarScreenState extends State<InventarioAgregarScreen> {
   }
 
   Future<void> agregarProducto() async {
-    final nombre = nombreController.text.trim();
-    final presentacion = presentacionController.text.trim();
-    final precio = double.tryParse(precioController.text.trim());
-    final stock = int.tryParse(stockController.text.trim());
-    final fechaVencimiento = fechaController.text.trim();
-
-    if (nombre.isEmpty || presentacion.isEmpty || fechaVencimiento.isEmpty || precio == null || stock == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Todos los campos son obligatorios y deben tener formato válido')),
-      );
+    if (!formKey.currentState!.validate()) {
       return;
     }
+
+    final nombre = nombreController.text.trim();
+    final presentacion = presentacionController.text.trim();
+    final precio = double.parse(precioController.text.trim());
+    final stock = int.parse(stockController.text.trim());
+    final fechaVencimiento = fechaController.text.trim();
 
     try {
       DateTime.parse(fechaVencimiento);
 
-      final inventarioRes = await supabase
-          .from('inventario')
-          .insert({
-            'stock': stock,
-            'presentacion': presentacion,
-            'fecha_vencimiento': fechaVencimiento,
-          })
-          .select();
+      final inventarioRes = await supabase.from('inventario').insert({
+        'stock': stock,
+        'presentacion': presentacion,
+        'fecha_vencimiento': fechaVencimiento,
+      }).select();
 
-      if (inventarioRes == null || inventarioRes.isEmpty || inventarioRes.first['id_inventario'] == null) {
+      if (inventarioRes == null ||
+          inventarioRes.isEmpty ||
+          inventarioRes.first['id_inventario'] == null) {
+        formKey.currentState?.reset();
         throw Exception('Error al insertar inventario');
       }
 
@@ -77,14 +76,14 @@ class _InventarioAgregarScreenState extends State<InventarioAgregarScreen> {
       );
 
       if (mounted) {
-        Navigator.pop(context);
+        context.goNamed('inventario-ver');
       }
     } catch (e) {
       debugPrint('Error al agregar producto: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
       }
     }
   }
@@ -104,23 +103,90 @@ class _InventarioAgregarScreenState extends State<InventarioAgregarScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
-          children: [
-            TextField(controller: nombreController, decoration: const InputDecoration(labelText: 'Nombre')),
-            TextField(controller: presentacionController, decoration: const InputDecoration(labelText: 'Presentación')),
-            TextField(controller: precioController, decoration: const InputDecoration(labelText: 'Precio')),
-            TextField(controller: stockController, decoration: const InputDecoration(labelText: 'Stock inicial')),
-            TextField(
-              controller: fechaController,
-              readOnly: true,
-              decoration: const InputDecoration(labelText: 'Fecha de vencimiento'),
-              onTap: seleccionarFecha,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(onPressed: agregarProducto, child: const Text('Guardar')),
-          ],
+      body: Form(
+        autovalidateMode: AutovalidateMode.onUnfocus,
+        key: formKey,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: ListView(
+            children: [
+              TextFormField(
+                controller: nombreController,
+                decoration: const InputDecoration(labelText: 'Nombre'),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'El nombre es obligatorio';
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: presentacionController,
+                decoration: const InputDecoration(labelText: 'Presentación'),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'La presentación es obligatoria';
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: precioController,
+                decoration: const InputDecoration(labelText: 'Precio'),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'El precio es obligatorio';
+                  }
+                  final precio = double.tryParse(value.trim());
+                  if (precio == null) {
+                    return 'El precio debe ser un número válido';
+                  }
+                  if (precio <= 0) {
+                    return 'El precio debe ser mayor a 0';
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: stockController,
+                decoration: const InputDecoration(labelText: 'Stock inicial'),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'El stock es obligatorio';
+                  }
+                  final stock = int.tryParse(value.trim());
+                  if (stock == null) {
+                    return 'El stock debe ser un número entero válido';
+                  }
+                  if (stock < 0) {
+                    return 'El stock no puede ser negativo';
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: fechaController,
+                readOnly: true,
+                decoration: const InputDecoration(
+                  labelText: 'Fecha de vencimiento',
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'La fecha de vencimiento es obligatoria';
+                  }
+                  return null;
+                },
+                onTap: seleccionarFecha,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: agregarProducto,
+                child: const Text('Guardar'),
+              ),
+            ],
+          ),
         ),
       ),
     );

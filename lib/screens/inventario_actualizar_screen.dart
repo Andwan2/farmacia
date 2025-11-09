@@ -18,7 +18,7 @@ class _InventarioActualizarScreenState extends State<InventarioActualizarScreen>
         .select('id_productos, nombre_producto, inventario(stock)')
         .execute();
 
-    if (response.error == null && response.data != null) {
+    if (response != null && response.error == null && response.data != null) {
       setState(() {
         productos = List<Map<String, dynamic>>.from(response.data);
       });
