@@ -1,8 +1,12 @@
-import 'package:farmacia_desktop/screens/login_screen.dart';
-import 'package:farmacia_desktop/screens/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:farmacia_desktop/screens/login_screen.dart';
+import 'package:farmacia_desktop/screens/home_screen.dart';
+import 'package:farmacia_desktop/screens/inventario_ver_screen.dart';
+import 'package:farmacia_desktop/screens/inventario_agregar_screen.dart';
+import 'package:farmacia_desktop/screens/inventario_actualizar_screen.dart';
 
 final GoRouter router = GoRouter(
   initialLocation: '/login',
@@ -33,6 +37,26 @@ final GoRouter router = GoRouter(
       path: '/home',
       builder: (BuildContext context, GoRouterState state) {
         return const HomeScreen();
+      },
+    ),
+
+    // 📦 Rutas del módulo Inventario
+    GoRoute(
+      path: '/inventario/ver',
+      builder: (BuildContext context, GoRouterState state) {
+        return const InventarioVerScreen();
+      },
+    ),
+    GoRoute(
+      path: '/inventario/agregar',
+      builder: (BuildContext context, GoRouterState state) {
+        return const InventarioAgregarScreen();
+      },
+    ),
+    GoRoute(
+      path: '/inventario/actualizar',
+      builder: (BuildContext context, GoRouterState state) {
+        return const InventarioActualizarScreen();
       },
     ),
   ],
