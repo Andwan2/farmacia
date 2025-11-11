@@ -52,11 +52,9 @@ class _SideMenuState extends State<SideMenu> {
             ('Actualizar stock', '/inventario/actualizar'),
           ]),
           buildSection('Ventas', [
-            ('Movimientos de venta', '/ventas/movimientos'),
-            ('Nueva venta', '/ventas/nueva'),
+            ('Nueva venta', '/ventas/registrar'),
           ]),
           buildSection('Compras', [
-            ('Historial de compras', '/compras/historial'),
             ('Nueva compra', '/compras/nueva'),
           ]),
           buildSection('Proveedores', [

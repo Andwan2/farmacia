@@ -78,9 +78,6 @@ class _InventarioAgregarScreenState extends State<InventarioAgregarScreen> {
         const SnackBar(content: Text('Producto agregado correctamente')),
       );
 
-      if (mounted) {
-        Navigator.pop(context);
-      }
     } catch (e) {
       debugPrint('Error al agregar producto: $e');
       if (mounted) {

@@ -7,6 +7,8 @@ import 'package:farmacia_desktop/screens/home_screen.dart';
 import 'package:farmacia_desktop/screens/inventario_ver_screen.dart';
 import 'package:farmacia_desktop/screens/inventario_agregar_screen.dart';
 import 'package:farmacia_desktop/screens/inventario_actualizar_screen.dart';
+import 'package:farmacia_desktop/screens/ventas_registrar_screen.dart';
+
 
 final GoRouter router = GoRouter(
   initialLocation: '/login',
@@ -57,6 +59,13 @@ final GoRouter router = GoRouter(
       path: '/inventario/actualizar',
       builder: (BuildContext context, GoRouterState state) {
         return const InventarioActualizarScreen();
+      },
+    ),
+    // 🧾 Ruta del módulo Ventas
+    GoRoute(
+      path: '/ventas/registrar',
+      builder: (BuildContext context, GoRouterState state) {
+        return const VentasRegistrarScreen();
       },
     ),
   ],

@@ -19,6 +19,6 @@ class AuthService {
 
   Future<Map<String, dynamic>> obtenerUsuarioActual() async {
     final userId = supabase.auth.currentUser?.id;
-    return await supabase.from('usuarios').select().eq('id_usuario', userId).single();
+    return await supabase.from('usuarios').select().eq('id_usuario', userId as Object).single();
   }
 }
