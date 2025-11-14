@@ -58,13 +58,11 @@ class _SideMenuState extends State<SideMenu> {
             ('Nueva compra', '/compras/nueva'),
           ]),
           buildSection('Proveedores', [
-            ('Detalles de proveedor', '/proveedores/detalles'),
-            ('Historial de compras', '/proveedores/historial'),
+            ('Registrar proveedor', '/proveedores/registrar_proveedor'),
+            ('Editar proveedor', '/proveedores/editar_proveedor'),
           ]),
           buildSection('Clientes', [
-            ('Registrar cliente', '/clientes/registrar'),
-            ('Editar cliente', '/clientes/editar'),
-            ('Historial de compras', '/clientes/historial'),
+            ('Registrar cliente', '/clientes/info'),
           ]),
           buildSection('Empleados', [
             ('Registrar empleado', '/empleados/registrar'),
