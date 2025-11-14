@@ -191,13 +191,9 @@ class _ReporteComprasScreenState extends State<ReporteComprasScreen> {
                           title: Text('Proveedor: ${compra['proveedores']['nombre_proveedor']}'),
                           subtitle: Text(
                               'Fecha: ${compra['fecha_compra'].split('T')[0]} | Total: \$${compra['total_compra'] }'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.info_outline),
-                            tooltip: 'Ver detalles',
-                            onPressed: () {
-                              context.go('/reportes/compras/detalle/${compra['id_compras']}');
-                            },
-                          ),
+                          onTap: () => {
+                            context.go('/reportes/compras/detalle/${compra['id_compras']}')
+                          },
                         ),
                       );
                     },

@@ -74,8 +74,5 @@ final GoRouter router = GoRouter(
         return DetalleCompraScreen(idCompra: id);
       },
     ),
-
-
-
   ],
 );
