@@ -191,15 +191,6 @@ class _VentasRegistrarScreenState extends State<VentasRegistrarScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Registrar venta'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.home),
-            tooltip: 'Volver al Home',
-            onPressed: () {
-              context.go('/home');
-            },
-          ),
-        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(12),

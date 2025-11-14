@@ -297,13 +297,6 @@ class _InventarioScreenState extends State<InventarioScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Inventario'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.home),
-            tooltip: 'Volver al Home',
-            onPressed: () => context.go('/home'),
-          ),
-        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add),

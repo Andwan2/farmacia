@@ -51,7 +51,7 @@ class _DetalleCompraScreenState extends State<DetalleCompraScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           tooltip: 'Volver al reporte',
-          onPressed: () => context.go('/reportes/compras'),
+          onPressed: () => Navigator.pop(context)
         ),
       ),
       body: compraInfo == null

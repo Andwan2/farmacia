@@ -107,13 +107,6 @@ class _ReporteComprasScreenState extends State<ReporteComprasScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reporte de compras'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.home),
-            tooltip: 'Volver al Home',
-            onPressed: () => context.go('/home'),
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -192,7 +185,7 @@ class _ReporteComprasScreenState extends State<ReporteComprasScreen> {
                           subtitle: Text(
                               'Fecha: ${compra['fecha_compra'].split('T')[0]} | Total: \$${compra['total_compra'] }'),
                           onTap: () => {
-                            context.go('/reportes/compras/detalle/${compra['id_compras']}')
+                            context.push('/reportes/compras/detalle/${compra['id_compras']}')
                           },
                         ),
                       );

@@ -107,13 +107,6 @@ class _ReporteVentasScreenState extends State<ReporteVentasScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reporte de ventas'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.home),
-            tooltip: 'Volver al Home',
-            onPressed: () => context.go('/home'),
-          ),
-        ],
       ),
       body: Column(
         children: [

@@ -47,30 +47,26 @@ class _SideMenuState extends State<SideMenu> {
         children: [
           const DrawerHeader(child: Text('Menú Principal')),
           buildSection('Inventario', [
-            ('Ver inventario', '/inventario/info'),
+            ('Ver inventario', '/inventario'),
           ]),
           buildSection('Ventas', [
-            ('Nueva venta', '/ventas/registrar'),
+            ('Nueva venta', '/venta'),
           ]),
           buildSection('Compras', [
-            ('Nueva compra', '/compras/nueva'),
+            ('Nueva compra', '/compra'),
           ]),
           buildSection('Proveedores', [
-            ('Registrar proveedor', '/proveedores/info'),
+            ('Registrar proveedor', '/proveedores'),
           ]),
           buildSection('Clientes', [
-            ('Registrar cliente', '/clientes/info'),
+            ('Registrar cliente', '/clientes'),
           ]),
           buildSection('Empleados', [
-            ('Registrar empleado', '/empleados/registrar'),
-            ('Editar empleado', '/empleados/editar'),
-            ('Control de accesos', '/empleados/accesos'),
+            ('Empleados', '/empleados'),
           ]),
           buildSection('Reportes', [
-            ('Reporte de venta', '/reportes/ventas'),
-            ('Reporte de compras', '/reportes/compras'),
-            ('Alertas de stock bajo', '/reportes/stock'),
-            ('Alertas generales', '/reportes/alertas'),
+            ('Reporte de venta', '/reporteVenta'),
+            ('Reporte de compras', '/reporteCompra'),
           ]),
           const Divider(),
           ListTile(
@@ -90,6 +86,7 @@ class _SideMenuState extends State<SideMenu> {
   Widget buildSection(String title, List<(String, String)> items) {
     final isOpen = expanded[title] ?? false;
     return ExpansionTile(
+      
       title: Text(title),
       initiallyExpanded: isOpen,
       onExpansionChanged: (_) => toggle(title),
@@ -99,7 +96,7 @@ class _SideMenuState extends State<SideMenu> {
           title: Text(label),
           onTap: () {
             Navigator.pop(context); // Cierra el Drawer
-            context.go(route);      // Navega a la ruta
+            context.push(route);      // Navega a la ruta    
           },
         );
       }).toList(),

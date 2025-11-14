@@ -159,13 +159,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gestión de proveedores'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.home),
-            tooltip: 'Volver al Home',
-            onPressed: () => context.go('/home'),
-          ),
-        ],
+        
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.person_add),

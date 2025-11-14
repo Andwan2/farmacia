@@ -154,13 +154,6 @@ class _ClientesScreenState extends State<ClientesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gestión de clientes'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.home),
-            tooltip: 'Volver al Home',
-            onPressed: () => context.go('/home'),
-          ),
-        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.person_add),
