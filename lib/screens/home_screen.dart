@@ -47,9 +47,7 @@ class _SideMenuState extends State<SideMenu> {
         children: [
           const DrawerHeader(child: Text('Menú Principal')),
           buildSection('Inventario', [
-            ('Ver inventario', '/inventario/ver'),
-            ('Agregar productos', '/inventario/agregar'),
-            ('Actualizar stock', '/inventario/actualizar'),
+            ('Ver inventario', '/inventario/info'),
           ]),
           buildSection('Ventas', [
             ('Nueva venta', '/ventas/registrar'),
@@ -58,8 +56,7 @@ class _SideMenuState extends State<SideMenu> {
             ('Nueva compra', '/compras/nueva'),
           ]),
           buildSection('Proveedores', [
-            ('Registrar proveedor', '/proveedores/registrar_proveedor'),
-            ('Editar proveedor', '/proveedores/editar_proveedor'),
+            ('Registrar proveedor', '/proveedores/info'),
           ]),
           buildSection('Clientes', [
             ('Registrar cliente', '/clientes/info'),

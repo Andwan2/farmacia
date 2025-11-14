@@ -2,91 +2,91 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class ClientesScreen extends StatefulWidget {
-  const ClientesScreen({super.key});
+class ProveedoresScreen extends StatefulWidget {
+  const ProveedoresScreen({super.key});
 
   @override
-  State<ClientesScreen> createState() => _ClientesScreenState();
+  State<ProveedoresScreen> createState() => _ProveedoresScreenState();
 }
 
-class _ClientesScreenState extends State<ClientesScreen> {
+class _ProveedoresScreenState extends State<ProveedoresScreen> {
   final supabase = Supabase.instance.client;
   final searchController = TextEditingController();
 
-  List<Map<String, dynamic>> clientes = [];
-  List<Map<String, dynamic>> clientesFiltrados = [];
+  List<Map<String, dynamic>> proveedores = [];
+  List<Map<String, dynamic>> proveedoresFiltrados = [];
 
-  Future<void> cargarClientes() async {
+  Future<void> cargarProveedores() async {
     final data = await supabase
-        .from('clientes')
-        .select('id_cliente, nombre_cliente, numero_telefono');
+        .from('proveedores')
+        .select('id_proveedor, nombre_proveedor, ruc_proveedor');
     setState(() {
-      clientes = List<Map<String, dynamic>>.from(data);
-      clientesFiltrados = clientes;
+      proveedores = List<Map<String, dynamic>>.from(data);
+      proveedoresFiltrados = proveedores;
     });
   }
 
-  Future<void> registrarCliente(String nombre, String telefono) async {
+  Future<void> registrarProveedor(String nombre, String ruc) async {
     try {
-      await supabase.from('clientes').insert({
-        'nombre_cliente': nombre,
-        'numero_telefono': telefono,
+      await supabase.from('proveedores').insert({
+        'nombre_proveedor': nombre,
+        'ruc_proveedor': ruc,
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cliente registrado correctamente')),
+        const SnackBar(content: Text('Proveedor registrado correctamente')),
       );
 
-      await cargarClientes();
-      filtrarClientes(searchController.text); // mantener filtro activo
+      await cargarProveedores();
+      filtrarProveedores(searchController.text);
     } catch (e) {
-      debugPrint('Error al registrar cliente: $e');
+      debugPrint('Error al registrar proveedor: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al registrar cliente')),
+        const SnackBar(content: Text('Error al registrar proveedor')),
       );
     }
   }
 
-  Future<void> editarCliente(String id, String nombre, String telefono) async {
+  Future<void> editarProveedor(String id, String nombre, String ruc) async {
     try {
-      await supabase.from('clientes').update({
-        'nombre_cliente': nombre,
-        'numero_telefono': telefono,
-      }).eq('id_cliente', id);
+      await supabase.from('proveedores').update({
+        'nombre_proveedor': nombre,
+        'ruc_proveedor': ruc,
+      }).eq('id_proveedor', id);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cliente actualizado correctamente')),
+        const SnackBar(content: Text('Proveedor actualizado correctamente')),
       );
 
-      await cargarClientes();
-      filtrarClientes(searchController.text); // mantener filtro activo
+      await cargarProveedores();
+      filtrarProveedores(searchController.text);
     } catch (e) {
-      debugPrint('Error al actualizar cliente: $e');
+      debugPrint('Error al actualizar proveedor: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al actualizar cliente')),
+        const SnackBar(content: Text('Error al actualizar proveedor')),
       );
     }
   }
 
-  void filtrarClientes(String query) {
+  void filtrarProveedores(String query) {
     if (query.isEmpty) {
-      setState(() => clientesFiltrados = clientes);
+      setState(() => proveedoresFiltrados = proveedores);
       return;
     }
 
-    final filtrados = clientes.where((c) {
-      final nombre = c['nombre_cliente']?.toLowerCase() ?? '';
-      final telefono = c['numero_telefono']?.toLowerCase() ?? '';
-      return nombre.contains(query.toLowerCase()) || telefono.contains(query.toLowerCase());
+    final filtrados = proveedores.where((p) {
+      final nombre = p['nombre_proveedor']?.toLowerCase() ?? '';
+      final ruc = p['ruc_proveedor']?.toLowerCase() ?? '';
+      return nombre.contains(query.toLowerCase()) || ruc.contains(query.toLowerCase());
     }).toList();
 
-    setState(() => clientesFiltrados = filtrados);
+    setState(() => proveedoresFiltrados = filtrados);
   }
 
   void mostrarModalRegistro() {
     final formKey = GlobalKey<FormState>();
     final nombreCtrl = TextEditingController();
-    final telefonoCtrl = TextEditingController();
+    final rucCtrl = TextEditingController();
 
     showModalBottomSheet(
       context: context,
@@ -103,26 +103,31 @@ class _ClientesScreenState extends State<ClientesScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Registrar nuevo cliente', style: TextStyle(fontSize: 18)),
+              const Text('Registrar proveedor', style: TextStyle(fontSize: 18)),
               const SizedBox(height: 12),
               TextFormField(
                 controller: nombreCtrl,
-                decoration: const InputDecoration(labelText: 'Nombre del cliente'),
+                decoration: const InputDecoration(labelText: 'Nombre del proveedor'),
                 validator: (value) =>
                     value == null || value.isEmpty ? 'Ingrese el nombre' : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
-                controller: telefonoCtrl,
-                decoration: const InputDecoration(labelText: 'Número de teléfono'),
+                controller: rucCtrl,
+                decoration: const InputDecoration(labelText: 'RUC del proveedor'),
+                validator: (value) =>
+                    value == null || value.isEmpty ? 'Ingrese el RUC' : null,
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 icon: const Icon(Icons.save),
-                label: const Text('Registrar'),
+                label: const Text('Guardar proveedor'),
                 onPressed: () async {
                   if (!formKey.currentState!.validate()) return;
-                  await registrarCliente(nombreCtrl.text.trim(), telefonoCtrl.text.trim());
+                  await registrarProveedor(
+                    nombreCtrl.text.trim(),
+                    rucCtrl.text.trim(),
+                  );
                   Navigator.pop(context);
                 },
               ),
@@ -137,9 +142,9 @@ class _ClientesScreenState extends State<ClientesScreen> {
   @override
   void initState() {
     super.initState();
-    cargarClientes();
+    cargarProveedores();
     searchController.addListener(() {
-      filtrarClientes(searchController.text);
+      filtrarProveedores(searchController.text);
     });
   }
 
@@ -153,7 +158,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestión de clientes'),
+        title: const Text('Gestión de proveedores'),
         actions: [
           IconButton(
             icon: const Icon(Icons.home),
@@ -164,7 +169,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.person_add),
-        label: const Text('Nuevo cliente'),
+        label: const Text('Nuevo proveedor'),
         onPressed: mostrarModalRegistro,
       ),
       body: Column(
@@ -174,20 +179,20 @@ class _ClientesScreenState extends State<ClientesScreen> {
             child: TextField(
               controller: searchController,
               decoration: const InputDecoration(
-                labelText: 'Buscar cliente por nombre o teléfono',
+                labelText: 'Buscar proveedor por nombre o RUC',
                 prefixIcon: Icon(Icons.search),
               ),
             ),
           ),
           Expanded(
             child: ListView.builder(
-              itemCount: clientesFiltrados.length,
+              itemCount: proveedoresFiltrados.length,
               itemBuilder: (context, index) {
-                final cliente = clientesFiltrados[index];
+                final proveedor = proveedoresFiltrados[index];
                 final nombreCtrl =
-                    TextEditingController(text: cliente['nombre_cliente']);
-                final telefonoCtrl =
-                    TextEditingController(text: cliente['numero_telefono']);
+                    TextEditingController(text: proveedor['nombre_proveedor']);
+                final rucCtrl =
+                    TextEditingController(text: proveedor['ruc_proveedor']);
 
                 return Card(
                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -201,18 +206,18 @@ class _ClientesScreenState extends State<ClientesScreen> {
                         ),
                         const SizedBox(height: 8),
                         TextFormField(
-                          controller: telefonoCtrl,
-                          decoration: const InputDecoration(labelText: 'Teléfono'),
+                          controller: rucCtrl,
+                          decoration: const InputDecoration(labelText: 'RUC'),
                         ),
                         const SizedBox(height: 12),
                         ElevatedButton.icon(
                           icon: const Icon(Icons.save),
                           label: const Text('Guardar cambios'),
                           onPressed: () {
-                            editarCliente(
-                              cliente['id_cliente'],
+                            editarProveedor(
+                              proveedor['id_proveedor'],
                               nombreCtrl.text.trim(),
-                              telefonoCtrl.text.trim(),
+                              rucCtrl.text.trim(),
                             );
                           },
                         ),
