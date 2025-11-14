@@ -12,6 +12,10 @@ import 'package:farmacia_desktop/screens/compras_registrar_screen.dart';
 import 'package:farmacia_desktop/screens/registrar_proveedor_screen.dart';
 import 'package:farmacia_desktop/screens/editar_proveedor_screen.dart';
 import 'package:farmacia_desktop/screens/clientes_screen.dart';
+import 'package:farmacia_desktop/screens/reportes_ventas_screen.dart';
+import 'package:farmacia_desktop/screens/detalle_ventas_screen.dart';
+import 'package:farmacia_desktop/screens/reportes_compras_screen.dart';
+import 'package:farmacia_desktop/screens/detalle_compras_screen.dart';
 
 
 final GoRouter router = GoRouter(
@@ -50,8 +54,34 @@ final GoRouter router = GoRouter(
     GoRoute(path: '/proveedores/editar_proveedor', builder: (_, _) => const EditarProveedorScreen()),
 
     // Clientes
-     GoRoute(path: '/clientes/info', builder: (_, __) => const ClientesScreen()),
-    
+    GoRoute(path: '/clientes/info', builder: (_, __) => const ClientesScreen()),
+
+    //reportes
+    GoRoute(path: '/reportes/ventas', builder: (_, __) => const ReporteVentasScreen()),
+    GoRoute(
+      path: '/reportes/ventas/detalle/:id',
+      builder: (context, state) {
+        final id = state.pathParameters['id'];
+        if (id == null) {
+          return const Scaffold(body: Center(child: Text('ID de venta no válido')));
+        }
+        return DetalleVentaScreen(idVenta: id);
+      },
+    ),
+
+    GoRoute(path: '/reportes/compras', builder: (context, state) => const ReporteComprasScreen()),
+    GoRoute(
+      path: '/reportes/compras/detalle/:id',
+      builder: (context, state) {
+        final id = state.pathParameters['id'];
+        if (id == null || id == 'null') {
+          return const Scaffold(body: Center(child: Text('ID de compra no válido')));
+        }
+        return DetalleCompraScreen(idCompra: id);
+      },
+    ),
+
+
 
   ],
 );
