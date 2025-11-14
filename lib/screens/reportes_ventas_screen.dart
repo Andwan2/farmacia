@@ -191,13 +191,9 @@ class _ReporteVentasScreenState extends State<ReporteVentasScreen> {
                           title: Text('Cliente: ${venta['clientes']['nombre_cliente']}'),
                           subtitle: Text(
                               'Fecha: ${venta['fecha_hora'].split('T')[0]} | Total: \$${venta['total_pago']} | Pago: ${venta['metodo_pago']}'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.info_outline),
-                            tooltip: 'Ver detalles',
-                            onPressed: () {
-                              context.go('/reportes/ventas/detalle/${venta['id_venta']}');
-                            },
-                          ),
+                          onTap: () => {
+                              context.go('/reportes/ventas/detalle/${venta['id_venta']}')
+                          }, 
                         ),
                       );
                     },
