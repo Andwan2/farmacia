@@ -185,7 +185,7 @@ class _ReporteComprasScreenState extends State<ReporteComprasScreen> {
                           subtitle: Text(
                               'Fecha: ${compra['fecha_compra'].split('T')[0]} | Total: \$${compra['total_compra'] }'),
                           onTap: () => {
-                            context.push('/reportes/compras/detalle/${compra['id_compras']}')
+                            context.push('/detalleCompra${compra['id_compras']}')
                           },
                         ),
                       );

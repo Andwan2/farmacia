@@ -57,7 +57,7 @@ class _DetalleVentaScreenState extends State<DetalleVentaScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           tooltip: 'Volver al reporte',
-          onPressed: () => context.go('/reportes/ventas'),
+          onPressed: () => context.pop('/reporteVenta'),
         ),
       ),
       body: ventaInfo == null

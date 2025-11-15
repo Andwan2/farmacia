@@ -185,7 +185,7 @@ class _ReporteVentasScreenState extends State<ReporteVentasScreen> {
                           subtitle: Text(
                               'Fecha: ${venta['fecha_hora'].split('T')[0]} | Total: \$${venta['total_pago']} | Pago: ${venta['metodo_pago']}'),
                           onTap: () => {
-                              context.go('/reportes/ventas/detalle/${venta['id_venta']}')
+                              context.push('/detalleVenta${venta['id_venta']}')
                           }, 
                         ),
                       );

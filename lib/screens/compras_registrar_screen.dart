@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ComprasRegistrarScreen extends StatefulWidget {
@@ -12,8 +11,6 @@ class ComprasRegistrarScreen extends StatefulWidget {
 class _ComprasRegistrarScreenState extends State<ComprasRegistrarScreen> {
   final supabase = Supabase.instance.client;
   final searchController = TextEditingController();
-  final Map<int, TextEditingController> cantidadControllers = {};
-  final Map<int, TextEditingController> precioControllers = {};
 
   List<Map<String, dynamic>> productos = [];
   List<Map<String, dynamic>> productosFiltrados = [];
@@ -23,31 +20,39 @@ class _ComprasRegistrarScreenState extends State<ComprasRegistrarScreen> {
   String? proveedorSeleccionado;
 
   Future<void> cargarProductos() async {
-    final data = await supabase
-        .from('productos')
-        .select('id_productos, nombre_producto, id_inventario, inventario(stock)');
-    if (data != null) {
-      setState(() {
-        productos = List<Map<String, dynamic>>.from(data);
-        productosFiltrados = productos;
-        cantidadControllers.clear();
-        precioControllers.clear();
-      });
+    try {
+      final data = await supabase
+          .from('productos')
+          .select('id_productos, nombre_producto, id_inventario, inventario(stock)');
+      if (mounted && data != null) {
+        setState(() {
+          productos = List<Map<String, dynamic>>.from(data);
+          productosFiltrados = productos;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error cargar productos: $e');
     }
   }
 
   Future<void> cargarProveedores() async {
-    final data = await supabase.from('proveedores').select('id_proveedor, nombre_proveedor');
-    if (data != null) {
-      setState(() {
-        proveedores = List<Map<String, dynamic>>.from(data);
-      });
+    try {
+      final data = await supabase
+          .from('proveedores')
+          .select('id_proveedor, nombre_proveedor');
+      if (mounted && data != null) {
+        setState(() {
+          proveedores = List<Map<String, dynamic>>.from(data);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error cargar proveedores: $e');
     }
   }
 
   void filtrarProductos(String query) {
     final filtrados = productos.where((p) {
-      final nombre = p['nombre_producto']?.toLowerCase() ?? '';
+      final nombre = (p['nombre_producto'] ?? '').toString().toLowerCase();
       return nombre.contains(query.toLowerCase());
     }).toList();
     setState(() {
@@ -55,7 +60,12 @@ class _ComprasRegistrarScreenState extends State<ComprasRegistrarScreen> {
     });
   }
 
-  void agregarAlCarrito(Map<String, dynamic> producto, int cantidad, double precioUnitario) {
+  void agregarAlCarrito(
+  Map<String, dynamic> producto,
+  int cantidad,
+  double precioUnitario,
+  DateTime? fechaVenc,
+  ) {
     final total = cantidad * precioUnitario;
     setState(() {
       carrito.add({
@@ -65,11 +75,12 @@ class _ComprasRegistrarScreenState extends State<ComprasRegistrarScreen> {
         'precio_unitario': precioUnitario,
         'total': total,
         'id_inventario': producto['id_inventario'],
+        'fecha_vencimiento': fechaVenc, // siempre DateTime? aquí
       });
     });
-    searchController.clear();
-    productosFiltrados = productos;
   }
+
+
 
   void eliminarDelCarrito(int index) {
     setState(() {
@@ -78,7 +89,10 @@ class _ComprasRegistrarScreenState extends State<ComprasRegistrarScreen> {
   }
 
   double calcularTotalCompra() {
-    return carrito.fold(0, (sum, item) => sum + item['total']);
+    return carrito.fold<double>(
+      0,
+      (sum, item) => sum + (item['total'] as num).toDouble(),
+    );
   }
 
   Future<void> confirmarCompra() async {
@@ -86,18 +100,17 @@ class _ComprasRegistrarScreenState extends State<ComprasRegistrarScreen> {
 
     final fecha = DateTime.now().toIso8601String();
     final totalCompra = calcularTotalCompra();
-    final userId = Supabase.instance.client.auth.currentUser?.id;
 
     try {
+      // Empleado (si aplica en tu modelo)
       final empleadoRes = await supabase
           .from('empleados')
           .select('id_empleado')
           .limit(1)
           .maybeSingle();
-
       final idEmpleado = empleadoRes?['id_empleado'];
-      if (idEmpleado == null) throw Exception('Empleado no encontrado');
 
+      // Insertar compra
       final compraRes = await supabase
           .from('compras')
           .insert({
@@ -106,47 +119,60 @@ class _ComprasRegistrarScreenState extends State<ComprasRegistrarScreen> {
             'id_proveedor': proveedorSeleccionado,
           })
           .select();
-
       final idCompra = compraRes.first['id_compras'];
 
+      // Insertar detalle y actualizar stock
       for (final item in carrito) {
-        await supabase.from('detalle_compras').insert({
-        'id_compras': idCompra, // ← nombre correcto del campo
+      // Insertar detalle (sin fecha_vencimiento)
+      await supabase.from('detalle_compras').insert({
+        'id_compras': idCompra,
         'id_productos': item['id_producto'],
         'cantidad': item['cantidad'],
         'precio_unitario': item['precio_unitario'],
         'subtotal': item['total'],
       });
 
+      // Actualizar inventario: stock + fecha_vencimiento
+      final inventarioRes = await supabase
+          .from('inventario')
+          .select('stock')
+          .eq('id_inventario', item['id_inventario'])
+          .single();
 
-        final inventarioRes = await supabase
-            .from('inventario')
-            .select('stock')
-            .eq('id_inventario', item['id_inventario'])
-            .single();
+      final stockActual = inventarioRes['stock'] ?? 0;
+      final nuevoStock = stockActual + item['cantidad'];
 
-        final stockActual = inventarioRes['stock'] ?? 0;
-        final nuevoStock = stockActual + item['cantidad'];
+      await supabase
+    .from('inventario')
+    .update({
+      'stock': nuevoStock,
+      'fecha_vencimiento': item['fecha_vencimiento'] == null
+          ? null
+          : (item['fecha_vencimiento'] as DateTime).toIso8601String().split('T')[0],
+          })
+          .eq('id_inventario', item['id_inventario']);
 
-        await supabase
-            .from('inventario')
-            .update({'stock': nuevoStock})
-            .eq('id_inventario', item['id_inventario']);
+          }
+
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Compra registrada correctamente')),
+        );
       }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Compra registrada correctamente')),
-      );
-
-      setState(() {
-        carrito.clear();
-        proveedorSeleccionado = null;
-      });
+      if (mounted) {
+        setState(() {
+          carrito.clear();
+          proveedorSeleccionado = null;
+        });
+      }
     } catch (e) {
       debugPrint('Error al registrar compra: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al registrar la compra')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al registrar la compra')),
+        );
+      }
     }
   }
 
@@ -163,12 +189,6 @@ class _ComprasRegistrarScreenState extends State<ComprasRegistrarScreen> {
   @override
   void dispose() {
     searchController.dispose();
-    for (final controller in cantidadControllers.values) {
-      controller.dispose();
-    }
-    for (final controller in precioControllers.values) {
-      controller.dispose();
-    }
     super.dispose();
   }
 
@@ -184,6 +204,7 @@ class _ComprasRegistrarScreenState extends State<ComprasRegistrarScreen> {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
+            // Proveedor
             DropdownButtonFormField<String>(
               value: proveedorSeleccionado,
               decoration: const InputDecoration(labelText: 'Seleccionar proveedor'),
@@ -193,105 +214,222 @@ class _ComprasRegistrarScreenState extends State<ComprasRegistrarScreen> {
                   child: Text(prov['nombre_proveedor']),
                 );
               }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  proveedorSeleccionado = value;
-                });
-              },
+              onChanged: (value) => setState(() => proveedorSeleccionado = value),
             ),
             const SizedBox(height: 12),
+
+            // Búsqueda
             TextField(
               controller: searchController,
               decoration: const InputDecoration(
                 labelText: 'Buscar producto',
                 prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 8),
-            if (productosFiltrados.isNotEmpty)
-              Expanded(
-                child: ListView.builder(
-                  itemCount: productosFiltrados.length,
-                  itemBuilder: (context, index) {
-                    final producto = productosFiltrados[index];
-                    cantidadControllers.putIfAbsent(index, () => TextEditingController());
-                    precioControllers.putIfAbsent(index, () => TextEditingController());
+            const SizedBox(height: 12),
 
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      child: ListTile(
-                        title: Text(producto['nombre_producto']),
-                        subtitle: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: cantidadControllers[index],
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(labelText: 'Cantidad'),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextField(
-                                controller: precioControllers[index],
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(labelText: 'Precio unitario'),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add),
-                              onPressed: () {
-                                final cantidad = int.tryParse(cantidadControllers[index]!.text.trim()) ?? 0;
-                                final precio = double.tryParse(precioControllers[index]!.text.trim()) ?? 0;
-                                if (cantidad > 0 && precio > 0) {
-                                  agregarAlCarrito(producto, cantidad, precio);
-                                }
-                              },
-                            ),
-                          ],
-                        ),
+            // Tabla productos disponibles
+            if (searchController.text.trim().isNotEmpty)
+              Expanded(
+                child: Card(
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: DataTable(
+                      columnSpacing: 20,
+                      headingRowColor: WidgetStateProperty.resolveWith(
+                        (states) => Colors.grey.shade200,
                       ),
-                    );
-                  },
+                      columns: const [
+                        DataColumn(label: Text('Producto')),
+                        DataColumn(label: Text('Cantidad')),
+                        DataColumn(label: Text('Precio unitario')),
+                        DataColumn(label: Text('Fecha venc.')),
+                        DataColumn(label: Text('Acciones')),
+                      ],
+                     rows: productosFiltrados.map((producto) {
+                      final cantidadCtrl = TextEditingController();
+                      final precioCtrl = TextEditingController();
+                      final fechaVencCtrl = TextEditingController();
+
+                      return DataRow(cells: [
+                        DataCell(Text(producto['nombre_producto'] ?? '')),
+                        DataCell(TextField(
+                          controller: cantidadCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(border: InputBorder.none, hintText: '0'),
+                        )),
+                        DataCell(TextField(
+                          controller: precioCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(border: InputBorder.none, hintText: '0.00'),
+                        )),
+                        DataCell(TextField(
+                          controller: fechaVencCtrl,
+                          decoration: const InputDecoration(border: InputBorder.none, hintText: 'YYYY-MM-DD'),
+                        )),
+                        DataCell(ElevatedButton.icon(
+                          icon: const Icon(Icons.add),
+                          label: const Text('Añadir'),
+                          onPressed: () {
+                            final cantidad = int.tryParse(cantidadCtrl.text.trim()) ?? 0;
+                            final precio = double.tryParse(precioCtrl.text.trim()) ?? 0;
+                            final fechaTexto = fechaVencCtrl.text.trim();
+
+                            final fechaRegex = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+                            DateTime? fechaFinal;
+
+                            if (cantidad <= 0 || precio <= 0) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Cantidad y precio deben ser mayores a cero')),
+                              );
+                              return;
+                            }
+
+                            if (fechaTexto.isNotEmpty) {
+                              if (!fechaRegex.hasMatch(fechaTexto)) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Formato inválido. Usa YYYY-MM-DD')),
+                                );
+                                return;
+                              }
+                              try {
+                                fechaFinal = DateTime.parse(fechaTexto);
+                                if (fechaFinal.isBefore(DateTime.now())) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('La fecha de vencimiento no puede ser anterior a hoy')),
+                                  );
+                                  return;
+                                }
+                              } catch (_) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Fecha inválida')),
+                                );
+                                return;
+                              }
+                            }
+
+                            agregarAlCarrito(producto, cantidad, precio, fechaFinal);
+                          },
+                        )),
+                      ]);
+                    }).toList(),
+                    ),
+                  ),
                 ),
               ),
-            const Divider(),
-            const Text('Resumen de compra', style: TextStyle(fontWeight: FontWeight.bold)),
-            Expanded(
-              child: carrito.isEmpty
-                  ? const Center(child: Text('No hay productos en la compra'))
-                  : ListView.builder(
-                      itemCount: carrito.length,
-                      itemBuilder: (context, index) {
-                        final item = carrito[index];
-                        return ListTile(
-                          title: Text(item['nombre']),
-                          subtitle: Text('Cantidad: ${item['cantidad']} | Precio: \$${item['precio_unitario']} | Subtotal: \$${item['total']}'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => eliminarDelCarrito(index),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-            Text('Fecha: ${DateTime.now().toLocal().toString().split(' ')[0]}'),
-            Text('Total de compra: \$${totalCompra.toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-                       ElevatedButton.icon(
-              icon: const Icon(Icons.check),
-              label: const Text('Confirmar compra'),
-              onPressed: carrito.isNotEmpty && proveedorSeleccionado != null
-                  ? confirmarCompra
-                  : null,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            )else
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'Busca un producto para añadirlo a la factura',
+                style: TextStyle(fontStyle: FontStyle.italic),
               ),
+            ),
+            const SizedBox(height: 12),
+
+            // Factura
+            Expanded(
+              child: Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: carrito.isEmpty
+                      ? const Center(child: Text('No hay productos en la factura'))
+                      : SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: DataTable(
+                            columnSpacing: 20,
+                            headingRowColor: WidgetStateProperty.resolveWith(
+                              (states) => Colors.grey.shade200,
+                            ),
+                            columns: const [
+                              DataColumn(label: Text('Producto')),
+                              DataColumn(label: Text('Cantidad')),
+                              DataColumn(label: Text('Precio')),
+                              DataColumn(label: Text('Subtotal')),
+                              DataColumn(label: Text('Fecha venc.')),
+                              DataColumn(label: Text('Acciones')),
+                            ],
+                            rows: carrito.map((item) {
+                              final idx = carrito.indexOf(item);
+                              return DataRow(cells: [
+                                DataCell(Text(item['nombre'].toString())),
+                                DataCell(Text(item['cantidad'].toString())),
+                                DataCell(Text('\$${(item['precio_unitario'] as num).toStringAsFixed(2)}')),
+                                DataCell(Text('\$${(item['total'] as num).toStringAsFixed(2)}')),
+                                DataCell(Text(
+                                  item['fecha_vencimiento'] == null
+                                      ? 'N/A'
+                                      : (item['fecha_vencimiento'] as DateTime).toIso8601String().split('T')[0],
+                                )),
+
+                                DataCell(IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () => eliminarDelCarrito(idx),
+                                )),
+                              ]);
+                            }).toList(),
+                          ),
+                        ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Resumen y confirmar
+            Row(
+              children: [
+                Expanded(
+                  child: Card(
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Proveedor: ${_nombreProveedor()}', style: const TextStyle(fontSize: 16)),
+                        Text('Fecha: ${DateTime.now().toLocal().toString().split(' ')[0]}'),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Total de compra: \$${totalCompra.toStringAsFixed(2)}',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.check),
+                  label: const Text('Confirmar compra'),
+                  onPressed: carrito.isNotEmpty && proveedorSeleccionado != null
+                      ? confirmarCompra
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _nombreProveedor() {
+    if (proveedorSeleccionado == null) return 'N/A';
+    final prov = proveedores.firstWhere(
+      (p) => p['id_proveedor'] == proveedorSeleccionado,
+      orElse: () => {},
+    );
+    return (prov['nombre_proveedor'] ?? 'N/A').toString();
   }
 }

@@ -33,17 +33,21 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
         'ruc_proveedor': ruc,
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Proveedor registrado correctamente')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Proveedor registrado correctamente')),
+        );
+      }
 
       await cargarProveedores();
       filtrarProveedores(searchController.text);
     } catch (e) {
       debugPrint('Error al registrar proveedor: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al registrar proveedor')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al registrar proveedor')),
+        );
+      }
     }
   }
 
@@ -54,17 +58,21 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
         'ruc_proveedor': ruc,
       }).eq('id_proveedor', id);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Proveedor actualizado correctamente')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Proveedor actualizado correctamente')),
+        );
+      }
 
       await cargarProveedores();
       filtrarProveedores(searchController.text);
     } catch (e) {
       debugPrint('Error al actualizar proveedor: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al actualizar proveedor')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al actualizar proveedor')),
+        );
+      }
     }
   }
 
@@ -159,7 +167,6 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gestión de proveedores'),
-        
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.person_add),
@@ -179,47 +186,44 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: proveedoresFiltrados.length,
-              itemBuilder: (context, index) {
-                final proveedor = proveedoresFiltrados[index];
-                final nombreCtrl =
-                    TextEditingController(text: proveedor['nombre_proveedor']);
-                final rucCtrl =
-                    TextEditingController(text: proveedor['ruc_proveedor']);
+            child: SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              child: DataTable(
+                columnSpacing: 24,
+                columns: const [
+                  DataColumn(label: Text('Nombre')),
+                  DataColumn(label: Text('RUC')),
+                  DataColumn(label: Text('Acciones')),
+                ],
+                rows: proveedoresFiltrados.map((proveedor) {
+                  final nombreCtrl =
+                      TextEditingController(text: proveedor['nombre_proveedor']);
+                  final rucCtrl =
+                      TextEditingController(text: proveedor['ruc_proveedor']);
 
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      children: [
-                        TextFormField(
-                          controller: nombreCtrl,
-                          decoration: const InputDecoration(labelText: 'Nombre'),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: rucCtrl,
-                          decoration: const InputDecoration(labelText: 'RUC'),
-                        ),
-                        const SizedBox(height: 12),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.save),
-                          label: const Text('Guardar cambios'),
-                          onPressed: () {
-                            editarProveedor(
-                              proveedor['id_proveedor'],
-                              nombreCtrl.text.trim(),
-                              rucCtrl.text.trim(),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+                  return DataRow(cells: [
+                    DataCell(TextField(
+                      controller: nombreCtrl,
+                      decoration: const InputDecoration(border: InputBorder.none),
+                    )),
+                    DataCell(TextField(
+                      controller: rucCtrl,
+                      decoration: const InputDecoration(border: InputBorder.none),
+                    )),
+                    DataCell(ElevatedButton.icon(
+                      icon: const Icon(Icons.save),
+                      label: const Text('Guardar'),
+                      onPressed: () {
+                        editarProveedor(
+                          proveedor['id_proveedor'],
+                          nombreCtrl.text.trim(),
+                          rucCtrl.text.trim(),
+                        );
+                      },
+                    )),
+                  ]);
+                }).toList(),
+              ),
             ),
           ),
         ],
