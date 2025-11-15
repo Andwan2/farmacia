@@ -173,49 +173,52 @@ class _ClientesScreenState extends State<ClientesScreen> {
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: clientesFiltrados.length,
-              itemBuilder: (context, index) {
-                final cliente = clientesFiltrados[index];
-                final nombreCtrl =
-                    TextEditingController(text: cliente['nombre_cliente']);
-                final telefonoCtrl =
-                    TextEditingController(text: cliente['numero_telefono']);
-
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      children: [
-                        TextFormField(
-                          controller: nombreCtrl,
-                          decoration: const InputDecoration(labelText: 'Nombre'),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: telefonoCtrl,
-                          decoration: const InputDecoration(labelText: 'Teléfono'),
-                        ),
-                        const SizedBox(height: 12),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.save),
-                          label: const Text('Guardar cambios'),
-                          onPressed: () {
-                            editarCliente(
-                              cliente['id_cliente'],
-                              nombreCtrl.text.trim(),
-                              telefonoCtrl.text.trim(),
-                            );
-                          },
-                        ),
+            child: clientesFiltrados.isEmpty
+                ? const Center(child: Text('No hay clientes registrados'))
+                : SingleChildScrollView(
+                    scrollDirection: Axis.vertical,
+                    child: DataTable(
+                      columnSpacing: 24,
+                      headingRowColor: WidgetStateProperty.resolveWith(
+                        (states) => Colors.grey.shade200,
+                      ),
+                      columns: const [
+                        DataColumn(label: Text('Nombre')),
+                        DataColumn(label: Text('Teléfono')),
+                        DataColumn(label: Text('Acciones')),
                       ],
+                      rows: clientesFiltrados.map((cliente) {
+                        final nombreCtrl =
+                            TextEditingController(text: cliente['nombre_cliente']);
+                        final telefonoCtrl =
+                            TextEditingController(text: cliente['numero_telefono']);
+
+                        return DataRow(cells: [
+                          DataCell(TextField(
+                            controller: nombreCtrl,
+                            decoration: const InputDecoration(border: InputBorder.none),
+                          )),
+                          DataCell(TextField(
+                            controller: telefonoCtrl,
+                            decoration: const InputDecoration(border: InputBorder.none),
+                          )),
+                          DataCell(ElevatedButton.icon(
+                            icon: const Icon(Icons.save),
+                            label: const Text('Guardar'),
+                            onPressed: () {
+                              editarCliente(
+                                cliente['id_cliente'],
+                                nombreCtrl.text.trim(),
+                                telefonoCtrl.text.trim(),
+                              );
+                            },
+                          )),
+                        ]);
+                      }).toList(),
                     ),
                   ),
-                );
-              },
-            ),
           ),
+
         ],
       ),
     );
