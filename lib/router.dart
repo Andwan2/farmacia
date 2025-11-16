@@ -9,6 +9,7 @@ import 'package:farmacia_desktop/screens/ventas_registrar_screen.dart';
 import 'package:farmacia_desktop/screens/compras_registrar_screen.dart';
 import 'package:farmacia_desktop/screens/proveedores_screen.dart';
 import 'package:farmacia_desktop/screens/clientes_screen.dart';
+import 'package:farmacia_desktop/screens/empleados_screen.dart';
 import 'package:farmacia_desktop/screens/reportes_ventas_screen.dart';
 import 'package:farmacia_desktop/screens/detalle_ventas_screen.dart';
 import 'package:farmacia_desktop/screens/reportes_compras_screen.dart';
@@ -52,6 +53,8 @@ final GoRouter router = GoRouter(
     GoRoute(path: '/proveedores', builder: (_, _) => const ProveedoresScreen()),
     // Clientes
     GoRoute(path: '/clientes', builder: (_, __) => const ClientesScreen()),
+    // Empleados
+    GoRoute(path: '/empleados', builder: (_, __) => const EmpleadosScreen()),
     //reportes
     GoRoute(
       path: '/reporteVenta',

@@ -403,7 +403,7 @@ class _ComprasRegistrarScreenState extends State<ComprasRegistrarScreen> {
                 ),
               ),
             ),
-          ),
+          ), 
             Expanded(
               child: Card(
                 elevation: 3,
@@ -457,9 +457,7 @@ class _ComprasRegistrarScreenState extends State<ComprasRegistrarScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
-
             // Confirmar compra
             Align(
               alignment: Alignment.centerRight,
