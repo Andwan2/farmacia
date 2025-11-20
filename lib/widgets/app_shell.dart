@@ -57,6 +57,15 @@ class AppDrawer extends StatelessWidget {
 
           const Divider(),
 
+          _buildSection("La plata", [
+            // factura a clientes
+            ('Factura', '/factura', Icons.point_of_sale),
+            // factura a proveedores
+            ('Compras', '/compra', Icons.attach_money),
+          ], context),
+
+          const Divider(),
+
           _buildSection("Info", [('Acerca de', '/about', Icons.info)], context),
 
           const Divider(),
