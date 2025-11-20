@@ -29,8 +29,9 @@ class _InventarioPageState extends State<ProductosScreen> {
     final resProd = await client
         .from('producto')
         .select(
-          'id_producto,nombre_producto,id_presentacion,fecha_vencimiento,tipo,medida',
+          'id_producto,nombre_producto,id_presentacion,fecha_vencimiento,tipo,medida,esVisible',
         )
+        .eq('esVisible', true)
         .order('nombre_producto', ascending: true);
 
     final dataProd = (resProd is List) ? resProd : <dynamic>[];
@@ -69,16 +70,28 @@ class _InventarioPageState extends State<ProductosScreen> {
   Future<void> eliminarProducto(int idProducto) async {
     await Supabase.instance.client
         .from('producto')
-        .delete()
+        .update({'esVisible': false})
         .eq('id_producto', idProducto);
     await cargarDatos();
   }
 
   @override
   Widget build(BuildContext context) {
-    final listaFiltrada = productos.where((p) {
+    // Agrupar productos por tipo
+    final Map<String, dynamic> productosPorTipo = {};
+    for (final p in productos) {
+      final tipo = p['tipo'] as String;
+      if (!productosPorTipo.containsKey(tipo)) {
+        productosPorTipo[tipo] = p;
+      }
+    }
+
+    // Filtrar por búsqueda
+    final listaFiltrada = productosPorTipo.values.where((p) {
       final nombre = p['nombre_producto']?.toString() ?? '';
-      return nombre.toLowerCase().contains(busqueda.toLowerCase());
+      final tipo = p['tipo']?.toString() ?? '';
+      return nombre.toLowerCase().contains(busqueda.toLowerCase()) ||
+          tipo.toLowerCase().contains(busqueda.toLowerCase());
     }).toList();
 
     return Scaffold(
@@ -136,26 +149,42 @@ class _InventarioPageState extends State<ProductosScreen> {
                               ),
                             ],
                           ),
-                          trailing: SizedBox(
-                            width: 160,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Text(
-                                  'Vence: ${fecha.toIso8601String().split('T').first}',
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.edit),
-                                  onPressed: () {
-                                    // TODO: Navegar a formulario de edición (usar id_producto)
-                                  },
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete),
-                                  onPressed: () => eliminarProducto(idProducto),
-                                ),
-                              ],
-                            ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    'Vence: ${fecha.toIso8601String().split('T').first}',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  Text(
+                                    diasRestantes < 30
+                                        ? '⚠️ $diasRestantes días'
+                                        : '$diasRestantes días',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: diasRestantes < 30
+                                          ? Colors.red
+                                          : Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.edit),
+                                onPressed: () {
+                                  // TODO: Navegar a formulario de edición (usar id_producto)
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete),
+                                onPressed: () => eliminarProducto(idProducto),
+                              ),
+                            ],
                           ),
                         ),
                       );
