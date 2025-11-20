@@ -1,80 +1,96 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:farmacia_desktop/providers/factura_provider.dart';
+import 'package:intl/intl.dart';
 
 class InvoiceHeaderFields extends StatelessWidget {
-  final String fecha;
-  final String metodoPago;
-  final String cliente;
-  final String empleado;
-  final String total;
+  const InvoiceHeaderFields({super.key});
 
-  const InvoiceHeaderFields({
-    super.key,
-    required this.fecha,
-    required this.metodoPago,
-    required this.cliente,
-    required this.empleado,
-    required this.total,
-  });
+  Future<void> _seleccionarFecha(BuildContext context) async {
+    final provider = context.read<FacturaProvider>();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: provider.fecha,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    
+    if (picked != null) {
+      provider.setFecha(picked);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.black),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(4),
-          topRight: Radius.circular(4),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _HeaderField(
-              label: 'FECHA',
-              value: fecha,
-              icon: Icons.calendar_today,
+    return Consumer<FacturaProvider>(
+      builder: (context, provider, child) {
+        final formatoFecha = DateFormat('dd/MM/yyyy');
+        
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: Colors.black),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(4),
+              topRight: Radius.circular(4),
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _HeaderField(
-              label: 'MÉTODO DE PAGO',
-              value: metodoPago,
-              icon: Icons.credit_card,
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _HeaderFieldEditable(
+                  label: 'FECHA',
+                  value: formatoFecha.format(provider.fecha),
+                  icon: Icons.calendar_today,
+                  onTap: () => _seleccionarFecha(context),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _HeaderFieldDropdown(
+                  label: 'MÉTODO DE PAGO',
+                  value: provider.metodoPago,
+                  icon: Icons.credit_card,
+                  opciones: const ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA'],
+                  onChanged: (valor) => provider.setMetodoPago(valor ?? 'EFECTIVO'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _HeaderFieldText(
+                  label: 'CLIENTE',
+                  value: provider.cliente,
+                  icon: Icons.person,
+                  onChanged: (valor) => provider.setCliente(valor),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _HeaderFieldText(
+                  label: 'EMPLEADO',
+                  value: provider.empleado,
+                  icon: Icons.person,
+                  onChanged: (valor) => provider.setEmpleado(valor),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _HeaderField(
+                  label: 'TOTAL',
+                  value: '\$${provider.total.toStringAsFixed(2)}',
+                  icon: Icons.attach_money,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _HeaderField(
-              label: 'CLIENTE',
-              value: cliente,
-              icon: Icons.person,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _HeaderField(
-              label: 'EMPLEADO',
-              value: empleado,
-              icon: Icons.person,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _HeaderField(
-              label: 'TOTAL',
-              value: total,
-              icon: Icons.credit_card,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
+// Campo de solo lectura
 class _HeaderField extends StatelessWidget {
   final String label;
   final String value;
@@ -84,6 +100,135 @@ class _HeaderField extends StatelessWidget {
     required this.label,
     required this.value,
     required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.black),
+        borderRadius: BorderRadius.circular(4),
+        color: Colors.grey[100],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Roboto',
+              fontSize: 12,
+              color: Color(0xFF49454F),
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    fontFamily: 'Roboto',
+                    fontSize: 16,
+                    color: Color(0xFF1D1B20),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Icon(
+                icon,
+                size: 20,
+                color: const Color(0xFF1E1E1E),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Campo editable con clic
+class _HeaderFieldEditable extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _HeaderFieldEditable({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.blue, width: 2),
+          borderRadius: BorderRadius.circular(4),
+          color: Colors.blue[50],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'Roboto',
+                fontSize: 12,
+                color: Color(0xFF49454F),
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      fontFamily: 'Roboto',
+                      fontSize: 16,
+                      color: Color(0xFF1D1B20),
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+                Icon(
+                  icon,
+                  size: 20,
+                  color: Colors.blue[700],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Campo de texto editable
+class _HeaderFieldText extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final ValueChanged<String> onChanged;
+
+  const _HeaderFieldText({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.onChanged,
   });
 
   @override
@@ -111,14 +256,98 @@ class _HeaderField extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  value,
+                child: TextField(
+                  controller: TextEditingController(text: value)
+                    ..selection = TextSelection.fromPosition(
+                      TextPosition(offset: value.length),
+                    ),
+                  onChanged: onChanged,
                   style: const TextStyle(
                     fontFamily: 'Roboto',
                     fontSize: 16,
                     color: Color(0xFF1D1B20),
                     fontWeight: FontWeight.w400,
                   ),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+              Icon(
+                icon,
+                size: 20,
+                color: const Color(0xFF1E1E1E),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Campo dropdown
+class _HeaderFieldDropdown extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final List<String> opciones;
+  final ValueChanged<String?> onChanged;
+
+  const _HeaderFieldDropdown({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.opciones,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.black),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Roboto',
+              fontSize: 12,
+              color: Color(0xFF49454F),
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButton<String>(
+                  value: value,
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  items: opciones.map((String opcion) {
+                    return DropdownMenuItem<String>(
+                      value: opcion,
+                      child: Text(
+                        opcion,
+                        style: const TextStyle(
+                          fontFamily: 'Roboto',
+                          fontSize: 16,
+                          color: Color(0xFF1D1B20),
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: onChanged,
                 ),
               ),
               Icon(

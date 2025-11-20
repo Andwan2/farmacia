@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:farmacia_desktop/providers/factura_provider.dart';
 import 'widgets/add_product_button.dart';
 import 'widgets/invoice_header_fields.dart';
 import 'widgets/invoice_table.dart';
 import 'widgets/invoice_actions.dart';
 
-class FacturaScreen extends StatefulWidget {
+class FacturaScreen extends StatelessWidget {
   static const String pathName = '/factura';
   static const String routeName = 'factura';
   
   const FacturaScreen({super.key});
 
   @override
-  State<FacturaScreen> createState() => _FacturaScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => FacturaProvider(),
+      child: const _FacturaScreenContent(),
+    );
+  }
 }
 
-class _FacturaScreenState extends State<FacturaScreen> {
-  // Datos de ejemplo
-  final List<ProductoFactura> _productos = [];
+class _FacturaScreenContent extends StatelessWidget {
+  const _FacturaScreenContent();
 
   @override
   Widget build(BuildContext context) {
@@ -44,27 +50,25 @@ class _FacturaScreenState extends State<FacturaScreen> {
               const SizedBox(height: 24),
               
               // Campos de encabezado
-              InvoiceHeaderFields(
-                fecha: '12/12/2012',
-                metodoPago: 'EFECTIVO',
-                cliente: 'Casimiro Sotelo',
-                empleado: 'Andre Abdul Mohamed',
-                total: '1000\$',
-              ),
+              const InvoiceHeaderFields(),
               const SizedBox(height: 16),
               
               // Tabla de productos
-              InvoiceTable(
-                productos: _productos,
+              Consumer<FacturaProvider>(
+                builder: (context, provider, child) {
+                  return InvoiceTable(
+                    productos: provider.productos,
+                  );
+                },
               ),
 
               const SizedBox(height: 24),
               
-              // Barra de búsqueda
+              // Botón agregar producto
               AddProductButton(
                 onProductSelected: (producto) {
-                  // TODO: Agregar producto a la lista de la factura
-                  print('Producto seleccionado: ${producto.nombreProducto}');
+                  final provider = context.read<FacturaProvider>();
+                  provider.agregarProducto(producto);
                 },
               ),
 
@@ -73,11 +77,15 @@ class _FacturaScreenState extends State<FacturaScreen> {
               // Botones de acción
               InvoiceActions(
                 onCancel: () {
-                  // TODO: Implementar cancelación
+                  final provider = context.read<FacturaProvider>();
+                  provider.limpiarFactura();
                   Navigator.pop(context);
                 },
                 onConfirm: () {
-                  // TODO: Implementar confirmación
+                  // TODO: Implementar confirmación y guardar en DB
+                  final provider = context.read<FacturaProvider>();
+                  print('Total: \$${provider.total}');
+                  print('Productos: ${provider.productos.length}');
                 },
               ),
             ],
