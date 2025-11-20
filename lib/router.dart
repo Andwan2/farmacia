@@ -1,3 +1,4 @@
+import 'package:farmacia_desktop/screens/empleados.dart';
 import 'package:farmacia_desktop/screens/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -38,6 +39,10 @@ final GoRouter router = GoRouter(
         GoRoute(
           path: '/productos',
           builder: (context, state) => const ProductosScreen(),
+        ),
+        GoRoute(
+          path: '/empleados',
+          builder: (context, state) => const EmpleadosScreen(),
         ),
         GoRoute(
           path: '/proveedores',

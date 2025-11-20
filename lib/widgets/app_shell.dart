@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:farmacia_desktop/providers/theme_provider.dart';
 
 /// Shell que contiene el AppBar y Drawer persistentes
 class AppShell extends StatelessWidget {
@@ -43,6 +45,7 @@ class AppDrawer extends StatelessWidget {
           _buildSection("Recursos humanos", [
             ('Proveedores', '/proveedores', Icons.corporate_fare),
             ('Clientes', '/clientes', Icons.verified_user),
+            ('Empleados', '/empleados', Icons.person),
           ], context),
 
           const Divider(),
@@ -55,6 +58,24 @@ class AppDrawer extends StatelessWidget {
           const Divider(),
 
           _buildSection("Info", [('Acerca de', '/about', Icons.info)], context),
+
+          const Divider(),
+
+          // Switch de tema
+          Consumer<ThemeProvider>(
+            builder: (context, themeProvider, child) {
+              return SwitchListTile(
+                secondary: Icon(
+                  themeProvider.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                ),
+                title: const Text('Modo oscuro'),
+                value: themeProvider.isDarkMode,
+                onChanged: (value) {
+                  themeProvider.toggleTheme();
+                },
+              );
+            },
+          ),
 
           const Divider(),
 

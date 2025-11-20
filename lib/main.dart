@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:farmacia_desktop/router.dart'; // Asegúrate de que este archivo tenga las rutas actualizadas
+import 'package:farmacia_desktop/router.dart';
+import 'package:farmacia_desktop/providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
     url: 'https://bezhfrzxsvglxcftwxsj.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlemhmcnp4c3ZnbHhjZnR3eHNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MjM3OTQsImV4cCI6MjA3OTA5OTc5NH0.A1O7KFRTonnbapM2zP5T_V6zfyzIv4-4C_T273v1vW0',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlemhmcnp4c3ZnbHhjZnR3eHNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MjM3OTQsImV4cCI6MjA3OTA5OTc5NH0.A1O7KFRTonnbapM2zP5T_V6zfyzIv4-4C_T273v1vW0',
   );
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -16,15 +24,34 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      debugShowCheckedModeBanner: false,
-      routerConfig: router, // ← usa el GoRouter con las rutas de inventario
-      supportedLocales: const [
-        Locale('en'), // English
-        // Locale('es'), // Puedes habilitar español si lo necesitas
-      ],
-      builder: (context, child) {
-        return child ?? const SizedBox.shrink();
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return MaterialApp.router(
+          debugShowCheckedModeBanner: false,
+          routerConfig: router,
+          themeMode: themeProvider.themeMode,
+          theme: ThemeData(
+            useMaterial3: true,
+            brightness: Brightness.light,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.blue,
+              brightness: Brightness.light,
+            ),
+            appBarTheme: const AppBarTheme(centerTitle: false, elevation: 2),
+          ),
+          darkTheme: ThemeData(
+            useMaterial3: true,
+            brightness: Brightness.dark,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.blue,
+              brightness: Brightness.dark,
+            ),
+            appBarTheme: const AppBarTheme(centerTitle: false, elevation: 2),
+          ),
+          builder: (context, child) {
+            return child ?? const SizedBox.shrink();
+          },
+        );
       },
     );
   }

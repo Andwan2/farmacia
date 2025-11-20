@@ -25,7 +25,9 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
   Future<void> cargarEmpleados() async {
     final response = await Supabase.instance.client
         .from('empleado')
-        .select('id_empleado, nombre_empleado, telefono, cargo_empleado(cargo)');
+        .select(
+          'id_empleado, nombre_empleado, telefono, cargo_empleado(cargo)',
+        );
 
     setState(() {
       empleados = List<Map<String, dynamic>>.from(response);
@@ -47,18 +49,6 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Empleados'),
-        actions: [
-          ElevatedButton.icon(
-            onPressed: () => mostrarAgregarEmpleado(context, cargarEmpleados),
-            icon: const Icon(Icons.person_add),
-            label: const Text('Agregar'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.lightBlue,
-        foregroundColor: Colors.white,),
-          ),
-        ],
-      ),
       body: Column(
         children: [
           Padding(
@@ -68,7 +58,9 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
               decoration: InputDecoration(
                 hintText: 'Buscar empleado',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ),
@@ -88,12 +80,20 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                   nombre: empleado['nombre_empleado'],
                   telefono: empleado['telefono'],
                   cargo: empleado['cargo_empleado']?['cargo'],
-                  onEdit: () => mostrarEditarEmpleado(context, empleado, cargarEmpleados),
+                  onEdit: () =>
+                      mostrarEditarEmpleado(context, empleado, cargarEmpleados),
                 );
               },
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => mostrarAgregarEmpleado(context, cargarEmpleados),
+        icon: const Icon(Icons.person_add),
+        label: const Text('Agregar Empleado'),
+        backgroundColor: Colors.lightBlue,
+        foregroundColor: Colors.white,
       ),
     );
   }
@@ -122,10 +122,7 @@ class EmpleadoCard extends StatelessWidget {
           Positioned(
             top: 8,
             right: 8,
-            child: IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: onEdit,
-            ),
+            child: IconButton(icon: const Icon(Icons.edit), onPressed: onEdit),
           ),
           Center(
             child: Column(
@@ -133,9 +130,15 @@ class EmpleadoCard extends StatelessWidget {
               children: [
                 const CircleAvatar(child: Icon(Icons.person)),
                 const SizedBox(height: 8),
-                Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  nombre,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
                 Text(telefono ?? 'Teléfono no disponible'),
-                Text('Cargo: ${cargo ?? 'No definido'}', style: const TextStyle(fontSize: 12)),
+                Text(
+                  'Cargo: ${cargo ?? 'No definido'}',
+                  style: const TextStyle(fontSize: 12),
+                ),
               ],
             ),
           ),
