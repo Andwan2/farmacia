@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:tu_app/modals/agregar_proveedor_modal.dart';
-import 'package:tu_app/modals/editar_proveedor_modal.dart';
+import 'package:farmacia_desktop/modal/agregar_proveedor_modal.dart';
+import 'package:farmacia_desktop/modal/editar_proveedor_modal.dart';
 
 class ProveedoresScreen extends StatefulWidget {
   const ProveedoresScreen({super.key});
@@ -54,7 +54,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
             onPressed: () => mostrarAgregarProveedor(context, cargarProveedores),
             icon: const Icon(Icons.add),
             label: const Text('Agregar'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.lightBlue, foregroundColor: Colors.white,),
           ),
         ],
       ),
@@ -75,7 +75,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
             child: GridView.builder(
               padding: const EdgeInsets.all(12),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+                crossAxisCount: 4,
                 childAspectRatio: 3 / 2,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
@@ -85,8 +85,8 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
                 final proveedor = filtrados[index];
                 return ProveedorCard(
                   nombre: proveedor['nombre_proveedor'],
-                  ruc: proveedor['ruc_proveedor'],
-                  telefono: proveedor['numero_telefono'],
+                  ruc: 'RUC: '+(proveedor['ruc_proveedor']),
+                  telefono: 'Cel: '+(proveedor['numero_telefono']),
                   onEdit: () => mostrarEditarProveedor(context, proveedor, cargarProveedores),
                 );
               },
