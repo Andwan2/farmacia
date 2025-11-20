@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:farmacia_desktop/providers/theme_provider.dart';
 import 'package:farmacia_desktop/modal/editar_producto_modal.dart';
+import 'package:farmacia_desktop/modal/agregar_producto_modal.dart';
 
 class ProductosScreen extends StatefulWidget {
   const ProductosScreen({super.key});
@@ -39,7 +40,7 @@ class _InventarioPageState extends State<ProductosScreen> {
     final resProd = await client
         .from('producto')
         .select(
-          'id_producto,nombre_producto,id_presentacion,fecha_vencimiento,tipo,medida,esVisible,estado',
+          'id_producto,nombre_producto,id_presentacion,fecha_vencimiento,tipo,medida,esVisible,estado,fecha_agregado',
         )
         .eq('esVisible', mostrarEliminados ? false : true)
         .order('nombre_producto', ascending: true);
@@ -642,6 +643,22 @@ class _InventarioPageState extends State<ProductosScreen> {
           final stockA = a['_stock_grupo'] as int? ?? 1;
           final stockB = b['_stock_grupo'] as int? ?? 1;
           return stockB.compareTo(stockA); // Descendente
+        case 'agregado_reciente':
+          final fechaA = a['fecha_agregado'] != null
+              ? DateTime.parse(a['fecha_agregado'] as String)
+              : DateTime(1970);
+          final fechaB = b['fecha_agregado'] != null
+              ? DateTime.parse(b['fecha_agregado'] as String)
+              : DateTime(1970);
+          return fechaB.compareTo(fechaA); // Descendente (más reciente primero)
+        case 'agregado_antiguo':
+          final fechaA = a['fecha_agregado'] != null
+              ? DateTime.parse(a['fecha_agregado'] as String)
+              : DateTime(1970);
+          final fechaB = b['fecha_agregado'] != null
+              ? DateTime.parse(b['fecha_agregado'] as String)
+              : DateTime(1970);
+          return fechaA.compareTo(fechaB); // Ascendente (más antiguo primero)
         default:
           return 0;
       }
@@ -820,6 +837,14 @@ class _InventarioPageState extends State<ProductosScreen> {
                           DropdownMenuItem(
                             value: 'stock',
                             child: Text('Stock'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'agregado_reciente',
+                            child: Text('Más reciente'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'agregado_antiguo',
+                            child: Text('Más antiguo'),
                           ),
                         ],
                         onChanged: (value) {
@@ -1014,9 +1039,10 @@ class _InventarioPageState extends State<ProductosScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // TODO: Navegar a formulario de agregar
+        onPressed: () async {
+          await mostrarAgregarProducto(context, cargarDatos);
         },
+        tooltip: 'Agregar producto',
         child: const Icon(Icons.add),
       ),
     );

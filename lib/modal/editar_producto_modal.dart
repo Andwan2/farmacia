@@ -18,6 +18,9 @@ Future<void> mostrarEditarProducto(
   final fechaVencimientoController = TextEditingController(
     text: producto['fecha_vencimiento']?.toString().split('T').first ?? '',
   );
+  final fechaAgregadoController = TextEditingController(
+    text: producto['fecha_agregado']?.toString() ?? '',
+  );
 
   // Cargar presentaciones disponibles
   final presentaciones = await Supabase.instance.client
@@ -354,6 +357,56 @@ Future<void> mostrarEditarProducto(
                               }
                             },
                           ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: fechaAgregadoController,
+                            decoration: const InputDecoration(
+                              labelText: 'Fecha de agregado',
+                              border: OutlineInputBorder(),
+                              hintText: 'YYYY-MM-DD HH:MM',
+                              suffixIcon: Icon(Icons.access_time),
+                            ),
+                            readOnly: true,
+                            onTap: () async {
+                              final fechaActual =
+                                  fechaAgregadoController.text.isNotEmpty
+                                  ? DateTime.tryParse(
+                                      fechaAgregadoController.text,
+                                    )
+                                  : null;
+
+                              final fechaSeleccionada = await showDatePicker(
+                                context: context,
+                                initialDate: fechaActual ?? DateTime.now(),
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime.now(),
+                              );
+
+                              if (fechaSeleccionada != null) {
+                                // Mostrar selector de hora
+                                final horaActual = fechaActual != null
+                                    ? TimeOfDay.fromDateTime(fechaActual)
+                                    : TimeOfDay.now();
+
+                                final horaSeleccionada = await showTimePicker(
+                                  context: context,
+                                  initialTime: horaActual,
+                                );
+
+                                if (horaSeleccionada != null) {
+                                  final fechaCompleta = DateTime(
+                                    fechaSeleccionada.year,
+                                    fechaSeleccionada.month,
+                                    fechaSeleccionada.day,
+                                    horaSeleccionada.hour,
+                                    horaSeleccionada.minute,
+                                  );
+                                  fechaAgregadoController.text = fechaCompleta
+                                      .toIso8601String();
+                                }
+                              }
+                            },
+                          ),
                         ],
                       ),
                     ),
@@ -457,6 +510,12 @@ Future<void> mostrarEditarProducto(
                                           ? null
                                           : double.tryParse(medida),
                                       'fecha_vencimiento': fechaVencimiento,
+                                      'fecha_agregado':
+                                          fechaAgregadoController
+                                              .text
+                                              .isNotEmpty
+                                          ? fechaAgregadoController.text
+                                          : null,
                                     })
                                     .eq('tipo', tipoOriginal)
                                     .eq(
@@ -516,6 +575,12 @@ Future<void> mostrarEditarProducto(
                                           ? null
                                           : double.tryParse(medida),
                                       'fecha_vencimiento': fechaVencimiento,
+                                      'fecha_agregado':
+                                          fechaAgregadoController
+                                              .text
+                                              .isNotEmpty
+                                          ? fechaAgregadoController.text
+                                          : null,
                                     })
                                     .inFilter('id_producto', idsActualizar);
 
