@@ -6,8 +6,8 @@ Future<void> mostrarAgregarProveedor(
   VoidCallback onSuccess,
 ) async {
   final nombreController = TextEditingController();
+  final rucController = TextEditingController();
   final telefonoController = TextEditingController();
-  final cargoController = TextEditingController();
 
   showDialog(
     context: context,
@@ -22,13 +22,13 @@ Future<void> mostrarAgregarProveedor(
               decoration: const InputDecoration(labelText: 'Nombre completo'),
             ),
             TextField(
+              controller: rucController,
+              decoration: const InputDecoration(labelText: 'RUC'),
+            ),
+            TextField(
               controller: telefonoController,
               decoration: const InputDecoration(labelText: 'Número de teléfono'),
               keyboardType: TextInputType.phone,
-            ),
-            TextField(
-              controller: cargoController,
-              decoration: const InputDecoration(labelText: 'Cargo'),
             ),
           ],
         ),
@@ -40,12 +40,12 @@ Future<void> mostrarAgregarProveedor(
           ElevatedButton(
             onPressed: () async {
               final nombre = nombreController.text.trim();
+              final ruc = rucController.text.trim();
               final telefono = telefonoController.text.trim();
-              final cargo = cargoController.text.trim();
 
-              if (nombre.isEmpty || cargo.isEmpty) {
+              if (nombre.isEmpty || ruc.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Nombre y cargo son obligatorios')),
+                  const SnackBar(content: Text('Nombre y RUC son obligatorios')),
                 );
                 return;
               }
@@ -53,12 +53,12 @@ Future<void> mostrarAgregarProveedor(
               await Supabase.instance.client.from('proveedor').insert({
                 'id_proveedor': DateTime.now().millisecondsSinceEpoch,
                 'nombre_proveedor': nombre,
+                'ruc_proveedor': ruc,
                 'numero_telefono': telefono.isEmpty ? null : telefono,
-                'cargo': cargo,
               });
 
               Navigator.pop(context);
-              onSuccess(); // refresca la lista
+              onSuccess();
             },
             child: const Text('Confirmar datos'),
           ),

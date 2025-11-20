@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-// Importa tus modales externos
-import 'package:farmacia_desktop/modal/agregar_proveedor_modal.dart';
-import 'package:farmacia_desktop/modal/editar_proveedor_modal.dart';
+import 'package:tu_app/modals/agregar_proveedor_modal.dart';
+import 'package:tu_app/modals/editar_proveedor_modal.dart';
 
 class ProveedoresScreen extends StatefulWidget {
   const ProveedoresScreen({super.key});
@@ -24,11 +22,10 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
     _searchController.addListener(filtrar);
   }
 
-  // 🔌 Cargar proveedores desde Supabase
   Future<void> cargarProveedores() async {
     final response = await Supabase.instance.client
         .from('proveedor')
-        .select('id_proveedor, nombre_proveedor, numero_telefono, cargo');
+        .select('id_proveedor, nombre_proveedor, ruc_proveedor, numero_telefono');
 
     setState(() {
       proveedores = List<Map<String, dynamic>>.from(response);
@@ -36,14 +33,13 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
     });
   }
 
-  // 🔍 Filtrar proveedores por nombre o cargo
   void filtrar() {
     final query = _searchController.text.toLowerCase();
     setState(() {
       filtrados = proveedores.where((p) {
         final nombre = p['nombre_proveedor']?.toLowerCase() ?? '';
-        final cargo = p['cargo']?.toLowerCase() ?? '';
-        return nombre.contains(query) || cargo.contains(query);
+        final ruc = p['ruc_proveedor']?.toLowerCase() ?? '';
+        return nombre.contains(query) || ruc.contains(query);
       }).toList();
     });
   }
@@ -56,9 +52,9 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
         actions: [
           ElevatedButton.icon(
             onPressed: () => mostrarAgregarProveedor(context, cargarProveedores),
-            icon: const Icon(Icons.person_add),
+            icon: const Icon(Icons.add),
             label: const Text('Agregar'),
-            style: ElevatedButton.styleFrom(  backgroundColor: Colors.lightBlue, foregroundColor: Colors.white,),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
           ),
         ],
       ),
@@ -69,7 +65,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Buscar proveedores',
+                hintText: 'Buscar proveedor',
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
@@ -89,8 +85,8 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
                 final proveedor = filtrados[index];
                 return ProveedorCard(
                   nombre: proveedor['nombre_proveedor'],
+                  ruc: proveedor['ruc_proveedor'],
                   telefono: proveedor['numero_telefono'],
-                  cargo: proveedor['cargo'],
                   onEdit: () => mostrarEditarProveedor(context, proveedor, cargarProveedores),
                 );
               },
@@ -102,18 +98,17 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
   }
 }
 
-// 🧱 Tarjeta visual de proveedor
 class ProveedorCard extends StatelessWidget {
   final String nombre;
+  final String? ruc;
   final String? telefono;
-  final String? cargo;
   final VoidCallback onEdit;
 
   const ProveedorCard({
     super.key,
     required this.nombre,
+    this.ruc,
     this.telefono,
-    this.cargo,
     required this.onEdit,
   });
 
@@ -127,7 +122,7 @@ class ProveedorCard extends StatelessWidget {
             top: 8,
             right: 8,
             child: IconButton(
-              icon: const Icon(Icons.edit, size: 20),
+              icon: const Icon(Icons.edit),
               onPressed: onEdit,
             ),
           ),
@@ -138,8 +133,8 @@ class ProveedorCard extends StatelessWidget {
                 const CircleAvatar(child: Icon(Icons.business)),
                 const SizedBox(height: 8),
                 Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(ruc ?? 'RUC no disponible'),
                 Text(telefono ?? 'Teléfono no disponible'),
-                Text('Cargo: ${cargo ?? 'No definido'}', style: const TextStyle(fontSize: 12)),
               ],
             ),
           ),
