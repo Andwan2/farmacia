@@ -3,15 +3,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProductosScreen extends StatefulWidget {
   const ProductosScreen({super.key});
-
   @override
-  State<ProductosScreen> createState() => _ProductosScreenState();
+  State<ProductosScreen> createState() => _InventarioPageState();
 }
 
-class _ProductosScreenState extends State<ProductosScreen> {
+class _InventarioPageState extends State<ProductosScreen> {
   List<dynamic> productos = [];
+  Map<int, Map<String, dynamic>> presentaciones =
+      {}; // id_presentacion -> {descripcion, unidad_medida}
   Map<String, int> stockPorTipo = {};
   String busqueda = '';
+  bool cargando = true;
 
   @override
   void initState() {
@@ -20,41 +22,72 @@ class _ProductosScreenState extends State<ProductosScreen> {
   }
 
   Future<void> cargarDatos() async {
+    setState(() => cargando = true);
     final client = Supabase.instance.client;
 
-    final response = await client.from('producto').select();
-    final data = response as List;
+    // 1) Productos
+    final resProd = await client
+        .from('producto')
+        .select(
+          'id_producto,nombre_producto,id_presentacion,fecha_vencimiento,tipo,medida',
+        )
+        .order('nombre_producto', ascending: true);
 
+    final dataProd = (resProd is List) ? resProd : <dynamic>[];
+
+    // 2) Presentaciones para mapear id_presentacion -> descripcion/unidad_medida
+    final resPres = await client
+        .from('presentacion')
+        .select('id_presentacion,descripcion,unidad_medida')
+        .order('id_presentacion', ascending: true);
+
+    final dataPres = (resPres is List) ? resPres : <dynamic>[];
+    final Map<int, Map<String, dynamic>> presMap = {};
+    for (final p in dataPres) {
+      final id = p['id_presentacion'] as int;
+      presMap[id] = {
+        'descripcion': p['descripcion'],
+        'unidad_medida': p['unidad_medida'],
+      };
+    }
+
+    // 3) Stock por tipo (conteo)
     final Map<String, int> stock = {};
-    for (var item in data) {
-      final tipo = item['tipo'];
+    for (final item in dataProd) {
+      final tipo = item['tipo'] as String;
       stock[tipo] = (stock[tipo] ?? 0) + 1;
     }
 
     setState(() {
-      productos = data;
+      productos = dataProd;
+      presentaciones = presMap;
       stockPorTipo = stock;
+      cargando = false;
     });
   }
 
-  void eliminarProducto(String nombre) async {
-    await Supabase.instance.client.from('producto').delete().eq('nombre', nombre);
-    cargarDatos();
+  Future<void> eliminarProducto(int idProducto) async {
+    await Supabase.instance.client
+        .from('producto')
+        .delete()
+        .eq('id_producto', idProducto);
+    await cargarDatos();
   }
 
   @override
   Widget build(BuildContext context) {
-    final filtrados = productos.where((p) =>
-      p['nombre'].toLowerCase().contains(busqueda.toLowerCase())).toList();
+    final listaFiltrada = productos.where((p) {
+      final nombre = p['nombre_producto']?.toString() ?? '';
+      return nombre.toLowerCase().contains(busqueda.toLowerCase());
+    }).toList();
 
     return Scaffold(
-      appBar: AppBar(title: Text('Inventario')),
       body: Column(
         children: [
           Padding(
-            padding: EdgeInsets.all(8),
+            padding: const EdgeInsets.all(8),
             child: TextField(
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Buscar producto',
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
@@ -63,54 +96,79 @@ class _ProductosScreenState extends State<ProductosScreen> {
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: filtrados.length,
-              itemBuilder: (context, index) {
-                final p = filtrados[index];
-                final stock = stockPorTipo[p['tipo']] ?? 0;
-                final fecha = DateTime.parse(p['fecha_vencimiento']);
-                final dias = fecha.difference(DateTime.now()).inDays;
-                final color = dias < 30 ? Colors.red[100] : null;
+            child: cargando
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    itemCount: listaFiltrada.length,
+                    itemBuilder: (context, index) {
+                      final p = listaFiltrada[index];
+                      final idProducto = p['id_producto'] as int;
+                      final nombre = p['nombre_producto'] as String;
+                      final idPres = p['id_presentacion'] as int;
+                      final tipo = p['tipo'] as String;
+                      final medida = p['medida']?.toString() ?? '';
+                      final presentacion =
+                          presentaciones[idPres]?['descripcion'] ?? '—';
+                      final unidad =
+                          presentaciones[idPres]?['unidad_medida'] ?? '';
+                      final fechaStr = p['fecha_vencimiento'] as String;
+                      final fecha = DateTime.parse(fechaStr);
+                      final diasRestantes = fecha
+                          .difference(DateTime.now())
+                          .inDays;
+                      final stockTipo = stockPorTipo[tipo] ?? 0;
+                      final color = diasRestantes < 30 ? Colors.red[100] : null;
 
-                return Card(
-                  color: color,
-                  margin: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: ListTile(
-                    title: Text(p['nombre']),
-                    subtitle: Text('${p['presentacion']} • Stock: $stock • \$${p['precio']}'),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('Vence: ${fecha.toLocal().toString().split(' ')[0]}'),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(Icons.edit),
-                              onPressed: () {
-                                // Aquí iría la lógica para editar
-                              },
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.delete),
-                              onPressed: () => eliminarProducto(p['nombre']),
-                            ),
-                          ],
+                      return Card(
+                        color: color,
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
                         ),
-                      ],
-                    ),
+                        child: ListTile(
+                          title: Text(nombre),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('$presentacion • $tipo'),
+                              Text(
+                                'Medida: $medida $unidad • Stock por tipo: $stockTipo',
+                              ),
+                            ],
+                          ),
+                          trailing: SizedBox(
+                            width: 160,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Vence: ${fecha.toIso8601String().split('T').first}',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.edit),
+                                  onPressed: () {
+                                    // TODO: Navegar a formulario de edición (usar id_producto)
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete),
+                                  onPressed: () => eliminarProducto(idProducto),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Aquí iría la lógica para agregar producto
+          // TODO: Navegar a formulario de agregar
         },
-        child: Icon(Icons.add),
+        child: const Icon(Icons.add),
       ),
     );
   }

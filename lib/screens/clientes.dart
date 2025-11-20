@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:farmacia_desktop/modal/agregar_cliente_modal.dart';
 import 'package:farmacia_desktop/modal/editar_cliente_modal.dart';
 
-
 class ClientesScreen extends StatefulWidget {
   const ClientesScreen({super.key});
 
@@ -52,17 +51,6 @@ class _ClientesScreenState extends State<ClientesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Clientes'),
-        actions: [
-          ElevatedButton.icon(
-            onPressed: () => mostrarAgregarCliente(context, cargarClientes),
-            icon: const Icon(Icons.person_add),
-            label: const Text('Agregar'),
-            style: ElevatedButton.styleFrom(  backgroundColor: Colors.lightBlue, foregroundColor: Colors.white,),
-          ),
-        ],
-      ),
       body: Column(
         children: [
           Padding(
@@ -72,7 +60,9 @@ class _ClientesScreenState extends State<ClientesScreen> {
               decoration: InputDecoration(
                 hintText: 'Buscar clientes',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ),
@@ -92,12 +82,20 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   nombre: cliente['nombre_cliente'],
                   telefono: cliente['numero_telefono'],
                   tipo: cliente['tipo_cliente'],
-                  onEdit: () => mostrarEditarCliente(context, cliente, cargarClientes),
+                  onEdit: () =>
+                      mostrarEditarCliente(context, cliente, cargarClientes),
                 );
               },
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => mostrarAgregarCliente(context, cargarClientes),
+        icon: const Icon(Icons.person_add),
+        label: const Text('Agregar Cliente'),
+        backgroundColor: Colors.lightBlue,
+        foregroundColor: Colors.white,
       ),
     );
   }
@@ -138,9 +136,15 @@ class ClienteCard extends StatelessWidget {
               children: [
                 const CircleAvatar(child: Icon(Icons.person)),
                 const SizedBox(height: 8),
-                Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  nombre,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
                 Text(telefono ?? 'Teléfono no disponible'),
-                Text('Tipo: ${tipo ?? 'No definido'}', style: const TextStyle(fontSize: 12)),
+                Text(
+                  'Tipo: ${tipo ?? 'No definido'}',
+                  style: const TextStyle(fontSize: 12),
+                ),
               ],
             ),
           ),
