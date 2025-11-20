@@ -54,7 +54,8 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
             onPressed: () => mostrarAgregarEmpleado(context, cargarEmpleados),
             icon: const Icon(Icons.person_add),
             label: const Text('Agregar'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.lightBlue,
+        foregroundColor: Colors.white,),
           ),
         ],
       ),
@@ -75,7 +76,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
             child: GridView.builder(
               padding: const EdgeInsets.all(12),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+                crossAxisCount: 4,
                 childAspectRatio: 3 / 2,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
