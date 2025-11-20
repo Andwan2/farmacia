@@ -80,7 +80,6 @@ class _ClientesScreenState extends State<ClientesScreen> {
                 return ClienteCard(
                   nombre: cliente['nombre_cliente'],
                   telefono: cliente['numero_telefono'],
-                  tipo: cliente['tipo_cliente'],
                   onEdit: () =>
                       mostrarEditarCliente(context, cliente, cargarClientes),
                 );
@@ -139,7 +138,7 @@ class ClienteCard extends StatelessWidget {
                 ),
                 Text(telefono ?? 'Teléfono no disponible'),
                 Text(
-                  'Tipo: ${tipo ?? 'No definido'}',
+                  'Tipo: ${telefono ?? 'N/A'}',
                   style: const TextStyle(fontSize: 12),
                 ),
               ],
