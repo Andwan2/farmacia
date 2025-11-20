@@ -862,9 +862,25 @@ class _InventarioPageState extends State<ProductosScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                // Switch para mostrar productos eliminados
+                // Botón de agregar y switch para mostrar productos eliminados
                 Row(
                   children: [
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        await mostrarAgregarProducto(context, cargarDatos);
+                      },
+                      icon: const Icon(Icons.add_circle_outline),
+                      label: const Text('Agregar producto'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: SwitchListTile(
                         title: Text(
@@ -1044,13 +1060,6 @@ class _InventarioPageState extends State<ProductosScreen> {
                   ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          await mostrarAgregarProducto(context, cargarDatos);
-        },
-        tooltip: 'Agregar producto',
-        child: const Icon(Icons.add),
       ),
     );
   }
