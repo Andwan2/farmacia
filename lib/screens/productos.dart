@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:farmacia_desktop/providers/theme_provider.dart';
 
 class ProductosScreen extends StatefulWidget {
   const ProductosScreen({super.key});
@@ -111,82 +113,93 @@ class _InventarioPageState extends State<ProductosScreen> {
           Expanded(
             child: cargando
                 ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    itemCount: listaFiltrada.length,
-                    itemBuilder: (context, index) {
-                      final p = listaFiltrada[index];
-                      final idProducto = p['id_producto'] as int;
-                      final nombre = p['nombre_producto'] as String;
-                      final idPres = p['id_presentacion'] as int;
-                      final tipo = p['tipo'] as String;
-                      final medida = p['medida']?.toString() ?? '';
-                      final presentacion =
-                          presentaciones[idPres]?['descripcion'] ?? '—';
-                      final unidad =
-                          presentaciones[idPres]?['unidad_medida'] ?? '';
-                      final fechaStr = p['fecha_vencimiento'] as String;
-                      final fecha = DateTime.parse(fechaStr);
-                      final diasRestantes = fecha
-                          .difference(DateTime.now())
-                          .inDays;
-                      final stockTipo = stockPorTipo[tipo] ?? 0;
-                      final color = diasRestantes < 30 ? Colors.red[100] : null;
+                : Consumer<ThemeProvider>(
+                    builder: (context, themeProvider, child) {
+                      return ListView.builder(
+                        itemCount: listaFiltrada.length,
+                        itemBuilder: (context, index) {
+                          final p = listaFiltrada[index];
+                          final idProducto = p['id_producto'] as int;
+                          final nombre = p['nombre_producto'] as String;
+                          final idPres = p['id_presentacion'] as int;
+                          final tipo = p['tipo'] as String;
+                          final medida = p['medida']?.toString() ?? '';
+                          final presentacion =
+                              presentaciones[idPres]?['descripcion'] ?? '—';
+                          final unidad =
+                              presentaciones[idPres]?['unidad_medida'] ?? '';
+                          final fechaStr = p['fecha_vencimiento'] as String;
+                          final fecha = DateTime.parse(fechaStr);
+                          final diasRestantes = fecha
+                              .difference(DateTime.now())
+                              .inDays;
+                          final stockTipo = stockPorTipo[tipo] ?? 0;
 
-                      return Card(
-                        color: color,
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        child: ListTile(
-                          title: Text(nombre),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('$presentacion • $tipo'),
-                              Text(
-                                'Medida: $medida $unidad • Cantidad en Stock: $stockTipo',
+                          return Card(
+                            color: diasRestantes < 60
+                                ? (themeProvider.isDarkMode
+                                      ? Colors.orange[900]?.withOpacity(0.4)
+                                      : Colors.orange[100])
+                                : null,
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            child: ListTile(
+                              title: Text(
+                                nombre,
+                                style: const TextStyle(fontSize: 16),
                               ),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  Text('$presentacion • $tipo'),
                                   Text(
-                                    'Vence: ${fecha.toIso8601String().split('T').first}',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                  Text(
-                                    diasRestantes < 60
-                                        ? '⚠️ $diasRestantes días'
-                                        : '$diasRestantes días',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: diasRestantes < 30
-                                          ? Colors.red
-                                          : Colors.grey,
-                                    ),
+                                    'Medida: $medida $unidad • Cantidad en Stock: $stockTipo',
                                   ),
                                 ],
                               ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(Icons.edit),
-                                onPressed: () {
-                                  // TODO: Navegar a formulario de edición (usar id_producto)
-                                },
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        'Vence: ${fecha.toIso8601String().split('T').first}',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                      Text(
+                                        diasRestantes < 60
+                                            ? '⚠️ $diasRestantes días'
+                                            : '$diasRestantes días',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: diasRestantes < 30
+                                              ? Colors.red
+                                              : Colors.grey,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit),
+                                    onPressed: () {
+                                      // TODO: Navegar a formulario de edición (usar id_producto)
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete),
+                                    onPressed: () =>
+                                        eliminarProducto(idProducto),
+                                  ),
+                                ],
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.delete),
-                                onPressed: () => eliminarProducto(idProducto),
-                              ),
-                            ],
-                          ),
-                        ),
+                            ),
+                          );
+                        },
                       );
                     },
                   ),
