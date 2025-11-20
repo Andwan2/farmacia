@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-Future<void> mostrarAgregarCliente(BuildContext context, VoidCallback onSuccess) async {
-  final nombreController = TextEditingController();
-  final telefonoController = TextEditingController();
+Future<void> mostrarEditarProveedor(
+  BuildContext context,
+  Map<String, dynamic> proveedor,
+  VoidCallback onSuccess,
+) async {
+  final nombreController = TextEditingController(text: proveedor['nombre_proveedor']);
+  final telefonoController = TextEditingController(text: proveedor['numero_telefono'] ?? '');
+  final cargoController = TextEditingController(text: proveedor['cargo']);
 
   showDialog(
     context: context,
     builder: (context) {
       return AlertDialog(
-        title: const Text('Agregar cliente'),
+        title: const Text('Editar proveedor'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -22,6 +27,10 @@ Future<void> mostrarAgregarCliente(BuildContext context, VoidCallback onSuccess)
               decoration: const InputDecoration(labelText: 'Número de teléfono'),
               keyboardType: TextInputType.phone,
             ),
+            TextField(
+              controller: cargoController,
+              decoration: const InputDecoration(labelText: 'Cargo'),
+            ),
           ],
         ),
         actions: [
@@ -33,21 +42,26 @@ Future<void> mostrarAgregarCliente(BuildContext context, VoidCallback onSuccess)
             onPressed: () async {
               final nombre = nombreController.text.trim();
               final telefono = telefonoController.text.trim();
+              final cargo = cargoController.text.trim();
 
-              if (nombre.isEmpty) {
+              if (nombre.isEmpty || cargo.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Nombre es obligatorio')),
+                  const SnackBar(content: Text('Nombre y cargo son obligatorios')),
                 );
                 return;
               }
 
-              await Supabase.instance.client.from('cliente').insert({
-                'nombre_cliente': nombre,
-                'numero_telefono': telefono.isEmpty ? null : telefono,
-              });
+              await Supabase.instance.client
+                  .from('proveedor')
+                  .update({
+                    'nombre_proveedor': nombre,
+                    'numero_telefono': telefono.isEmpty ? null : telefono,
+                    'cargo': cargo,
+                  })
+                  .eq('id_proveedor', proveedor['id_proveedor']);
 
               Navigator.pop(context);
-              onSuccess(); // recarga la lista
+              onSuccess(); // refresca la lista
             },
             child: const Text('Confirmar datos'),
           ),

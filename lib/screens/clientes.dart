@@ -28,7 +28,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
   Future<void> cargarClientes() async {
     final response = await Supabase.instance.client
         .from('cliente')
-        .select('id_cliente, nombre_cliente, numero_telefono, tipo_cliente');
+        .select('id_cliente, nombre_cliente, numero_telefono');
 
     setState(() {
       clientes = List<Map<String, dynamic>>.from(response);
@@ -42,8 +42,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
     setState(() {
       filtrados = clientes.where((c) {
         final nombre = c['nombre_cliente']?.toLowerCase() ?? '';
-        final tipo = c['tipo_cliente']?.toLowerCase() ?? '';
-        return nombre.contains(query) || tipo.contains(query);
+        return nombre.contains(query);
       }).toList();
     });
   }
@@ -105,14 +104,12 @@ class _ClientesScreenState extends State<ClientesScreen> {
 class ClienteCard extends StatelessWidget {
   final String nombre;
   final String? telefono;
-  final String? tipo;
   final VoidCallback onEdit;
 
   const ClienteCard({
     super.key,
     required this.nombre,
     this.telefono,
-    this.tipo,
     required this.onEdit,
   });
 
