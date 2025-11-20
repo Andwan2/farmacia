@@ -8,7 +8,6 @@ Future<void> mostrarEditarCliente(
 ) async {
   final nombreController = TextEditingController(text: cliente['nombre_cliente']);
   final telefonoController = TextEditingController(text: cliente['numero_telefono'] ?? '');
-  final tipoController = TextEditingController(text: cliente['tipo_cliente']);
 
   showDialog(
     context: context,
@@ -27,10 +26,6 @@ Future<void> mostrarEditarCliente(
               decoration: const InputDecoration(labelText: 'Número de teléfono'),
               keyboardType: TextInputType.phone,
             ),
-            TextField(
-              controller: tipoController,
-              decoration: const InputDecoration(labelText: 'Tipo de cliente'),
-            ),
           ],
         ),
         actions: [
@@ -42,11 +37,10 @@ Future<void> mostrarEditarCliente(
             onPressed: () async {
               final nombre = nombreController.text.trim();
               final telefono = telefonoController.text.trim();
-              final tipo = tipoController.text.trim();
 
-              if (nombre.isEmpty || tipo.isEmpty) {
+              if (nombre.isEmpty ) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Nombre y tipo son obligatorios')),
+                  const SnackBar(content: Text('Nombre es obligatorio')),
                 );
                 return;
               }
@@ -56,7 +50,6 @@ Future<void> mostrarEditarCliente(
                   .update({
                     'nombre_cliente': nombre,
                     'numero_telefono': telefono.isEmpty ? null : telefono,
-                    'tipo_cliente': tipo,
                   })
                   .eq('id_cliente', cliente['id_cliente']);
 
