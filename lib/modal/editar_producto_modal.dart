@@ -35,6 +35,7 @@ Future<void> mostrarEditarProducto(
   final tipoOriginal = producto['tipo'] as String;
   final fechaVencimientoOriginal =
       producto['fecha_vencimiento']?.toString().split('T').first ?? '';
+  final estadoOriginal = producto['estado'] as String? ?? 'Disponible';
 
   // Obtener la cantidad de productos en el grupo
   final stockGrupo = producto['_stock_grupo'] as int? ?? 1;
@@ -320,8 +321,12 @@ Future<void> mostrarEditarProducto(
                             decoration: const InputDecoration(
                               labelText: 'Medida',
                               border: OutlineInputBorder(),
+                              helperText: 'Puede ser entero o decimal',
                             ),
-                            keyboardType: TextInputType.number,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                              signed: false,
+                            ),
                           ),
                           const SizedBox(height: 10),
                           TextField(
@@ -522,7 +527,7 @@ Future<void> mostrarEditarProducto(
                                       'fecha_vencimiento',
                                       fechaVencimientoOriginal,
                                     )
-                                    .eq('esVisible', true);
+                                    .eq('estado', estadoOriginal);
 
                                 Navigator.pop(context);
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -544,7 +549,7 @@ Future<void> mostrarEditarProducto(
                                       'fecha_vencimiento',
                                       fechaVencimientoOriginal,
                                     )
-                                    .eq('esVisible', true)
+                                    .eq('estado', estadoOriginal)
                                     .limit(cantidadIndividual);
 
                                 final listaProductos = productosGrupo as List;

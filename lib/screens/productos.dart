@@ -37,13 +37,22 @@ class _InventarioPageState extends State<ProductosScreen> {
     final client = Supabase.instance.client;
 
     // 1) Productos
-    final resProd = await client
+    // Filtrar por estado: disponibles (Comprado) o eliminados (Vendido/Removido)
+    var query = client
         .from('producto')
         .select(
-          'id_producto,nombre_producto,id_presentacion,fecha_vencimiento,tipo,medida,esVisible,estado,fecha_agregado',
-        )
-        .eq('esVisible', mostrarEliminados ? false : true)
-        .order('nombre_producto', ascending: true);
+          'id_producto,nombre_producto,id_presentacion,fecha_vencimiento,tipo,medida,estado,fecha_agregado,precio_compra,precio_venta',
+        );
+
+    if (mostrarEliminados) {
+      // Mostrar solo productos eliminados (Vendido o Removido)
+      query = query.inFilter('estado', ['Vendido', 'Removido']);
+    } else {
+      // Mostrar solo productos disponibles
+      query = query.eq('estado', 'Disponible');
+    }
+
+    final resProd = await query.order('nombre_producto', ascending: true);
 
     final dataProd = (resProd is List) ? resProd : <dynamic>[];
 
@@ -94,7 +103,7 @@ class _InventarioPageState extends State<ProductosScreen> {
     final tipoOriginal = producto['tipo'] as String;
     final fechaVencimientoOriginal =
         producto['fecha_vencimiento']?.toString().split('T').first ?? '';
-    final estadoOriginal = producto['estado'] as String? ?? 'Comprado';
+    final estadoOriginal = producto['estado'] as String? ?? 'Disponible';
 
     bool eliminarTodos = true;
     int cantidadEliminar = 1;
@@ -433,14 +442,13 @@ class _InventarioPageState extends State<ProductosScreen> {
       try {
         if (resultado['eliminarTodos'] == true) {
           // Eliminar todos los productos del grupo con el mismo estado
-          // Solo elimina productos activos (esVisible=true) que tengan el mismo estado
+          // estadoOriginal ya garantiza que son productos disponibles
           await Supabase.instance.client
               .from('producto')
-              .update({'esVisible': false, 'estado': estadoFinal})
+              .update({'estado': estadoFinal})
               .eq('tipo', tipoOriginal)
               .eq('fecha_vencimiento', fechaVencimientoOriginal)
-              .eq('estado', estadoOriginal)
-              .eq('esVisible', true);
+              .eq('estado', estadoOriginal);
 
           await cargarDatos();
 
@@ -459,13 +467,13 @@ class _InventarioPageState extends State<ProductosScreen> {
           final cantidad = resultado['cantidad'] as int;
 
           // Obtener los IDs de los productos a eliminar con el mismo estado
+          // estadoOriginal ya garantiza que son productos disponibles
           final productosGrupo = await Supabase.instance.client
               .from('producto')
               .select('id_producto')
               .eq('tipo', tipoOriginal)
               .eq('fecha_vencimiento', fechaVencimientoOriginal)
               .eq('estado', estadoOriginal)
-              .eq('esVisible', true)
               .limit(cantidad);
 
           final listaProductos = productosGrupo as List;
@@ -488,7 +496,7 @@ class _InventarioPageState extends State<ProductosScreen> {
           // Eliminar solo los productos seleccionados
           await Supabase.instance.client
               .from('producto')
-              .update({'esVisible': false, 'estado': estadoFinal})
+              .update({'estado': estadoFinal})
               .inFilter('id_producto', idsEliminar);
 
           await cargarDatos();
@@ -544,7 +552,7 @@ class _InventarioPageState extends State<ProductosScreen> {
     // Primero agrupar todos los productos por tipo y estado
     for (final p in productos) {
       final tipo = p['tipo'] as String;
-      final estado = p['estado'] as String? ?? 'Comprado';
+      final estado = p['estado'] as String? ?? 'Disponible';
       final clave = '${tipo}_$estado'; // Agrupar por tipo Y estado
       if (!gruposPorTipo.containsKey(clave)) {
         gruposPorTipo[clave] = [];
@@ -608,7 +616,7 @@ class _InventarioPageState extends State<ProductosScreen> {
     // Crear mapa para compatibilidad con filtros
     final Map<String, dynamic> productosPorTipo = {};
     for (final p in productosAgrupados) {
-      final estado = p['estado'] as String? ?? 'Comprado';
+      final estado = p['estado'] as String? ?? 'Disponible';
       final key = '${p['tipo']}_${p['fecha_vencimiento']}_$estado';
       productosPorTipo[key] = p;
     }
@@ -943,6 +951,8 @@ class _InventarioPageState extends State<ProductosScreen> {
                           final fechaMin = p['_fecha_min'] as DateTime?;
                           final fechaMax = p['_fecha_max'] as DateTime?;
                           final estado = p['estado'] as String?;
+                          final precioCompra = p['precio_compra'] as num?;
+                          final precioVenta = p['precio_venta'] as num?;
 
                           return Card(
                             color: diasRestantes < 60
@@ -964,7 +974,35 @@ class _InventarioPageState extends State<ProductosScreen> {
                                 children: [
                                   Text('$presentacion • $tipo'),
                                   Text(
-                                    'Medida: $medida $unidad • Cantidad en Stock: $stockGrupo',
+                                    'Medida: $medida $unidad • Stock: $stockGrupo',
+                                  ),
+                                  Row(
+                                    children: [
+                                      if (precioCompra != null)
+                                        Text(
+                                          'Compra: C\$ ${precioCompra.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.blue[700],
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      if (precioCompra != null &&
+                                          precioVenta != null)
+                                        const Text(
+                                          ' • ',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      if (precioVenta != null)
+                                        Text(
+                                          'Venta: C\$ ${precioVenta.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.green[700],
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                   if (mostrarEliminados && estado != null)
                                     Container(

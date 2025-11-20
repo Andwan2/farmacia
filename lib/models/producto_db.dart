@@ -5,7 +5,7 @@ class ProductoDB {
   final String fechaVencimiento;
   final String tipo;
   final String medida;
-  final bool esVisible;
+  final String estado;
   final double? precioVenta;
   final double? precioCompra;
 
@@ -16,7 +16,7 @@ class ProductoDB {
     required this.fechaVencimiento,
     required this.tipo,
     required this.medida,
-    required this.esVisible,
+    required this.estado,
     this.precioVenta,
     this.precioCompra,
   });
@@ -29,7 +29,7 @@ class ProductoDB {
       fechaVencimiento: json['fecha_vencimiento'] as String,
       tipo: json['tipo'] as String,
       medida: json['medida'] as String,
-      esVisible: json['esVisible'] as bool? ?? true,
+      estado: json['estado'] as String? ?? 'Disponible',
       precioVenta: (json['precio_venta'] as num?)?.toDouble(),
       precioCompra: (json['precio_compra'] as num?)?.toDouble(),
     );
@@ -43,9 +43,12 @@ class ProductoDB {
       'fecha_vencimiento': fechaVencimiento,
       'tipo': tipo,
       'medida': medida,
-      'esVisible': esVisible,
+      'estado': estado,
       'precio_venta': precioVenta,
       'precio_compra': precioCompra,
     };
   }
+
+  /// Verifica si el producto está disponible (no Vendido ni Removido)
+  bool get estaDisponible => estado != 'Vendido' && estado != 'Removido';
 }

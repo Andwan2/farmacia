@@ -46,7 +46,20 @@ Future<void> mostrarAgregarProducto(
             );
 
             final unidadMedida = presentacion['unidad_medida'] ?? '';
-            return '${nombreController.text} ${medidaController.text} $unidadMedida';
+            // Formatear medida: si es entero mostrar sin decimales, si es decimal mantenerlo
+            final medidaTexto = medidaController.text.trim();
+            final medidaNum = double.tryParse(medidaTexto);
+            String medidaFormateada = medidaTexto;
+            if (medidaNum != null) {
+              // Si es un número entero, mostrar sin decimales
+              if (medidaNum == medidaNum.toInt()) {
+                medidaFormateada = medidaNum.toInt().toString();
+              } else {
+                // Si es decimal, mantener el valor tal cual
+                medidaFormateada = medidaNum.toString();
+              }
+            }
+            return '${nombreController.text} $medidaFormateada $unidadMedida';
           }
 
           return Dialog(
@@ -172,9 +185,13 @@ Future<void> mostrarAgregarProducto(
                             decoration: const InputDecoration(
                               labelText: 'Medida *',
                               border: OutlineInputBorder(),
-                              hintText: 'Ej: 500',
+                              hintText: 'Ej: 500 o 2.5',
+                              helperText: 'Puede ser entero o decimal',
                             ),
-                            keyboardType: TextInputType.number,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                              signed: false,
+                            ),
                             onChanged: (_) => setState(() {}),
                           ),
                           const SizedBox(height: 10),
