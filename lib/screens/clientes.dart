@@ -1,31 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// Pantalla principal que muestra la lista de clientes
+// Importa tus modales externos
+import 'package:farmacia_desktop/modal/agregar_cliente_modal.dart';
+import 'package:farmacia_desktop/modal/editar_cliente_modal.dart';
+
+
 class ClientesScreen extends StatefulWidget {
   const ClientesScreen({super.key});
 
   @override
-  State<ClientesScreen> createState() => _ClienteScreenState();
+  State<ClientesScreen> createState() => _ClientesScreenState();
 }
 
-class _ClienteScreenState extends State<ClientesScreen> {
-  final TextEditingController _searchController = TextEditingController();
-
-  // Lista completa de clientes obtenidos desde Supabase
+class _ClientesScreenState extends State<ClientesScreen> {
   List<Map<String, dynamic>> clientes = [];
-
-  // Lista filtrada según la búsqueda
   List<Map<String, dynamic>> filtrados = [];
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    cargarClientes(); // Carga inicial de datos
-    _searchController.addListener(filtrar); // Escucha cambios en el campo de búsqueda
+    cargarClientes();
+    _searchController.addListener(filtrar);
   }
 
-  // Consulta a Supabase para obtener los clientes
+  // 🔌 Cargar clientes desde Supabase
   Future<void> cargarClientes() async {
     final response = await Supabase.instance.client
         .from('cliente')
@@ -33,11 +33,11 @@ class _ClienteScreenState extends State<ClientesScreen> {
 
     setState(() {
       clientes = List<Map<String, dynamic>>.from(response);
-      filtrados = clientes; // Inicialmente muestra todos
+      filtrados = clientes;
     });
   }
 
-  // Filtra la lista según el texto ingresado
+  // 🔍 Filtrar clientes por nombre o tipo
   void filtrar() {
     final query = _searchController.text.toLowerCase();
     setState(() {
@@ -52,51 +52,36 @@ class _ClienteScreenState extends State<ClientesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // AppBar con botón atrás y botón "Agregar"
       appBar: AppBar(
         title: const Text('Clientes'),
         actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: ElevatedButton.icon(
-              onPressed: () {
-                // Acción para agregar cliente (puedes abrir un modal o navegar)
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Agregar'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.lightBlue,
-                foregroundColor: Colors.white, // ← color del texto e ícono
-              ),
-
-            ),
+          ElevatedButton.icon(
+            onPressed: () => mostrarAgregarCliente(context, cargarClientes),
+            icon: const Icon(Icons.person_add),
+            label: const Text('Agregar'),
+            style: ElevatedButton.styleFrom(  backgroundColor: Colors.lightBlue, foregroundColor: Colors.white,),
           ),
         ],
       ),
-
-      // Cuerpo de la pantalla
       body: Column(
         children: [
-          // Campo de búsqueda
           Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Buscar por nombre o tipo',
+                hintText: 'Buscar clientes',
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),
-
-          // Grid de tarjetas de cliente
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(12),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4, // Dos columnas
-                childAspectRatio: 3 / 2, // Proporción de cada tarjeta
+                crossAxisCount: 4,
+                childAspectRatio: 3 / 2,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
               ),
@@ -105,11 +90,9 @@ class _ClienteScreenState extends State<ClientesScreen> {
                 final cliente = filtrados[index];
                 return ClienteCard(
                   nombre: cliente['nombre_cliente'],
-                  telefono: cliente['numero_telefono'] ?? 'No registrado',
+                  telefono: cliente['numero_telefono'],
                   tipo: cliente['tipo_cliente'],
-                  onEdit: () {
-                    // Acción para editar cliente (puedes abrir un modal o navegar)
-                  },
+                  onEdit: () => mostrarEditarCliente(context, cliente, cargarClientes),
                 );
               },
             ),
@@ -120,28 +103,27 @@ class _ClienteScreenState extends State<ClientesScreen> {
   }
 }
 
-// Tarjeta visual para mostrar datos de un cliente
+//  Tarjeta visual de cliente
 class ClienteCard extends StatelessWidget {
   final String nombre;
-  final String telefono;
-  final String tipo;
+  final String? telefono;
+  final String? tipo;
   final VoidCallback onEdit;
 
   const ClienteCard({
     super.key,
     required this.nombre,
-    required this.telefono,
-    required this.tipo,
+    this.telefono,
+    this.tipo,
     required this.onEdit,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 3, // Sombra
+      elevation: 3,
       child: Stack(
         children: [
-          // Botón de edición en la esquina superior derecha
           Positioned(
             top: 8,
             right: 8,
@@ -150,17 +132,15 @@ class ClienteCard extends StatelessWidget {
               onPressed: onEdit,
             ),
           ),
-
-          // Contenido central de la tarjeta
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const CircleAvatar(child: Icon(Icons.person)), // Ícono de cliente
+                const CircleAvatar(child: Icon(Icons.person)),
                 const SizedBox(height: 8),
                 Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(telefono),
-                Text('Tipo: $tipo', style: const TextStyle(fontSize: 12)),
+                Text(telefono ?? 'Teléfono no disponible'),
+                Text('Tipo: ${tipo ?? 'No definido'}', style: const TextStyle(fontSize: 12)),
               ],
             ),
           ),
