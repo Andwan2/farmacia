@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:farmacia_desktop/modal/agregar_cliente_modal.dart';
 import 'package:farmacia_desktop/modal/editar_cliente_modal.dart';
 
-
 class ClientesScreen extends StatefulWidget {
   const ClientesScreen({super.key});
 
@@ -43,7 +42,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
     setState(() {
       filtrados = clientes.where((c) {
         final nombre = c['nombre_cliente']?.toLowerCase() ?? '';
-        return nombre.contains(query) ;
+        return nombre.contains(query);
       }).toList();
     });
   }
@@ -51,17 +50,6 @@ class _ClientesScreenState extends State<ClientesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Clientes'),
-        actions: [
-          ElevatedButton.icon(
-            onPressed: () => mostrarAgregarCliente(context, cargarClientes),
-            icon: const Icon(Icons.person_add),
-            label: const Text('Agregar'),
-            style: ElevatedButton.styleFrom(  backgroundColor: Colors.lightBlue, foregroundColor: Colors.white,),
-          ),
-        ],
-      ),
       body: Column(
         children: [
           Padding(
@@ -71,7 +59,9 @@ class _ClientesScreenState extends State<ClientesScreen> {
               decoration: InputDecoration(
                 hintText: 'Buscar clientes',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ),
@@ -90,12 +80,20 @@ class _ClientesScreenState extends State<ClientesScreen> {
                 return ClienteCard(
                   nombre: cliente['nombre_cliente'],
                   telefono: cliente['numero_telefono'],
-                  onEdit: () => mostrarEditarCliente(context, cliente, cargarClientes),
+                  onEdit: () =>
+                      mostrarEditarCliente(context, cliente, cargarClientes),
                 );
               },
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => mostrarAgregarCliente(context, cargarClientes),
+        icon: const Icon(Icons.person_add),
+        label: const Text('Agregar Cliente'),
+        backgroundColor: Colors.lightBlue,
+        foregroundColor: Colors.white,
       ),
     );
   }

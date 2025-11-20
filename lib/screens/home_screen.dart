@@ -1,3 +1,11 @@
+// ===============================
+// DEPRECATED: Este archivo ya no se usa
+// ===============================
+// La navegación ahora se maneja con go_router y ShellRoute.
+// El AppBar y Drawer están en lib/widgets/app_shell.dart
+// Las rutas están definidas en lib/router.dart
+// ===============================
+
 import 'package:farmacia_desktop/screens/about.dart';
 import 'package:farmacia_desktop/screens/clientes.dart';
 import 'package:farmacia_desktop/screens/compras.dart';
@@ -9,7 +17,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ===============================
-// HOME SCREEN CON BODY DINÁMICO
+// HOME SCREEN CON BODY DINÁMICO (DEPRECATED)
 // ===============================
 
 class HomeScreen extends StatefulWidget {
@@ -20,7 +28,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Widget _currentPage = const Center(child: Text('Selecciona una opción del menú'));
+  Widget _currentPage = const Center(
+    child: Text('Selecciona una opción del menú'),
+  );
 
   void changeScreen(Widget screen) {
     setState(() {
@@ -31,7 +41,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Sistema de inventario de farmacia André')),
+      appBar: AppBar(
+        title: const Text('Sistema de inventario de farmacia André'),
+      ),
       drawer: SideMenu(onSelectPage: changeScreen),
       body: _currentPage,
     );
@@ -59,10 +71,7 @@ class _SideMenuState extends State<SideMenu> {
         padding: const EdgeInsets.all(8),
         children: [
           const DrawerHeader(
-            child: Text(
-              'Menú Principal',
-              style: TextStyle(fontSize: 18),
-            ),
+            child: Text('Menú Principal', style: TextStyle(fontSize: 18)),
           ),
 
           buildSection("Inventario", [
@@ -85,9 +94,7 @@ class _SideMenuState extends State<SideMenu> {
 
           const Divider(),
 
-          buildSection("Info", [
-            ('Acerca de', '/about', Icons.info),
-          ]),
+          buildSection("Info", [('Acerca de', '/about', Icons.info)]),
 
           const Divider(),
 
@@ -108,10 +115,7 @@ class _SideMenuState extends State<SideMenu> {
   // ======================
   // SECCIONES DEL DRAWER
   // ======================
-  Widget buildSection(
-    String title,
-    List<(String, String, IconData?)> items,
-  ) {
+  Widget buildSection(String title, List<(String, String, IconData?)> items) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

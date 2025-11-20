@@ -2,7 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:farmacia_desktop/screens/login_screen.dart';
-import 'package:farmacia_desktop/screens/home_screen.dart';
+import 'package:farmacia_desktop/screens/productos.dart';
+import 'package:farmacia_desktop/screens/proveedores.dart';
+import 'package:farmacia_desktop/screens/clientes.dart';
+import 'package:farmacia_desktop/screens/ventas.dart';
+import 'package:farmacia_desktop/screens/compras.dart';
+import 'package:farmacia_desktop/screens/about.dart';
+import 'package:farmacia_desktop/widgets/app_shell.dart';
 
 final GoRouter router = GoRouter(
   initialLocation: '/login',
@@ -14,7 +20,7 @@ final GoRouter router = GoRouter(
       return '/login';
     }
     if (isLoggedIn && state.uri.toString() == '/login') {
-      return '/home';
+      return '/productos';
     }
     return null;
   },
@@ -24,12 +30,36 @@ final GoRouter router = GoRouter(
       builder: (BuildContext context, GoRouterState state) =>
           const LoginScreen(),
     ),
-    GoRoute(
-      path: '/home',
-      builder: (BuildContext context, GoRouterState state) =>
-          const HomeScreen(),
+    ShellRoute(
+      builder: (context, state, child) => AppShell(child: child),
+      routes: [
+        GoRoute(
+          path: '/productos',
+          builder: (context, state) => const ProductosScreen(),
+        ),
+        GoRoute(
+          path: '/proveedores',
+          builder: (context, state) => const ProveedoresScreen(),
+        ),
+        GoRoute(
+          path: '/clientes',
+          builder: (context, state) => const ClientesScreen(),
+        ),
+        GoRoute(
+          path: '/ventas',
+          builder: (context, state) => const VentasScreen(),
+        ),
+        GoRoute(
+          path: '/compras',
+          builder: (context, state) => const ComprasScreen(),
+        ),
+        GoRoute(
+          path: '/about',
+          builder: (context, state) => const AboutScreen(),
+        ),
+      ],
     ),
-   ],
+  ],
   //ESTO HACE COSAS QUE SOLO GPT SABE
   errorBuilder: (context, state) {
     // Mostrar SnackBar de manera segura
@@ -54,8 +84,10 @@ final GoRouter router = GoRouter(
               icon: Icon(Icons.home),
               tooltip: "Inicio",
             ),
-            Text('Ha ocurrido un error, parece que la ruta no existe. Presiona el boton para volver al inicio.'),
-          ]
+            Text(
+              'Ha ocurrido un error, parece que la ruta no existe. Presiona el boton para volver al inicio.',
+            ),
+          ],
         ),
       ),
     );
