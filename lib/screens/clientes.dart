@@ -132,15 +132,8 @@ class ClienteCard extends StatelessWidget {
               children: [
                 const CircleAvatar(child: Icon(Icons.person)),
                 const SizedBox(height: 8),
-                Text(
-                  nombre,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(telefono ?? 'Teléfono no disponible'),
-                Text(
-                  'Tipo: ${telefono ?? 'N/A'}',
-                  style: const TextStyle(fontSize: 12),
-                ),
+                Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text('Cel:'+(telefono ?? 'Teléfono no disponible')),
               ],
             ),
           ),

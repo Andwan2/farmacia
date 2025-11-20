@@ -1,3 +1,4 @@
+import 'package:farmacia_desktop/screens/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,7 +21,7 @@ final GoRouter router = GoRouter(
       return '/login';
     }
     if (isLoggedIn && state.uri.toString() == '/login') {
-      return '/productos';
+      return '/home';
     }
     return null;
   },
@@ -33,6 +34,7 @@ final GoRouter router = GoRouter(
     ShellRoute(
       builder: (context, state, child) => AppShell(child: child),
       routes: [
+        GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
         GoRoute(
           path: '/productos',
           builder: (context, state) => const ProductosScreen(),

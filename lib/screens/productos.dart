@@ -145,7 +145,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                             children: [
                               Text('$presentacion • $tipo'),
                               Text(
-                                'Medida: $medida $unidad • Stock por tipo: $stockTipo',
+                                'Medida: $medida $unidad • Cantidad en Stock: $stockTipo',
                               ),
                             ],
                           ),
@@ -161,7 +161,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                                     style: const TextStyle(fontSize: 12),
                                   ),
                                   Text(
-                                    diasRestantes < 30
+                                    diasRestantes < 60
                                         ? '⚠️ $diasRestantes días'
                                         : '$diasRestantes días',
                                     style: TextStyle(
