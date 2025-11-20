@@ -138,7 +138,7 @@ class _SideMenuState extends State<SideMenu> {
 
               switch (route) {
                 case '/productos':
-                  widget.onSelectPage(const ProductosScreen());
+                  widget.onSelectPage(ProductosScreen());
                   break;
                 case '/proveedores':
                   widget.onSelectPage(const ProveedoresScreen());
