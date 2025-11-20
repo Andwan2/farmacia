@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:farmacia_desktop/providers/theme_provider.dart';
+import 'package:farmacia_desktop/modal/editar_producto_modal.dart';
 
 class ProductosScreen extends StatefulWidget {
   const ProductosScreen({super.key});
@@ -16,6 +17,7 @@ class _InventarioPageState extends State<ProductosScreen> {
   Map<String, int> stockPorTipo = {};
   String busqueda = '';
   bool cargando = true;
+  bool mostrarEliminados = false;
 
   // Filtros
   String? filtroTipo;
@@ -37,9 +39,9 @@ class _InventarioPageState extends State<ProductosScreen> {
     final resProd = await client
         .from('producto')
         .select(
-          'id_producto,nombre_producto,id_presentacion,fecha_vencimiento,tipo,medida,esVisible',
+          'id_producto,nombre_producto,id_presentacion,fecha_vencimiento,tipo,medida,esVisible,estado',
         )
-        .eq('esVisible', true)
+        .eq('esVisible', mostrarEliminados ? false : true)
         .order('nombre_producto', ascending: true);
 
     final dataProd = (resProd is List) ? resProd : <dynamic>[];
@@ -75,12 +77,458 @@ class _InventarioPageState extends State<ProductosScreen> {
     });
   }
 
-  Future<void> eliminarProducto(int idProducto) async {
-    await Supabase.instance.client
-        .from('producto')
-        .update({'esVisible': false})
-        .eq('id_producto', idProducto);
-    await cargarDatos();
+  Future<void> eliminarProducto(
+    BuildContext context,
+    Map<String, dynamic> producto,
+  ) async {
+    final nombre = producto['nombre_producto'] as String;
+    final tipo = producto['tipo'] as String;
+    final medida = producto['medida']?.toString() ?? '';
+    final idPres = producto['id_presentacion'] as int;
+    final presentacion = presentaciones[idPres]?['descripcion'] ?? '—';
+    final unidad = presentaciones[idPres]?['unidad_medida'] ?? '';
+    final fechaStr = producto['fecha_vencimiento'] as String;
+    final fecha = DateTime.parse(fechaStr);
+    final stockGrupo = producto['_stock_grupo'] as int? ?? 1;
+    final tipoOriginal = producto['tipo'] as String;
+    final fechaVencimientoOriginal =
+        producto['fecha_vencimiento']?.toString().split('T').first ?? '';
+
+    bool eliminarTodos = true;
+    int cantidadEliminar = 1;
+    final cantidadController = TextEditingController(text: '1');
+    String estadoSeleccionado = 'Vendido'; // Vendido o Removido
+
+    final resultado = await showDialog<Map<String, dynamic>?>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
+
+            return AlertDialog(
+              title: const Text('Confirmar eliminación'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '¿Está seguro que desea eliminar este producto?',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    _buildInfoRow('Nombre:', nombre),
+                    _buildInfoRow('Tipo:', tipo),
+                    _buildInfoRow('Presentación:', '$presentacion ($unidad)'),
+                    _buildInfoRow('Medida:', '$medida $unidad'),
+                    _buildInfoRow('Stock:', '$stockGrupo unidades'),
+                    _buildInfoRow(
+                      'Fecha de vencimiento:',
+                      fecha.toIso8601String().split('T').first,
+                    ),
+                    const SizedBox(height: 12),
+                    const Divider(),
+                    const SizedBox(height: 12),
+                    // Opciones de eliminación
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isDarkMode
+                            ? Colors.grey[800]
+                            : Colors.orange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isDarkMode
+                              ? Colors.grey[600]!
+                              : Colors.orange.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                color: isDarkMode
+                                    ? Colors.orange[300]
+                                    : Colors.orange[700],
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  'Opciones de eliminación',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          RadioListTile<bool>(
+                            title: const Text(
+                              'Eliminar todos los productos del grupo',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                            value: true,
+                            groupValue: eliminarTodos,
+                            onChanged: (value) {
+                              setState(() {
+                                eliminarTodos = value!;
+                              });
+                            },
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          RadioListTile<bool>(
+                            title: const Text(
+                              'Eliminar cantidad específica',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                            value: false,
+                            groupValue: eliminarTodos,
+                            onChanged: (value) {
+                              setState(() {
+                                eliminarTodos = value!;
+                              });
+                            },
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          if (!eliminarTodos) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              'Cantidad a eliminar (Máx: $stockGrupo)',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  onPressed: cantidadEliminar > 1
+                                      ? () {
+                                          setState(() {
+                                            cantidadEliminar--;
+                                            cantidadController.text =
+                                                cantidadEliminar.toString();
+                                          });
+                                        }
+                                      : null,
+                                  iconSize: 28,
+                                  color: isDarkMode
+                                      ? Colors.orange[300]
+                                      : Colors.orange,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    minHeight: 40,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 80,
+                                  child: TextField(
+                                    controller: cantidadController,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 8,
+                                      ),
+                                      isDense: true,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (value) {
+                                      final cantidad = int.tryParse(value) ?? 1;
+                                      setState(() {
+                                        cantidadEliminar = cantidad.clamp(
+                                          1,
+                                          stockGrupo,
+                                        );
+                                        cantidadController.text =
+                                            cantidadEliminar.toString();
+                                        cantidadController.selection =
+                                            TextSelection.fromPosition(
+                                              TextPosition(
+                                                offset: cantidadController
+                                                    .text
+                                                    .length,
+                                              ),
+                                            );
+                                      });
+                                    },
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.add_circle_outline),
+                                  onPressed: cantidadEliminar < stockGrupo
+                                      ? () {
+                                          setState(() {
+                                            cantidadEliminar++;
+                                            cantidadController.text =
+                                                cantidadEliminar.toString();
+                                          });
+                                        }
+                                      : null,
+                                  iconSize: 28,
+                                  color: isDarkMode
+                                      ? Colors.orange[300]
+                                      : Colors.orange,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    minHeight: 40,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Divider(),
+                    const SizedBox(height: 12),
+                    // Selector de estado
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isDarkMode
+                            ? Colors.grey[850]
+                            : Colors.grey.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isDarkMode
+                              ? Colors.grey[700]!
+                              : Colors.grey.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.label_outline,
+                                color: isDarkMode
+                                    ? Colors.grey[400]
+                                    : Colors.grey[700],
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Motivo de eliminación',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          RadioListTile<String>(
+                            title: const Text(
+                              'Vendido',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                            subtitle: const Text(
+                              'El producto fue vendido',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                            value: 'Vendido',
+                            groupValue: estadoSeleccionado,
+                            onChanged: (value) {
+                              setState(() {
+                                estadoSeleccionado = value!;
+                              });
+                            },
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          RadioListTile<String>(
+                            title: const Text(
+                              'Removido',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                            subtitle: const Text(
+                              'El producto fue descartado o retirado',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                            value: 'Removido',
+                            groupValue: estadoSeleccionado,
+                            onChanged: (value) {
+                              setState(() {
+                                estadoSeleccionado = value!;
+                              });
+                            },
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Esta acción no se puede deshacer.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context, {
+                      'confirmar': true,
+                      'eliminarTodos': eliminarTodos,
+                      'cantidad': cantidadEliminar,
+                      'estado': estadoSeleccionado,
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Eliminar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (resultado != null && resultado['confirmar'] == true) {
+      final estadoFinal = resultado['estado'] as String;
+
+      try {
+        if (resultado['eliminarTodos'] == true) {
+          // Eliminar todos los productos del grupo
+          await Supabase.instance.client
+              .from('producto')
+              .update({'esVisible': false, 'estado': estadoFinal})
+              .eq('tipo', tipoOriginal)
+              .eq('fecha_vencimiento', fechaVencimientoOriginal)
+              .eq('esVisible', true);
+
+          await cargarDatos();
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  '$stockGrupo producto(s) eliminado(s) correctamente',
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          // Eliminar solo una cantidad específica
+          final cantidad = resultado['cantidad'] as int;
+
+          // Obtener los IDs de los productos a eliminar
+          final productosGrupo = await Supabase.instance.client
+              .from('producto')
+              .select('id_producto')
+              .eq('tipo', tipoOriginal)
+              .eq('fecha_vencimiento', fechaVencimientoOriginal)
+              .eq('esVisible', true)
+              .limit(cantidad);
+
+          final listaProductos = productosGrupo as List;
+          final idsEliminar = listaProductos
+              .map((p) => p['id_producto'] as int)
+              .toList();
+
+          if (idsEliminar.isEmpty) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('No se encontraron productos para eliminar'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            }
+            return;
+          }
+
+          // Eliminar solo los productos seleccionados
+          await Supabase.instance.client
+              .from('producto')
+              .update({'esVisible': false, 'estado': estadoFinal})
+              .inFilter('id_producto', idsEliminar);
+
+          await cargarDatos();
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  '${idsEliminar.length} producto(s) eliminado(s) correctamente',
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al eliminar productos: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
+    );
   }
 
   @override
@@ -381,6 +829,41 @@ class _InventarioPageState extends State<ProductosScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 8),
+                // Switch para mostrar productos eliminados
+                Row(
+                  children: [
+                    Expanded(
+                      child: SwitchListTile(
+                        title: Text(
+                          mostrarEliminados
+                              ? 'Mostrando productos eliminados'
+                              : 'Mostrando productos activos',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        subtitle: Text(
+                          mostrarEliminados
+                              ? 'Los productos eliminados se muestran con su estado (Vendido/Removido)'
+                              : 'Activa para ver productos eliminados',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        value: mostrarEliminados,
+                        onChanged: (value) {
+                          setState(() {
+                            mostrarEliminados = value;
+                          });
+                          cargarDatos();
+                        },
+                        secondary: Icon(
+                          mostrarEliminados
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        dense: true,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -393,7 +876,6 @@ class _InventarioPageState extends State<ProductosScreen> {
                         itemCount: listaFiltrada.length,
                         itemBuilder: (context, index) {
                           final p = listaFiltrada[index];
-                          final idProducto = p['id_producto'] as int;
                           final nombre = p['nombre_producto'] as String;
                           final idPres = p['id_presentacion'] as int;
                           final tipo = p['tipo'] as String;
@@ -412,6 +894,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                           final stockGrupo = p['_stock_grupo'] as int? ?? 1;
                           final fechaMin = p['_fecha_min'] as DateTime?;
                           final fechaMax = p['_fecha_max'] as DateTime?;
+                          final estado = p['estado'] as String?;
 
                           return Card(
                             color: diasRestantes < 60
@@ -435,6 +918,36 @@ class _InventarioPageState extends State<ProductosScreen> {
                                   Text(
                                     'Medida: $medida $unidad • Cantidad en Stock: $stockGrupo',
                                   ),
+                                  if (mostrarEliminados && estado != null)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 4),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: estado == 'Vendido'
+                                            ? Colors.green.withOpacity(0.2)
+                                            : Colors.red.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color: estado == 'Vendido'
+                                              ? Colors.green
+                                              : Colors.red,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Estado: $estado',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: estado == 'Vendido'
+                                              ? Colors.green[800]
+                                              : Colors.red[800],
+                                        ),
+                                      ),
+                                    ),
                                   if (fechaMin != null &&
                                       fechaMax != null &&
                                       fechaMin != fechaMax)
@@ -471,18 +984,24 @@ class _InventarioPageState extends State<ProductosScreen> {
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit),
-                                    onPressed: () {
-                                      // TODO: Navegar a formulario de edición (usar id_producto)
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete),
-                                    onPressed: () =>
-                                        eliminarProducto(idProducto),
-                                  ),
+                                  if (!mostrarEliminados) ...[
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit),
+                                      onPressed: () async {
+                                        await mostrarEditarProducto(
+                                          context,
+                                          p,
+                                          cargarDatos,
+                                        );
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete),
+                                      onPressed: () =>
+                                          eliminarProducto(context, p),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
