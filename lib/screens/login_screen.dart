@@ -40,6 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     } catch (error) {
+      print(error);
       setState(() {
         errorMessage = 'Credenciales incorrectas o usuario no encontrado';
       });
