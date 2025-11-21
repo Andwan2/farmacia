@@ -10,6 +10,7 @@ import 'package:farmacia_desktop/screens/proveedores.dart';
 import 'package:farmacia_desktop/screens/clientes.dart';
 import 'package:farmacia_desktop/screens/ventas.dart';
 import 'package:farmacia_desktop/screens/reporte_venta_screen.dart';
+import 'package:farmacia_desktop/screens/reporte_compra_screen.dart';
 import 'package:farmacia_desktop/screens/compras.dart';
 import 'package:farmacia_desktop/screens/about.dart';
 import 'package:farmacia_desktop/widgets/app_shell.dart';
@@ -61,6 +62,10 @@ final GoRouter router = GoRouter(
         GoRoute(
           path: '/reporteVenta',
           builder: (context, state) => const ReportesVentasScreen(),
+        ),
+        GoRoute(
+          path: '/reporteCompra',
+          builder: (context, state) => const ReportesComprasScreen(),
         ),
         GoRoute(
           path: '/compras',
