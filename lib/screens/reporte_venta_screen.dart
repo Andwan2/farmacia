@@ -12,21 +12,38 @@ class ReportesVentasScreen extends StatefulWidget {
   State<ReportesVentasScreen> createState() => _ReportesVentasScreenState();
 }
 
-class _ReportesVentasScreenState extends State<ReportesVentasScreen> {
+class _ReportesVentasScreenState extends State<ReportesVentasScreen>
+    with SingleTickerProviderStateMixin {
   List<Map<String, dynamic>> ventas = [];
   DateTime? fechaInicio;
   DateTime? fechaFin;
+  List<int> ventasSeleccionadas = []; // IDs de ventas para reporte detallado
+  late TabController _tabController;
+
+  // Filtros para reporte detallado
+  String busquedaCliente = '';
+  String ordenarPor =
+      'fecha_desc'; // fecha_asc, fecha_desc, ganancia_asc, ganancia_desc, total_asc, total_desc, productos_asc, productos_desc
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     cargarVentas();
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   Future<void> cargarVentas() async {
-    var query = Supabase.instance.client.from('venta').select(
-      'id_venta, fecha, cliente(nombre_cliente), empleado(nombre_empleado), payment_method:payment_method_id(name, provider)',
-    );
+    var query = Supabase.instance.client
+        .from('venta')
+        .select(
+          'id_venta, fecha, cliente(nombre_cliente), empleado(nombre_empleado), payment_method:payment_method_id(name, provider)',
+        );
 
     // ✅ Filtros por rango de fechas si se seleccionaron
     if (fechaInicio != null) {
@@ -42,21 +59,33 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen> {
     final response = await query;
     final ventasBase = List<Map<String, dynamic>>.from(response);
 
-    // 🔎 Calcular total dinámico por cada venta
+    // 🔎 Calcular total dinámico por cada venta y ganancias
     for (var v in ventasBase) {
       final producto = await Supabase.instance.client
           .from('producto_en_venta')
-          .select('producto(nombre_producto, precio_venta, tipo)')
+          .select(
+            'producto(nombre_producto, precio_venta, precio_compra, tipo)',
+          )
           .eq('id_venta', v['id_venta']);
 
       final listaProductos = List<Map<String, dynamic>>.from(producto);
-      final total = listaProductos.fold<double>(
-        0.0,
-        (sum, p) => sum + ((p['producto']?['precio_venta'] as num?)?.toDouble() ?? 0.0),
-      );
+
+      double totalVenta = 0.0;
+      double totalCosto = 0.0;
+
+      for (var p in listaProductos) {
+        final precioVenta =
+            (p['producto']?['precio_venta'] as num?)?.toDouble() ?? 0.0;
+        final precioCompra =
+            (p['producto']?['precio_compra'] as num?)?.toDouble() ?? 0.0;
+        totalVenta += precioVenta;
+        totalCosto += precioCompra;
+      }
 
       v['productos'] = listaProductos;
-      v['total_calculado'] = total;
+      v['total_calculado'] = totalVenta;
+      v['total_costo'] = totalCosto;
+      v['ganancia_total'] = totalVenta - totalCosto;
     }
 
     setState(() {
@@ -69,117 +98,21 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen> {
     return productos.length;
   }
 
-  Future<Map<String, String>?> _mostrarDialogoFiltroPdf() async {
-    String tipoFiltro = 'ninguno';
-    String valorFiltro = '';
-
-    return showDialog<Map<String, String>>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Filtros para reporte PDF'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<String>(
-                    value: tipoFiltro,
-                    decoration: const InputDecoration(labelText: 'Tipo de filtro'),
-                    items: const [
-                      DropdownMenuItem(value: 'ninguno', child: Text('Sin filtro adicional')),
-                      DropdownMenuItem(value: 'cliente', child: Text('Por cliente')),
-                      DropdownMenuItem(value: 'producto', child: Text('Por producto')),
-                      DropdownMenuItem(value: 'metodo_pago', child: Text('Por método de pago')),
-                      DropdownMenuItem(value: 'fecha', child: Text('Por fecha (YYYY-MM-DD)')),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => tipoFiltro = value);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    decoration: const InputDecoration(
-                      labelText: 'Valor a buscar',
-                      hintText: 'Ej. nombre de cliente, producto, etc.',
-                    ),
-                    onChanged: (value) => valorFiltro = value,
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context, {
-                      'tipo': tipoFiltro,
-                      'valor': valorFiltro.trim(),
-                    });
-                  },
-                  child: const Text('Aplicar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  List<Map<String, dynamic>> _filtrarVentasParaPdf(
-    List<Map<String, dynamic>> origen,
-    String tipo,
-    String valor,
-  ) {
-    if (tipo == 'ninguno' || valor.isEmpty) {
-      return List<Map<String, dynamic>>.from(origen);
-    }
-
-    final lower = valor.toLowerCase();
-
-    if (tipo == 'cliente') {
-      return origen
-          .where((v) =>
-              (v['cliente']?['nombre_cliente']?.toString().toLowerCase() ?? '')
-                  .contains(lower))
-          .toList();
-    }
-
-    if (tipo == 'fecha') {
-      return origen
-          .where((v) => (v['fecha']?.toString().toLowerCase() ?? '').contains(lower))
-          .toList();
-    }
-
-    if (tipo == 'metodo_pago') {
-      return origen
-          .where((v) =>
-              (v['payment_method']?['name']?.toString().toLowerCase() ?? '')
-                  .contains(lower))
-          .toList();
-    }
-
-    if (tipo == 'producto') {
-      return origen.where((v) {
-        final productos = (v['productos'] as List?) ?? [];
-        return productos.any((p) =>
-            (p['producto']?['nombre_producto']?.toString().toLowerCase() ?? '')
-                .contains(lower));
-      }).toList();
-    }
-
-    return List<Map<String, dynamic>>.from(origen);
-  }
-
-  Future<Uint8List> _buildPdf(
+  // PDF para reporte general (resumen de ventas)
+  Future<Uint8List> _buildPdfGeneral(
     List<Map<String, dynamic>> ventasParaPdf,
-    String descripcionFiltro,
   ) async {
     final pdf = pw.Document();
+
+    final totalGeneral = ventasParaPdf.fold<double>(
+      0.0,
+      (sum, v) => sum + (v['total_calculado'] ?? 0.0),
+    );
+    final costoGeneral = ventasParaPdf.fold<double>(
+      0.0,
+      (sum, v) => sum + (v['total_costo'] ?? 0.0),
+    );
+    final gananciaGeneral = totalGeneral - costoGeneral;
 
     pdf.addPage(
       pw.MultiPage(
@@ -187,7 +120,13 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen> {
           return [
             pw.Header(
               level: 0,
-              child: pw.Text('Reporte de ventas', style: pw.TextStyle(fontSize: 20)),
+              child: pw.Text(
+                'Reporte General de Ventas',
+                style: pw.TextStyle(
+                  fontSize: 20,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
             ),
             pw.Text(
               'Rango de fechas: '
@@ -195,44 +134,49 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen> {
               ' - '
               '${fechaFin != null ? '${fechaFin!.day}/${fechaFin!.month}/${fechaFin!.year}' : 'Todas'}',
             ),
-            if (descripcionFiltro.isNotEmpty) ...[
-              pw.SizedBox(height: 4),
-              pw.Text('Filtro aplicado: $descripcionFiltro'),
-            ],
             pw.SizedBox(height: 10),
             pw.Table.fromTextArray(
               headers: const [
                 'ID',
                 'Fecha',
                 'Cliente',
-                'Empleado',
-                'Pago',
                 'Productos',
-                'Total',
+                'Total Venta',
+                'Ganancia',
               ],
               data: ventasParaPdf.map((v) {
-                final productosCount = _contarProductos(v);
                 return [
                   v['id_venta'].toString(),
                   (v['fecha'] ?? '').toString(),
                   v['cliente']?['nombre_cliente']?.toString() ?? 'N/A',
-                  v['empleado']?['nombre_empleado']?.toString() ?? 'N/A',
-                  v['payment_method']?['name']?.toString() ?? 'N/A',
-                  productosCount.toString(),
+                  _contarProductos(v).toString(),
                   'C\$${(v['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
+                  'C\$${(v['ganancia_total'] ?? 0.0).toStringAsFixed(2)}',
                 ];
               }).toList(),
             ),
             pw.SizedBox(height: 10),
-            pw.Align(
-              alignment: pw.Alignment.centerRight,
-              child: pw.Text(
-                'Total general: C\$${ventasParaPdf.fold<double>(
-                      0.0,
-                      (sum, v) => sum + (v['total_calculado'] ?? 0.0),
-                    ).toStringAsFixed(2)}',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-              ),
+            pw.Divider(),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.end,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      'Total Vendido: C\$${totalGeneral.toStringAsFixed(2)}',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
+                    pw.Text(
+                      'Total Costo: C\$${costoGeneral.toStringAsFixed(2)}',
+                    ),
+                    pw.Text(
+                      'Ganancia Total: C\$${gananciaGeneral.toStringAsFixed(2)}',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ];
         },
@@ -242,7 +186,133 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen> {
     return pdf.save();
   }
 
-  Future<void> _exportarPdf() async {
+  // PDF para reporte detallado (productos por venta)
+  Future<Uint8List> _buildPdfDetallado(
+    List<Map<String, dynamic>> ventasParaPdf,
+  ) async {
+    final pdf = pw.Document();
+
+    for (var venta in ventasParaPdf) {
+      final productos = (venta['productos'] as List?) ?? [];
+
+      // Agrupar productos iguales
+      final Map<String, Map<String, dynamic>> productosAgrupados = {};
+      for (final p in productos) {
+        final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
+        final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
+        final tipo = prod['tipo']?.toString() ?? 'N/A';
+        final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
+        final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
+
+        final key = '$nombre|$tipo|$precioVenta|$precioCompra';
+
+        if (!productosAgrupados.containsKey(key)) {
+          productosAgrupados[key] = {
+            'nombre': nombre,
+            'tipo': tipo,
+            'precio_venta': precioVenta,
+            'precio_compra': precioCompra,
+            'cantidad': 1,
+          };
+        } else {
+          productosAgrupados[key]!['cantidad'] =
+              (productosAgrupados[key]!['cantidad'] as int) + 1;
+        }
+      }
+
+      final listaAgrupada = productosAgrupados.values.toList();
+
+      pdf.addPage(
+        pw.MultiPage(
+          build: (context) {
+            return [
+              pw.Header(
+                level: 0,
+                child: pw.Text(
+                  'Venta #${venta['id_venta']}',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
+              pw.Text('Fecha: ${venta['fecha'] ?? 'N/A'}'),
+              pw.Text(
+                'Cliente: ${venta['cliente']?['nombre_cliente'] ?? 'N/A'}',
+              ),
+              pw.Text(
+                'Empleado: ${venta['empleado']?['nombre_empleado'] ?? 'N/A'}',
+              ),
+              pw.Text(
+                'Método de Pago: ${venta['payment_method']?['name'] ?? 'N/A'}',
+              ),
+              pw.SizedBox(height: 10),
+              pw.Text(
+                'Productos:',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 5),
+              pw.Table.fromTextArray(
+                headers: const [
+                  'Producto',
+                  'Tipo',
+                  'Cant.',
+                  'P. Compra',
+                  'P. Venta',
+                  'Ganancia Unit.',
+                  'Ganancia Total',
+                ],
+                data: listaAgrupada.map((p) {
+                  final precioCompra = p['precio_compra'] as double? ?? 0.0;
+                  final precioVenta = p['precio_venta'] as double? ?? 0.0;
+                  final cantidad = p['cantidad'] as int? ?? 0;
+                  final gananciaUnit = precioVenta - precioCompra;
+                  final gananciaTotal = gananciaUnit * cantidad;
+
+                  return [
+                    p['nombre']?.toString() ?? 'N/A',
+                    p['tipo']?.toString() ?? 'N/A',
+                    cantidad.toString(),
+                    'C\$${precioCompra.toStringAsFixed(2)}',
+                    'C\$${precioVenta.toStringAsFixed(2)}',
+                    'C\$${gananciaUnit.toStringAsFixed(2)}',
+                    'C\$${gananciaTotal.toStringAsFixed(2)}',
+                  ];
+                }).toList(),
+              ),
+              pw.SizedBox(height: 10),
+              pw.Divider(),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.end,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                        'Total Costo: C\$${(venta['total_costo'] ?? 0.0).toStringAsFixed(2)}',
+                      ),
+                      pw.Text(
+                        'Total Venta: C\$${(venta['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      ),
+                      pw.Text(
+                        'Ganancia: C\$${(venta['ganancia_total'] ?? 0.0).toStringAsFixed(2)}',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ];
+          },
+        ),
+      );
+    }
+
+    return pdf.save();
+  }
+
+  Future<void> _exportarPdfGeneral() async {
     if (ventas.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -252,28 +322,27 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen> {
       return;
     }
 
-    final filtro = await _mostrarDialogoFiltroPdf();
-    if (filtro == null) return;
+    await Printing.layoutPdf(
+      onLayout: (format) async => _buildPdfGeneral(ventas),
+    );
+  }
 
-    final tipo = filtro['tipo'] ?? 'ninguno';
-    final valor = filtro['valor'] ?? '';
-
-    final ventasFiltradas = _filtrarVentasParaPdf(ventas, tipo, valor);
-    if (ventasFiltradas.isEmpty) {
+  Future<void> _exportarPdfDetallado() async {
+    if (ventasSeleccionadas.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se encontraron ventas con ese filtro.')),
+          const SnackBar(content: Text('Selecciona al menos una venta.')),
         );
       }
       return;
     }
 
-    final descripcionFiltro = tipo == 'ninguno' || valor.isEmpty
-        ? 'Sin filtro adicional'
-        : '$tipo = $valor';
+    final ventasFiltradas = ventas
+        .where((v) => ventasSeleccionadas.contains(v['id_venta'] as int))
+        .toList();
 
     await Printing.layoutPdf(
-      onLayout: (format) async => _buildPdf(ventasFiltradas, descripcionFiltro),
+      onLayout: (format) async => _buildPdfDetallado(ventasFiltradas),
     );
   }
 
@@ -286,6 +355,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen> {
     );
     if (fecha != null) {
       setState(() => fechaInicio = fecha);
+      cargarVentas(); // Recargar automáticamente
     }
   }
 
@@ -298,6 +368,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen> {
     );
     if (fecha != null) {
       setState(() => fechaFin = fecha);
+      cargarVentas(); // Recargar automáticamente
     }
   }
 
@@ -305,87 +376,496 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen> {
     return ventas.fold(0.0, (sum, v) => sum + (v['total_calculado'] ?? 0.0));
   }
 
-  Future<void> mostrarProductosVenta(BuildContext context, int idVenta, List<Map<String, dynamic>> productos) async {
-    showDialog(
-      context: context,
-      builder: (context) {
-        // Agrupar productos iguales para obtener cantidad por producto
-        final Map<String, Map<String, dynamic>> productosAgrupados = {};
+  double calcularCostoGeneral() {
+    return ventas.fold(0.0, (sum, v) => sum + (v['total_costo'] ?? 0.0));
+  }
 
-        for (final p in productos) {
-          final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
-          final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
-          final tipo = prod['tipo']?.toString() ?? 'N/A';
-          final precio = (prod['precio_venta'] as num?)?.toDouble();
+  double calcularGananciaGeneral() {
+    return calcularTotalGeneral() - calcularCostoGeneral();
+  }
 
-          final key = '$nombre|$tipo|$precio';
+  List<Map<String, dynamic>> _filtrarYOrdenarVentas() {
+    var ventasFiltradas = ventas.where((v) {
+      if (busquedaCliente.isEmpty) return true;
+      final nombreCliente = (v['cliente']?['nombre_cliente']?.toString() ?? '')
+          .toLowerCase();
+      return nombreCliente.contains(busquedaCliente.toLowerCase());
+    }).toList();
 
-          if (!productosAgrupados.containsKey(key)) {
-            productosAgrupados[key] = {
-              'nombre': nombre,
-              'tipo': tipo,
-              'precio': precio,
-              'cantidad': 1,
-            };
-          } else {
-            productosAgrupados[key]!['cantidad'] =
-                (productosAgrupados[key]!['cantidad'] as int) + 1;
-          }
-        }
+    // Ordenar según criterio seleccionado
+    ventasFiltradas.sort((a, b) {
+      switch (ordenarPor) {
+        case 'fecha_asc':
+          return (a['fecha'] ?? '').toString().compareTo(
+            (b['fecha'] ?? '').toString(),
+          );
+        case 'fecha_desc':
+          return (b['fecha'] ?? '').toString().compareTo(
+            (a['fecha'] ?? '').toString(),
+          );
+        case 'ganancia_asc':
+          return ((a['ganancia_total'] ?? 0.0) as double).compareTo(
+            (b['ganancia_total'] ?? 0.0) as double,
+          );
+        case 'ganancia_desc':
+          return ((b['ganancia_total'] ?? 0.0) as double).compareTo(
+            (a['ganancia_total'] ?? 0.0) as double,
+          );
+        case 'total_asc':
+          return ((a['total_calculado'] ?? 0.0) as double).compareTo(
+            (b['total_calculado'] ?? 0.0) as double,
+          );
+        case 'total_desc':
+          return ((b['total_calculado'] ?? 0.0) as double).compareTo(
+            (a['total_calculado'] ?? 0.0) as double,
+          );
+        case 'productos_asc':
+          return _contarProductos(a).compareTo(_contarProductos(b));
+        case 'productos_desc':
+          return _contarProductos(b).compareTo(_contarProductos(a));
+        default:
+          return 0;
+      }
+    });
 
-        final listaAgrupada = productosAgrupados.values.toList();
+    return ventasFiltradas;
+  }
 
-        return AlertDialog(
-          title: Text('Productos de la venta $idVenta'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: listaAgrupada.isEmpty
-                ? const Text('No hay productos registrados en esta venta.')
-                : ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: listaAgrupada.length,
-                    itemBuilder: (context, index) {
-                      final p = listaAgrupada[index];
-                      final precio = p['precio'] as double?;
-                      final cantidad = p['cantidad'] as int? ?? 0;
-                      return ListTile(
-                        leading: const Icon(Icons.shopping_bag),
-                        title: Text(p['nombre']?.toString() ?? 'Sin nombre'),
-                        subtitle: Text(
-                          'Precio: C\$${precio?.toStringAsFixed(2) ?? 'N/A'}\n'
-                          'Cantidad en esta venta: $cantidad\n'
-                          'Tipo: ${p['tipo'] ?? 'N/A'}',
-                        ),
-                      );
-                    },
-                  ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar'),
+  Widget _buildReporteGeneral(bool isDark) {
+    return Column(
+      children: [
+        // Resumen de totales
+        Card(
+          margin: const EdgeInsets.all(12),
+          color: isDark ? Colors.blue[900]?.withOpacity(0.3) : Colors.blue[50],
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                Column(
+                  children: [
+                    const Text(
+                      'Total Vendido',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'C\$${calcularTotalGeneral().toStringAsFixed(2)}',
+                      style: const TextStyle(fontSize: 18, color: Colors.blue),
+                    ),
+                  ],
+                ),
+                Column(
+                  children: [
+                    const Text(
+                      'Total Costo',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'C\$${calcularCostoGeneral().toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+                Column(
+                  children: [
+                    const Text(
+                      'Ganancia Total',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'C\$${calcularGananciaGeneral().toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        );
-      },
+          ),
+        ),
+        // Lista de ventas
+        Expanded(
+          child: ListView.builder(
+            itemCount: ventas.length,
+            itemBuilder: (context, index) {
+              final v = ventas[index];
+              final ganancia = v['ganancia_total'] ?? 0.0;
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: ListTile(
+                  leading: const Icon(Icons.shopping_cart, color: Colors.blue),
+                  title: Text(
+                    'Venta #${v['id_venta']} - C\$${(v['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
+                  ),
+                  subtitle: Text(
+                    'Fecha: ${v['fecha']}\n'
+                    'Cliente: ${v['cliente']?['nombre_cliente'] ?? 'N/A'}\n'
+                    'Ganancia: C\$${ganancia.toStringAsFixed(2)}',
+                  ),
+                  trailing: Text(
+                    '${_contarProductos(v)} productos',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  isThreeLine: true,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReporteDetallado(bool isDark) {
+    // Aplicar filtros y ordenamiento
+    final ventasFiltradas = _filtrarYOrdenarVentas();
+
+    // Calcular totales de ventas seleccionadas
+    final ventasSeleccionadasData = ventasFiltradas
+        .where((v) => ventasSeleccionadas.contains(v['id_venta'] as int))
+        .toList();
+
+    final totalVentaSeleccionada = ventasSeleccionadasData.fold<double>(
+      0.0,
+      (sum, v) => sum + (v['total_calculado'] ?? 0.0),
+    );
+    final totalCostoSeleccionado = ventasSeleccionadasData.fold<double>(
+      0.0,
+      (sum, v) => sum + (v['total_costo'] ?? 0.0),
+    );
+    final gananciaSeleccionada =
+        totalVentaSeleccionada - totalCostoSeleccionado;
+
+    return Column(
+      children: [
+        // Filtros y búsqueda
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  decoration: InputDecoration(
+                    labelText: 'Buscar por cliente',
+                    hintText: 'Nombre del cliente',
+                    prefixIcon: const Icon(Icons.search),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: busquedaCliente.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              setState(() => busquedaCliente = '');
+                            },
+                          )
+                        : null,
+                  ),
+                  onChanged: (value) {
+                    setState(() => busquedaCliente = value);
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: DropdownButtonFormField<String>(
+                  value: ordenarPor,
+                  decoration: const InputDecoration(
+                    labelText: 'Ordenar por',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'fecha_desc',
+                      child: Text('Fecha (más reciente)'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'fecha_asc',
+                      child: Text('Fecha (más antigua)'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'ganancia_desc',
+                      child: Text('Ganancia (mayor)'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'ganancia_asc',
+                      child: Text('Ganancia (menor)'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'total_desc',
+                      child: Text('Total (mayor)'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'total_asc',
+                      child: Text('Total (menor)'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'productos_desc',
+                      child: Text('Productos (más)'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'productos_asc',
+                      child: Text('Productos (menos)'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => ordenarPor = value);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Resumen de ventas seleccionadas (compacto)
+        if (ventasSeleccionadas.isNotEmpty)
+          Card(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            color: isDark
+                ? Colors.green[900]?.withOpacity(0.3)
+                : Colors.green[50],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${ventasSeleccionadas.length} seleccionada(s)',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    'Total: C\$${totalVentaSeleccionada.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.blue,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Ganancia: C\$${gananciaSeleccionada.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        // Lista scrolleable de todas las ventas (seleccionadas y disponibles)
+        Expanded(
+          child: ListView.builder(
+            itemCount: ventasFiltradas.length,
+            itemBuilder: (context, index) {
+              final v = ventasFiltradas[index];
+              final isSelected = ventasSeleccionadas.contains(
+                v['id_venta'] as int,
+              );
+              return _buildVentaDetalladaCard(v, isSelected);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVentaDetalladaCard(Map<String, dynamic> v, bool isSelected) {
+    final idVenta = v['id_venta'] as int;
+    final productos = (v['productos'] as List?) ?? [];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Agrupar productos
+    final Map<String, Map<String, dynamic>> productosAgrupados = {};
+    for (final p in productos) {
+      final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
+      final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
+      final tipo = prod['tipo']?.toString() ?? 'N/A';
+      final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
+      final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
+
+      final key = '$nombre|$tipo|$precioVenta|$precioCompra';
+
+      if (!productosAgrupados.containsKey(key)) {
+        productosAgrupados[key] = {
+          'nombre': nombre,
+          'tipo': tipo,
+          'precio_venta': precioVenta,
+          'precio_compra': precioCompra,
+          'cantidad': 1,
+        };
+      } else {
+        productosAgrupados[key]!['cantidad'] =
+            (productosAgrupados[key]!['cantidad'] as int) + 1;
+      }
+    }
+
+    final listaAgrupada = productosAgrupados.values.toList();
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      color: isSelected
+          ? (isDark ? Colors.green[900]?.withOpacity(0.3) : Colors.green[50])
+          : null,
+      child: ExpansionTile(
+        dense: true,
+        leading: Checkbox(
+          value: isSelected,
+          onChanged: (value) {
+            setState(() {
+              if (value == true) {
+                ventasSeleccionadas.add(idVenta);
+              } else {
+                ventasSeleccionadas.remove(idVenta);
+              }
+            });
+          },
+        ),
+        title: Text(
+          'Venta #$idVenta - C\$${(v['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          '${v['fecha']} | ${v['cliente']?['nombre_cliente'] ?? 'N/A'} | Ganancia: C\$${(v['ganancia_total'] ?? 0.0).toStringAsFixed(2)}',
+          style: const TextStyle(fontSize: 12),
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Productos:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                ...listaAgrupada.map((p) {
+                  final precioCompra = p['precio_compra'] as double? ?? 0.0;
+                  final precioVenta = p['precio_venta'] as double? ?? 0.0;
+                  final cantidad = p['cantidad'] as int? ?? 0;
+                  final gananciaUnit = precioVenta - precioCompra;
+                  final gananciaTotal = gananciaUnit * cantidad;
+
+                  return Card(
+                    color: isDark ? Colors.grey[800] : Colors.grey[100],
+                    margin: const EdgeInsets.only(bottom: 4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${p['nombre']} (${p['tipo']}) - Cant: $cantidad',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Compra: C\$${precioCompra.toStringAsFixed(2)} | Venta: C\$${precioVenta.toStringAsFixed(2)} | Ganancia: C\$${gananciaTotal.toStringAsFixed(2)}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                const Divider(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Costo: C\$${(v['total_costo'] ?? 0.0).toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      'Venta: C\$${(v['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      'Ganancia: C\$${(v['ganancia_total'] ?? 0.0).toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reportes de Ventas'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
-            tooltip: 'Exportar a PDF',
-            onPressed: _exportarPdf,
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.picture_as_pdf, size: 24),
+              label: const Text('Exportar PDF', style: TextStyle(fontSize: 16)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+                elevation: 4,
+              ),
+              onPressed: () {
+                if (_tabController.index == 0) {
+                  _exportarPdfGeneral();
+                } else {
+                  _exportarPdfDetallado();
+                }
+              },
+            ),
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.summarize), text: 'Reporte General'),
+            Tab(icon: Icon(Icons.analytics), text: 'Reporte Detallado'),
+          ],
+        ),
       ),
       body: Column(
         children: [
+          // Filtros de fecha
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -433,33 +913,14 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen> {
               ],
             ),
           ),
+          // Contenido de tabs
           Expanded(
-            child: ListView.builder(
-              itemCount: ventas.length,
-              itemBuilder: (context, index) {
-                final v = ventas[index];
-                return Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.shopping_cart),
-                    title: Text(
-                      'Venta #${v['id_venta'].toString()} - C\$${(v['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
-                    ),
-                    subtitle: Text(
-                      'Fecha: ${v['fecha']}\n'
-                      'Cliente: ${v['cliente']?['nombre_cliente'] ?? 'N/A'}\n'
-                      'Empleado: ${v['empleado']?['nombre_empleado'] ?? 'N/A'}\n'
-                      'Metodo de Pago: ${v['payment_method']?['name'] ?? 'N/A'}\n'
-                      'Proveedor: ${v['payment_method']?['provider'] ?? 'N/A'}\n'
-                      'Productos: ${_contarProductos(v)}',
-                    ),
-                    onTap: () => mostrarProductosVenta(
-                      context,
-                      v['id_venta'] as int,
-                      List<Map<String, dynamic>>.from(v['productos'] ?? []),
-                    ),
-                  ),
-                );
-              },
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildReporteGeneral(isDark),
+                _buildReporteDetallado(isDark),
+              ],
             ),
           ),
         ],
