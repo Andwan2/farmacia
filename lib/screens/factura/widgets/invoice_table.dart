@@ -22,10 +22,12 @@ class ProductoFactura {
 
 class InvoiceTable extends StatelessWidget {
   final List<ProductoFactura> productos;
+  final Function(int)? onDelete;
 
   const InvoiceTable({
     super.key,
     required this.productos,
+    this.onDelete,
   });
 
   @override
@@ -60,9 +62,10 @@ class InvoiceTable extends StatelessWidget {
                 _buildHeaderCell(context, 'Cant.', flex: 1),
                 _buildHeaderCell(context, 'Producto', flex: 2),
                 _buildHeaderCell(context, 'Presentación', flex: 2),
-                _buildHeaderCell(context, 'Medida', flex: 1),
+                _buildHeaderCell(context, 'Medida', flex: 2),
                 _buildHeaderCell(context, 'Vencimiento', flex: 2),
                 _buildHeaderCell(context, 'Precio Ind.', flex: 2),
+                _buildHeaderCell(context, 'Acciones', flex: 2),
               ],
             ),
           ),
@@ -73,8 +76,7 @@ class InvoiceTable extends StatelessWidget {
             ...productos.asMap().entries.map((entry) {
               final index = entry.key;
               final producto = entry.value;
-              final isEven = index % 2 == 0;
-              return _buildRow(context, producto, isEven);
+              return _buildRow(context, producto, index.isEven, index);
             }),
         ],
       ),
@@ -135,7 +137,7 @@ class InvoiceTable extends StatelessWidget {
     );
   }
 
-  Widget _buildRow(BuildContext context, ProductoFactura producto, bool isEven) {
+  Widget _buildRow(BuildContext context, ProductoFactura producto, bool isEven, int index) {
     final colorScheme = Theme.of(context).colorScheme;
     
     return Container(
@@ -155,9 +157,10 @@ class InvoiceTable extends StatelessWidget {
           _buildCell(context, producto.cantidad.toString(), flex: 1),
           _buildCell(context, producto.nombre, flex: 2),
           _buildCell(context, producto.presentacion, flex: 2),
-          _buildCell(context, producto.medida, flex: 1),
+          _buildCell(context, producto.medida, flex: 2),
           _buildCell(context, producto.fechaVencimiento, flex: 2),
           _buildCell(context, 'C\$${producto.precio.toStringAsFixed(2)}', flex: 2, isMoney: true),
+          _buildActionCell(context, index),
         ],
       ),
     );
@@ -176,6 +179,30 @@ class InvoiceTable extends StatelessWidget {
           style: textTheme.bodyMedium?.copyWith(
             fontWeight: isMoney ? FontWeight.w600 : FontWeight.w400,
             color: isMoney ? colorScheme.primary : colorScheme.onSurface,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionCell(BuildContext context, int index) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Expanded(
+      flex: 2,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Center(
+          child: IconButton(
+            icon: Icon(
+              Icons.delete_outline,
+              color: colorScheme.error,
+            ),
+            onPressed: onDelete != null ? () => onDelete!(index) : null,
+            tooltip: 'Eliminar producto',
+            style: IconButton.styleFrom(
+              padding: const EdgeInsets.all(8),
+            ),
           ),
         ),
       ),

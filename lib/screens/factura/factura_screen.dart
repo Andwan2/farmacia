@@ -91,6 +91,21 @@ class _FacturaScreenContent extends StatelessWidget {
                         
                         return InvoiceTable(
                           productos: productosAgrupados,
+                          onDelete: (index) {
+                            // Obtener el tipo del producto agrupado
+                            final productoAEliminar = productosAgrupados[index];
+                            final tipoAEliminar = productoAEliminar.presentacion;
+                            
+                            // Encontrar el primer producto con ese tipo en la lista original
+                            final indexEnOriginal = provider.productos.indexWhere(
+                              (p) => p.presentacion == tipoAEliminar,
+                            );
+                            
+                            // Eliminar solo UN producto de ese tipo
+                            if (indexEnOriginal != -1) {
+                              provider.eliminarProducto(indexEnOriginal);
+                            }
+                          },
                         );
                       },
                     ),
@@ -159,22 +174,8 @@ class _FacturaScreenContent extends StatelessWidget {
                             return;
                           }
                           
-                          // Mostrar indicador de carga
-                          showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (context) => const Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                          );
-                          
                           // Guardar en base de datos
                           final error = await provider.guardarVenta();
-                          
-                          // Cerrar indicador de carga
-                          if (context.mounted) {
-                            Navigator.of(context).pop();
-                          }
                           
                           if (error != null) {
                             // Mostrar error
@@ -208,7 +209,10 @@ class _FacturaScreenContent extends StatelessWidget {
                               );
                             }
                           } else {
-                            // Mostrar mensaje de éxito
+                            // Limpiar formulario
+                            provider.limpiarFactura();
+                            
+                            // Redirigir a productos
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
