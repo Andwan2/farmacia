@@ -5,6 +5,8 @@ import 'package:farmacia_desktop/models/producto_db.dart';
 import 'package:farmacia_desktop/providers/compra_provider.dart';
 import 'package:farmacia_desktop/screens/factura/widgets/producto_search_dialog.dart';
 import 'package:farmacia_desktop/modal/seleccionar_empleado_modal.dart';
+import 'package:farmacia_desktop/modal/agregar_producto_modal.dart';
+import 'package:farmacia_desktop/modal/agregar_proveedor_modal.dart';
 
 class ComprasScreen extends StatelessWidget {
   const ComprasScreen({super.key});
@@ -237,6 +239,21 @@ class _ComprasScreenContent extends StatelessWidget {
                                 },
                               ),
                             ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              tooltip: 'Nuevo proveedor',
+                              icon: const Icon(Icons.add_business),
+                              onPressed: () {
+                                mostrarAgregarProveedor(
+                                  context,
+                                  () {
+                                    final compraProvider =
+                                        context.read<CompraProvider>();
+                                    compraProvider.cargarProveedores();
+                                  },
+                                );
+                              },
+                            ),
                             const SizedBox(width: 16),
                             Expanded(
                               child: DropdownButtonFormField<String>(
@@ -444,18 +461,37 @@ class _ComprasScreenContent extends StatelessWidget {
 
                         const SizedBox(height: 16),
 
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () => _agregarProductoDialog(context),
-                            icon: const Icon(Icons.add_circle_outline),
-                            label: const Text('Agregar producto'),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 16,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () => _agregarProductoDialog(context),
+                                icon: const Icon(Icons.add_circle_outline),
+                                label: const Text('Agregar producto'),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  mostrarAgregarProducto(
+                                    context,
+                                    () {
+                                      // Después de crear productos, no hace
+                                      // falta recargar nada específico aquí.
+                                    },
+                                  );
+                                },
+                                icon: const Icon(Icons.add_box_outlined),
+                                label: const Text('Nuevo producto'),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     );
@@ -547,6 +583,10 @@ class _ComprasScreenContent extends StatelessWidget {
                                               },
                                         icon: const Icon(Icons.save),
                                         label: const Text('Guardar'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          foregroundColor: Colors.white,
+                                        ),
                                       ),
                                     ),
                                   ],

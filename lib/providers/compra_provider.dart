@@ -240,6 +240,17 @@ class CompraProvider extends ChangeNotifier {
           .map((json) => PaymentMethod.fromJson(json))
           .toList();
 
+      // Si no hay método seleccionado aún, intentar preseleccionar "Cordoba NIO"
+      if (_metodosPago.isNotEmpty && _metodoPago.isEmpty) {
+        final metodoCordoba = _metodosPago.firstWhere(
+          (m) => m.name.toLowerCase().contains('cordoba') ||
+                  m.name.toLowerCase().contains('nio'),
+          orElse: () => _metodosPago.first,
+        );
+        _metodoPago = metodoCordoba.name;
+        _metodoPagoId = metodoCordoba.id;
+      }
+
       _metodosPagoCargados = true;
     } catch (e, stackTrace) {
       debugPrint('Error cargando métodos de pago (compra): $e');
