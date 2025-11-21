@@ -6,6 +6,7 @@ import 'widgets/add_product_button.dart';
 import 'widgets/payment_and_customer_fields.dart';
 import 'widgets/invoice_table.dart';
 import 'widgets/sale_summary.dart';
+import 'package:farmacia_desktop/modal/seleccionar_empleado_modal.dart';
 
 class FacturaScreen extends StatelessWidget {
   static const String pathName = '/factura';
@@ -124,29 +125,64 @@ class _FacturaScreenContent extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            TextField(
-                              controller: TextEditingController(text: provider.empleado)
-                                ..selection = TextSelection.fromPosition(
-                                  TextPosition(offset: provider.empleado.length),
-                                ),
-                              onChanged: (valor) => provider.setEmpleado(valor),
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 16,
-                                fontWeight: FontWeight.w400,
-                              ),
-                              decoration: InputDecoration(
-                                hintText: 'Nombre del empleado',
-                                prefixIcon: const Icon(Icons.person),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 16,
-                                ),
-                              ),
-                            ),
+                            provider.empleado.isEmpty
+                                ? OutlinedButton.icon(
+                                    onPressed: () {
+                                      mostrarSeleccionarEmpleado(context, (empleado) {
+                                        provider.setEmpleado(empleado.nombreEmpleado);
+                                      });
+                                    },
+                                    icon: const Icon(Icons.badge),
+                                    label: const Text('Seleccionar empleado'),
+                                    style: OutlinedButton.styleFrom(
+                                      minimumSize: const Size(double.infinity, 56),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 16,
+                                      ),
+                                    ),
+                                  )
+                                : Container(
+                                    height: 56,
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Colors.grey[300]!),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.badge, size: 20),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            provider.empleado,
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.close, size: 20),
+                                          onPressed: () {
+                                            provider.setEmpleado('');
+                                          },
+                                          tooltip: 'Quitar empleado',
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.edit, size: 20),
+                                          onPressed: () {
+                                            mostrarSeleccionarEmpleado(context, (empleado) {
+                                              provider.setEmpleado(empleado.nombreEmpleado);
+                                            });
+                                          },
+                                          tooltip: 'Cambiar empleado',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                             
                             const SizedBox(height: 24),
                             
