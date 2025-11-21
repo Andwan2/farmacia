@@ -55,8 +55,8 @@ class AppDrawer extends StatelessWidget {
             ('Factura', '/factura', Icons.point_of_sale),
             // factura a proveedores
             ('Compras', '/compra', Icons.attach_money),
-            ('REPORTE DE VENTAS (debug)', '/reporteVenta', Icons.report),
-            ('REPORTE DE COMPRAS (debug)', '/reporteCompra', Icons.report),
+            ('Reporte de ventas', '/reporteVenta', Icons.receipt_long),
+            ('Reporte de compras', '/reporteCompra', Icons.receipt_long),
           ], context),
 
           const Divider(),
