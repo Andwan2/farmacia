@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:farmacia_desktop/providers/factura_provider.dart';
+import 'package:intl/intl.dart';
 import 'widgets/add_product_button.dart';
-import 'widgets/invoice_header_fields.dart';
+import 'widgets/payment_and_customer_fields.dart';
 import 'widgets/invoice_table.dart';
-import 'widgets/invoice_actions.dart';
+import 'widgets/sale_summary.dart';
 
 class FacturaScreen extends StatelessWidget {
   static const String pathName = '/factura';
@@ -27,66 +28,183 @@ class _FacturaScreenContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(64),
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Título
-              const Text(
-                'Ventas',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 48,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E1E1E),
-                  height: 1.2,
-                  letterSpacing: -0.96,
+              // Contenido izquierdo (formulario de factura)
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Título
+                    const Text(
+                      'Ventas',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 48,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                        letterSpacing: -0.96,
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+                    
+                    // Campos de método de pago y cliente
+                    const PaymentAndCustomerFields(),
+                    const SizedBox(height: 16),
+                    
+                    // Tabla de productos
+                    Consumer<FacturaProvider>(
+                      builder: (context, provider, child) {
+                        return InvoiceTable(
+                          productos: provider.productos,
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 24),
+                    
+                    // Botón agregar producto
+                    AddProductButton(
+                      onProductSelected: (producto) {
+                        final provider = context.read<FacturaProvider>();
+                        provider.agregarProducto(producto);
+                      },
+                    ),
+                  ],
                 ),
               ),
 
-              const SizedBox(height: 24),
-              
-              // Campos de encabezado
-              const InvoiceHeaderFields(),
-              const SizedBox(height: 16),
-              
-              // Tabla de productos
-              Consumer<FacturaProvider>(
-                builder: (context, provider, child) {
-                  return InvoiceTable(
-                    productos: provider.productos,
-                  );
-                },
-              ),
+              const SizedBox(width: 32),
 
-              const SizedBox(height: 24),
-              
-              // Botón agregar producto
-              AddProductButton(
-                onProductSelected: (producto) {
-                  final provider = context.read<FacturaProvider>();
-                  provider.agregarProducto(producto);
-                },
-              ),
-
-              const SizedBox(height: 48),
-              
-              // Botones de acción
-              InvoiceActions(
-                onCancel: () {
-                  final provider = context.read<FacturaProvider>();
-                  provider.limpiarFactura();
-                  Navigator.pop(context);
-                },
-                onConfirm: () {
-                  // TODO: Implementar confirmación y guardar en DB
-                  final provider = context.read<FacturaProvider>();
-                  print('Total: \$${provider.total}');
-                  print('Productos: ${provider.productos.length}');
-                },
+              // Columna derecha (resumen y empleado)
+              Column(
+                children: [
+                  // Resumen de venta
+                  SaleSummary(
+                    onReset: () {
+                      final provider = context.read<FacturaProvider>();
+                      provider.limpiarFactura();
+                    },
+                    onConfirm: () {
+                      // TODO: Implementar confirmación y guardar en DB
+                      final provider = context.read<FacturaProvider>();
+                      print('Total: \$${provider.total}');
+                      print('Productos: ${provider.productos.length}');
+                    },
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Campo de empleado y fecha
+                  Consumer<FacturaProvider>(
+                    builder: (context, provider, child) {
+                      final formatoFecha = DateFormat('dd/MM/yyyy');
+                      
+                      return Container(
+                        width: 400,
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Campo empleado
+                            Text(
+                              'EMPLEADO',
+                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: TextEditingController(text: provider.empleado)
+                                ..selection = TextSelection.fromPosition(
+                                  TextPosition(offset: provider.empleado.length),
+                                ),
+                              onChanged: (valor) => provider.setEmpleado(valor),
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              decoration: InputDecoration(
+                                hintText: 'Nombre del empleado',
+                                prefixIcon: const Icon(Icons.person),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
+                              ),
+                            ),
+                            
+                            const SizedBox(height: 24),
+                            
+                            // Selector de fecha
+                            Text(
+                              'FECHA',
+                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            InkWell(
+                              onTap: () async {
+                                final DateTime? picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: provider.fecha,
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime(2100),
+                                );
+                                
+                                if (picked != null) {
+                                  provider.setFecha(picked);
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: Theme.of(context).colorScheme.outline,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today),
+                                    const SizedBox(width: 16),
+                                    Text(
+                                      formatoFecha.format(provider.fecha),
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ],
           ),

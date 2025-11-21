@@ -29,8 +29,7 @@ class InvoiceHeaderFields extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.black),
+            border: Border.all(color: const Color.fromARGB(255, 255, 255, 255)),
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(4),
               topRight: Radius.circular(4),
@@ -63,15 +62,6 @@ class InvoiceHeaderFields extends StatelessWidget {
                   value: provider.cliente,
                   icon: Icons.person,
                   onChanged: (valor) => provider.setCliente(valor),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _HeaderFieldText(
-                  label: 'EMPLEADO',
-                  value: provider.empleado,
-                  icon: Icons.person,
-                  onChanged: (valor) => provider.setEmpleado(valor),
                 ),
               ),
               const SizedBox(width: 8),
@@ -109,7 +99,6 @@ class _HeaderField extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border.all(color: Colors.black),
         borderRadius: BorderRadius.circular(4),
-        color: Colors.grey[100],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +109,6 @@ class _HeaderField extends StatelessWidget {
             style: const TextStyle(
               fontFamily: 'Roboto',
               fontSize: 12,
-              color: Color(0xFF49454F),
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -133,7 +121,6 @@ class _HeaderField extends StatelessWidget {
                   style: const TextStyle(
                     fontFamily: 'Roboto',
                     fontSize: 16,
-                    color: Color(0xFF1D1B20),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -141,7 +128,6 @@ class _HeaderField extends StatelessWidget {
               Icon(
                 icon,
                 size: 20,
-                color: const Color(0xFF1E1E1E),
               ),
             ],
           ),
@@ -172,9 +158,8 @@ class _HeaderFieldEditable extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.blue, width: 2),
           borderRadius: BorderRadius.circular(4),
-          color: Colors.blue[50],
+          // color: Colors.blue[50],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,7 +170,6 @@ class _HeaderFieldEditable extends StatelessWidget {
               style: const TextStyle(
                 fontFamily: 'Roboto',
                 fontSize: 12,
-                color: Color(0xFF49454F),
                 fontWeight: FontWeight.w400,
               ),
             ),
@@ -198,7 +182,6 @@ class _HeaderFieldEditable extends StatelessWidget {
                     style: const TextStyle(
                       fontFamily: 'Roboto',
                       fontSize: 16,
-                      color: Color(0xFF1D1B20),
                       fontWeight: FontWeight.w400,
                     ),
                   ),
@@ -206,7 +189,6 @@ class _HeaderFieldEditable extends StatelessWidget {
                 Icon(
                   icon,
                   size: 20,
-                  color: Colors.blue[700],
                 ),
               ],
             ),
@@ -236,7 +218,6 @@ class _HeaderFieldText extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.black),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
@@ -248,7 +229,6 @@ class _HeaderFieldText extends StatelessWidget {
             style: const TextStyle(
               fontFamily: 'Roboto',
               fontSize: 12,
-              color: Color(0xFF49454F),
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -265,7 +245,6 @@ class _HeaderFieldText extends StatelessWidget {
                   style: const TextStyle(
                     fontFamily: 'Roboto',
                     fontSize: 16,
-                    color: Color(0xFF1D1B20),
                     fontWeight: FontWeight.w400,
                   ),
                   decoration: const InputDecoration(
@@ -278,7 +257,6 @@ class _HeaderFieldText extends StatelessWidget {
               Icon(
                 icon,
                 size: 20,
-                color: const Color(0xFF1E1E1E),
               ),
             ],
           ),
@@ -309,7 +287,6 @@ class _HeaderFieldDropdown extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.black),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
@@ -321,7 +298,6 @@ class _HeaderFieldDropdown extends StatelessWidget {
             style: const TextStyle(
               fontFamily: 'Roboto',
               fontSize: 12,
-              color: Color(0xFF49454F),
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -341,7 +317,6 @@ class _HeaderFieldDropdown extends StatelessWidget {
                         style: const TextStyle(
                           fontFamily: 'Roboto',
                           fontSize: 16,
-                          color: Color(0xFF1D1B20),
                           fontWeight: FontWeight.w400,
                         ),
                       ),
@@ -353,7 +328,6 @@ class _HeaderFieldDropdown extends StatelessWidget {
               Icon(
                 icon,
                 size: 20,
-                color: const Color(0xFF1E1E1E),
               ),
             ],
           ),
