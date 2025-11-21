@@ -467,7 +467,7 @@ class _ComprasScreenContent extends StatelessWidget {
                               child: ElevatedButton.icon(
                                 onPressed: () => _agregarProductoDialog(context),
                                 icon: const Icon(Icons.add_circle_outline),
-                                label: const Text('Agregar producto'),
+                                label: const Text('Agregar producto a compra'),
                                 style: ElevatedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 16,

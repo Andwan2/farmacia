@@ -51,14 +51,21 @@ Future<void> mostrarAgregarProveedor(
               }
 
               await Supabase.instance.client.from('proveedor').insert({
-                'id_proveedor': DateTime.now().millisecondsSinceEpoch,
+                // id_proveedor es BIGSERIAL, lo genera Postgres automáticamente
                 'nombre_proveedor': nombre,
                 'ruc_proveedor': ruc,
                 'numero_telefono': telefono.isEmpty ? null : telefono,
               });
 
-              Navigator.pop(context);
+              // Ejecutar el callback antes de cerrar el diálogo para evitar
+              // usar un BuildContext después de que el widget sea desmontado.
               onSuccess();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Proveedor agregado correctamente'),
+                ),
+              );
+              Navigator.pop(context);
             },
             child: const Text('Confirmar datos'),
           ),
