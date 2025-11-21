@@ -36,6 +36,12 @@ class AppDrawer extends StatelessWidget {
             child: Text('Menú Principal', style: TextStyle(fontSize: 18)),
           ),
 
+          _buildSection("Principal", [
+            ('Inicio', '/home', Icons.home),
+          ], context),
+
+          const Divider(),
+
           _buildSection("Inventario", [
             ('Productos', '/productos', Icons.inventory),
           ], context),

@@ -74,7 +74,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
     for (var c in comprasBase) {
       final detalle = await Supabase.instance.client
           .from('producto_a_comprar')
-          .select('precio_compra, producto(nombre_producto, tipo)')
+          .select('producto(precio_compra,nombre_producto,tipo)')
           .eq('id_compra', c['id_compras']);
 
       final listaProductos = List<Map<String, dynamic>>.from(detalle);
