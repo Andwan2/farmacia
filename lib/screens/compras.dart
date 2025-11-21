@@ -273,8 +273,9 @@ class _ComprasScreenContent extends StatelessWidget {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: Colors.grey.shade300,
+                                color: Colors.grey.shade700,
                               ),
+                              color: Theme.of(context).colorScheme.surface,
                             ),
                             child: Column(
                               children: [
@@ -284,19 +285,87 @@ class _ComprasScreenContent extends StatelessWidget {
                                     vertical: 12,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHighest,
                                     borderRadius: const BorderRadius.vertical(
                                       top: Radius.circular(12),
                                     ),
                                   ),
                                   child: Row(
-                                    children: const [
-                                      Expanded(flex: 2, child: Text('Producto')),
-                                      Expanded(child: Text('Cant.')),
-                                      Expanded(child: Text('P. Compra')),
-                                      Expanded(child: Text('P. Venta')),
-                                      Expanded(child: Text('Vence')),
-                                      SizedBox(width: 40),
+                                    children: [
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          'Producto',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface,
+                                              ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          'Cant.',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface,
+                                              ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          'P. Compra',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface,
+                                              ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          'P. Venta',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface,
+                                              ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          'Vence',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface,
+                                              ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 40),
                                     ],
                                   ),
                                 ),

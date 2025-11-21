@@ -316,6 +316,8 @@ class CompraProvider extends ChangeNotifier {
       }
 
       // 1. Insertar en tabla compra (total = totalCosto pagado al proveedor)
+      // Nota: la tabla compra usa actualmente columna metodo_pago (texto),
+      // no payment_method_id como venta.
       final compraResponse = await Supabase.instance.client
           .from('compra')
           .insert({
@@ -323,7 +325,7 @@ class CompraProvider extends ChangeNotifier {
             'total': totalCosto,
             'id_proveedor': _proveedorId,
             'id_empleado': _empleadoId,
-            'payment_method_id': _metodoPagoId,
+            'metodo_pago': _metodoPago,
           })
           .select('id_compras')
           .single();
