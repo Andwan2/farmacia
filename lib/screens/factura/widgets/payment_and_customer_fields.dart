@@ -1,9 +1,28 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:farmacia_desktop/providers/factura_provider.dart';
 
-class PaymentAndCustomerFields extends StatelessWidget {
+class PaymentAndCustomerFields extends StatefulWidget {
   const PaymentAndCustomerFields({super.key});
+
+  @override
+  State<PaymentAndCustomerFields> createState() => _PaymentAndCustomerFieldsState();
+}
+
+class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
+  @override
+  void initState() {
+    super.initState();
+    // Cargar métodos de pago y clientes al iniciar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      print('PaymentAndCustomerFields: Llamando cargarMetodosPago...');
+      context.read<FacturaProvider>().cargarMetodosPago();
+      print('PaymentAndCustomerFields: Llamando cargarClientes...');
+      context.read<FacturaProvider>().cargarClientes();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,34 +43,11 @@ class PaymentAndCustomerFields extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: provider.metodoPago,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.credit_card),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 16,
-                      ),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'EFECTIVO',
-                        child: Text('Efectivo'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'TARJETA',
-                        child: Text('Tarjeta'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'TRANSFERENCIA',
-                        child: Text('Transferencia'),
-                      ),
-                    ],
-                    onChanged: (valor) => provider.setMetodoPago(valor ?? 'EFECTIVO'),
-                  ),
+                  provider.isLoadingMetodosPago
+                      ? _buildShimmerLoader()
+                      : provider.metodosPagoCargados && provider.metodosPago.isNotEmpty
+                          ? _buildAutocompleteConDatos(provider)
+                          : _buildAutocompleteFallback(provider),
                 ],
               ),
             ),
@@ -71,45 +67,11 @@ class PaymentAndCustomerFields extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: provider.cliente.isEmpty ? null : provider.cliente,
-                    decoration: InputDecoration(
-                      hintText: 'Seleccionar cliente',
-                      prefixIcon: const Icon(Icons.person),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 16,
-                      ),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'nuevo',
-                        child: Text('+ Crear nuevo cliente'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Cliente 1',
-                        child: Text('Cliente 1'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Cliente 2',
-                        child: Text('Cliente 2'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Cliente 3',
-                        child: Text('Cliente 3'),
-                      ),
-                    ],
-                    onChanged: (valor) {
-                      if (valor == 'nuevo') {
-                        _mostrarDialogNuevoCliente(context);
-                      } else {
-                        provider.setCliente(valor ?? '');
-                      }
-                    },
-                  ),
+                  provider.isLoadingClientes
+                      ? _buildShimmerLoader()
+                      : provider.clientesCargados && provider.clientes.isNotEmpty
+                          ? _buildAutocompleteClientesConDatos(provider)
+                          : _buildAutocompleteClientesFallback(provider),
                 ],
               ),
             ),
@@ -119,89 +81,185 @@ class PaymentAndCustomerFields extends StatelessWidget {
     );
   }
 
-  void _mostrarDialogNuevoCliente(BuildContext context) {
-    final TextEditingController controller = TextEditingController();
+  Widget _buildAutocompleteConDatos(FacturaProvider provider) {
+    // Obtener todos los métodos de pago de la DB
+    final opciones = provider.metodosPago
+        .map((metodo) => metodo.name)
+        .toList();
     
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Row(
-            children: [
-              Icon(Icons.person_add, color: Color(0xFF16A34A), size: 28),
-              SizedBox(width: 12),
-              Text(
-                'Nuevo Cliente',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Nombre del cliente',
-                  hintText: 'Ingrese el nombre completo',
-                  prefixIcon: const Icon(Icons.person),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text(
-                'Cancelar',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
+    return Autocomplete<String>(
+      key: ValueKey('metodo_pago_${provider.formKey}'),
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        if (textEditingValue.text.isEmpty) {
+          return opciones;
+        }
+        return opciones.where((String option) {
+          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+        });
+      },
+      onSelected: (String selection) {
+        provider.setMetodoPago(selection);
+      },
+      fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
+        return TextField(
+          controller: textEditingController,
+          focusNode: focusNode,
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.credit_card),
+            hintText: 'Método de pago',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
             ),
-            ElevatedButton(
-              onPressed: () {
-                final nombre = controller.text.trim();
-                if (nombre.isNotEmpty) {
-                  Navigator.of(dialogContext).pop();
-                  // Usar el contexto original para acceder al provider
-                  context.read<FacturaProvider>().setCliente(nombre);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF16A34A),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: const Text(
-                'Guardar',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
             ),
-          ],
+          ),
+          onSubmitted: (String value) {
+            onFieldSubmitted();
+          },
         );
       },
     );
   }
+
+  Widget _buildAutocompleteFallback(FacturaProvider provider) {
+    // Opciones por defecto si no hay conexión a BD
+    const opciones = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA'];
+    
+    return Autocomplete<String>(
+      key: ValueKey('metodo_pago_fallback_${provider.formKey}'),
+      initialValue: TextEditingValue(text: provider.metodoPago),
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        if (textEditingValue.text.isEmpty) {
+          return opciones;
+        }
+        return opciones.where((String option) {
+          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+        });
+      },
+      onSelected: (String selection) {
+        provider.setMetodoPago(selection);
+      },
+      fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
+        return TextField(
+          controller: textEditingController,
+          focusNode: focusNode,
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.credit_card),
+            hintText: 'Método de pago',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+          ),
+          onSubmitted: (String value) {
+            onFieldSubmitted();
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildShimmerLoader() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAutocompleteClientesConDatos(FacturaProvider provider) {
+    // Obtener todos los clientes de la DB
+    final opciones = provider.clientes
+        .map((cliente) => cliente.nombreCliente)
+        .toList();
+    
+    return Autocomplete<String>(
+      key: ValueKey('cliente_${provider.formKey}'),
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        if (textEditingValue.text.isEmpty) {
+          return opciones;
+        }
+        return opciones.where((String option) {
+          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+        });
+      },
+      onSelected: (String selection) {
+        provider.setCliente(selection);
+      },
+      fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
+        return TextField(
+          controller: textEditingController,
+          focusNode: focusNode,
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.person),
+            hintText: 'Seleccionar cliente',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+          ),
+          onSubmitted: (String value) {
+            onFieldSubmitted();
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAutocompleteClientesFallback(FacturaProvider provider) {
+    // Opciones por defecto si no hay conexión a BD
+    const opciones = ['Cliente General', 'Cliente Frecuente'];
+    
+    return Autocomplete<String>(
+      key: ValueKey('cliente_fallback_${provider.formKey}'),
+      initialValue: TextEditingValue(text: provider.cliente),
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        if (textEditingValue.text.isEmpty) {
+          return opciones;
+        }
+        return opciones.where((String option) {
+          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+        });
+      },
+      onSelected: (String selection) {
+        provider.setCliente(selection);
+      },
+      fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
+        return TextField(
+          controller: textEditingController,
+          focusNode: focusNode,
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.person),
+            hintText: 'Seleccionar cliente',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+          ),
+          onSubmitted: (String value) {
+            onFieldSubmitted();
+          },
+        );
+      },
+    );
+  }
+
 }

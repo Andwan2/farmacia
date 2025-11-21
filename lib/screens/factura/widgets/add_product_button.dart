@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:farmacia_desktop/models/producto_db.dart';
+import 'package:farmacia_desktop/providers/factura_provider.dart';
 import 'producto_search_dialog.dart';
 
 class AddProductButton extends StatelessWidget {
@@ -11,9 +13,18 @@ class AddProductButton extends StatelessWidget {
   });
 
   Future<void> _abrirDialogoBusqueda(BuildContext context) async {
+    // Obtener los IDs de productos ya agregados a la factura
+    final provider = context.read<FacturaProvider>();
+    final idsYaAgregados = provider.productos
+        .map((p) => p.idProducto)
+        .toSet()
+        .toList();
+    
     final producto = await showDialog<ProductoDB>(
       context: context,
-      builder: (context) => const ProductoSearchDialog(),
+      builder: (context) => ProductoSearchDialog(
+        idsYaAgregados: idsYaAgregados,
+      ),
     );
 
     if (producto != null) {

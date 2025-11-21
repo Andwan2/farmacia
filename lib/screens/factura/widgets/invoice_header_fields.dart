@@ -68,7 +68,7 @@ class InvoiceHeaderFields extends StatelessWidget {
               Expanded(
                 child: _HeaderField(
                   label: 'TOTAL',
-                  value: '\$${provider.total.toStringAsFixed(2)}',
+                  value: 'C\$${provider.total.toStringAsFixed(2)}',
                   icon: Icons.attach_money,
                 ),
               ),

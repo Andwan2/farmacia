@@ -4,7 +4,12 @@ import 'package:farmacia_desktop/services/producto_service.dart';
 import 'package:farmacia_desktop/utils/debouncer.dart';
 
 class ProductoSearchDialog extends StatefulWidget {
-  const ProductoSearchDialog({super.key});
+  final List<int> idsYaAgregados;
+  
+  const ProductoSearchDialog({
+    super.key,
+    this.idsYaAgregados = const [],
+  });
 
   @override
   State<ProductoSearchDialog> createState() => _ProductoSearchDialogState();
@@ -38,8 +43,13 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
       
       final productos = await _productoService.buscarProductos(query);
       
+      // Filtrar productos cuyo ID ya esté agregado a la factura
+      final productosFiltrados = productos.where((producto) {
+        return !widget.idsYaAgregados.contains(producto.idProducto);
+      }).toList();
+      
       setState(() {
-        _resultados = productos;
+        _resultados = productosFiltrados;
         _isSearching = false;
       });
     });
@@ -214,7 +224,7 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    '\$${producto.precioVenta!.toStringAsFixed(2)}',
+                    'C\$${producto.precioVenta!.toStringAsFixed(2)}',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,

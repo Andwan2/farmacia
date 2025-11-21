@@ -62,8 +62,35 @@ class _FacturaScreenContent extends StatelessWidget {
                     // Tabla de productos
                     Consumer<FacturaProvider>(
                       builder: (context, provider, child) {
+                        // Agrupar productos por tipo
+                        final Map<String, List<ProductoFactura>> productosPorTipo = {};
+                        for (var producto in provider.productos) {
+                          if (!productosPorTipo.containsKey(producto.presentacion)) {
+                            productosPorTipo[producto.presentacion] = [];
+                          }
+                          productosPorTipo[producto.presentacion]!.add(producto);
+                        }
+                        
+                        // Crear lista agrupada con cantidad total por tipo
+                        final productosAgrupados = productosPorTipo.entries.map((entry) {
+                          final tipo = entry.key;
+                          final productos = entry.value;
+                          final cantidadTotal = productos.length;
+                          final primerProducto = productos.first;
+                          
+                          return ProductoFactura(
+                            idProducto: primerProducto.idProducto,
+                            cantidad: cantidadTotal,
+                            nombre: primerProducto.nombre,
+                            presentacion: tipo,
+                            medida: primerProducto.medida,
+                            fechaVencimiento: primerProducto.fechaVencimiento,
+                            precio: primerProducto.precio,
+                          );
+                        }).toList();
+                        
                         return InvoiceTable(
-                          productos: provider.productos,
+                          productos: productosAgrupados,
                         );
                       },
                     ),
@@ -87,16 +114,136 @@ class _FacturaScreenContent extends StatelessWidget {
               Column(
                 children: [
                   // Resumen de venta
-                  SaleSummary(
-                    onReset: () {
-                      final provider = context.read<FacturaProvider>();
-                      provider.limpiarFactura();
-                    },
-                    onConfirm: () {
-                      // TODO: Implementar confirmación y guardar en DB
-                      final provider = context.read<FacturaProvider>();
-                      print('Total: \$${provider.total}');
-                      print('Productos: ${provider.productos.length}');
+                  Consumer<FacturaProvider>(
+                    builder: (context, provider, child) {
+                      final isValid = provider.validarFactura() == null;
+                      
+                      return SaleSummary(
+                        isValid: isValid,
+                        onReset: () {
+                          provider.limpiarFactura();
+                        },
+                        onConfirm: () async {
+                          // Validar todos los campos
+                          final errorValidacion = provider.validarFactura();
+                          
+                          if (errorValidacion != null) {
+                            // Mostrar error al usuario
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    const Icon(Icons.error_outline, color: Colors.white),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        errorValidacion,
+                                        style: const TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                backgroundColor: Colors.red[700],
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                margin: const EdgeInsets.all(16),
+                                duration: const Duration(seconds: 4),
+                              ),
+                            );
+                            return;
+                          }
+                          
+                          // Mostrar indicador de carga
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (context) => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                          
+                          // Guardar en base de datos
+                          final error = await provider.guardarVenta();
+                          
+                          // Cerrar indicador de carga
+                          if (context.mounted) {
+                            Navigator.of(context).pop();
+                          }
+                          
+                          if (error != null) {
+                            // Mostrar error
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.error_outline, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          error,
+                                          style: const TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.red[700],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  margin: const EdgeInsets.all(16),
+                                  duration: const Duration(seconds: 5),
+                                ),
+                              );
+                            }
+                          } else {
+                            // Mostrar mensaje de éxito
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: const Row(
+                                    children: [
+                                      Icon(Icons.check_circle_outline, color: Colors.white),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          '¡Venta guardada exitosamente!',
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.green[700],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  margin: const EdgeInsets.all(16),
+                                  duration: const Duration(seconds: 3),
+                                ),
+                              );
+                              
+                              // Limpiar formulario
+                              provider.limpiarFactura();
+                            }
+                          }
+                        },
+                      );
                     },
                   ),
                   
@@ -129,7 +276,10 @@ class _FacturaScreenContent extends StatelessWidget {
                                 ? OutlinedButton.icon(
                                     onPressed: () {
                                       mostrarSeleccionarEmpleado(context, (empleado) {
-                                        provider.setEmpleado(empleado.nombreEmpleado);
+                                        provider.setEmpleado(
+                                          empleado.nombreEmpleado,
+                                          empleadoId: empleado.idEmpleado,
+                                        );
                                       });
                                     },
                                     icon: const Icon(Icons.badge),
@@ -175,7 +325,10 @@ class _FacturaScreenContent extends StatelessWidget {
                                           icon: const Icon(Icons.edit, size: 20),
                                           onPressed: () {
                                             mostrarSeleccionarEmpleado(context, (empleado) {
-                                              provider.setEmpleado(empleado.nombreEmpleado);
+                                              provider.setEmpleado(
+                                                empleado.nombreEmpleado,
+                                                empleadoId: empleado.idEmpleado,
+                                              );
                                             });
                                           },
                                           tooltip: 'Cambiar empleado',
