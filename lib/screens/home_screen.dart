@@ -262,18 +262,20 @@ class _HomeScreenState extends State<HomeScreen> {
             // Encabezado
             Row(
               children: [
-                Icon(Icons.dashboard, size: 32, color: Colors.blue[700]),
+                Icon(Icons.home, size: 32, color: Colors.blue[700]),
                 const SizedBox(width: 12),
                 const Text(
-                  'Dashboard',
+                  'Inicio',
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              'Sistema de inventario de farmacia André',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            Center(
+              child: Text(
+                'Bienvenido al Dashboard',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
             ),
             const SizedBox(height: 24),
 
