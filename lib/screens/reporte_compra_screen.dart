@@ -74,19 +74,28 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
     for (var c in comprasBase) {
       final detalle = await Supabase.instance.client
           .from('producto_a_comprar')
-          .select('producto(precio_compra,nombre_producto,tipo)')
+          .select('producto(precio_compra,precio_venta,nombre_producto,tipo)')
           .eq('id_compra', c['id_compras']);
 
       final listaProductos = List<Map<String, dynamic>>.from(detalle);
 
-      double totalCompra = 0.0;
+      double totalCosto = 0.0;
+      double totalVenta = 0.0;
+
       for (var p in listaProductos) {
-        final precioCompra = (p['precio_compra'] as num?)?.toDouble() ?? 0.0;
-        totalCompra += precioCompra;
+        final producto = p['producto'] as Map<String, dynamic>?;
+        final precioCompra =
+            (producto?['precio_compra'] as num?)?.toDouble() ?? 0.0;
+        final precioVenta =
+            (producto?['precio_venta'] as num?)?.toDouble() ?? 0.0;
+        totalCosto += precioCompra;
+        totalVenta += precioVenta;
       }
 
       c['productos'] = listaProductos;
-      c['total_calculado'] = c['total'] ?? totalCompra;
+      c['total_costo'] = totalCosto;
+      c['total_calculado'] = totalVenta;
+      c['ganancia_total'] = totalVenta - totalCosto;
 
       // Asignar datos del proveedor
       final provId = c['id_proveedor'] as int?;
@@ -105,8 +114,16 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
     return productos.length;
   }
 
-  double calcularTotalGeneral() {
+  double calcularTotalCosto() {
+    return compras.fold(0.0, (sum, c) => sum + (c['total_costo'] ?? 0.0));
+  }
+
+  double calcularTotalVentaEsperable() {
     return compras.fold(0.0, (sum, c) => sum + (c['total_calculado'] ?? 0.0));
+  }
+
+  double calcularGananciaEsperable() {
+    return compras.fold(0.0, (sum, c) => sum + (c['ganancia_total'] ?? 0.0));
   }
 
   List<Map<String, dynamic>> _filtrarYOrdenarCompras() {
@@ -258,7 +275,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
               pw.Header(
                 level: 0,
                 child: pw.Text(
-                  'Compra #${compra['id_compras']}',
+                  'ID de Compra: ${compra['id_compras']}',
                   style: pw.TextStyle(
                     fontSize: 18,
                     fontWeight: pw.FontWeight.bold,
@@ -386,19 +403,60 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 Column(
                   children: [
                     const Text(
-                      'Total de Compras',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      'Total Invertido',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
                     Text(
-                      'C\$${calcularTotalGeneral().toStringAsFixed(2)}',
+                      'C\$${calcularTotalCosto().toStringAsFixed(2)}',
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                Column(
+                  children: [
+                    const Text(
+                      'Venta Esperable',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      'C\$${calcularTotalVentaEsperable().toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 16,
                         color: Colors.blue,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                Column(
+                  children: [
+                    const Text(
+                      'Ganancia Esperable',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      'C\$${calcularGananciaEsperable().toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.green,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -422,7 +480,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
                 child: ListTile(
                   leading: const Icon(Icons.shopping_bag, color: Colors.blue),
                   title: Text(
-                    'Compra #${c['id_compras']} - C\$${(c['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
+                    'ID de Compra: ${c['id_compras']} - C\$${(c['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
                   ),
                   subtitle: Text(
                     'Fecha: ${c['fecha']}\n'
@@ -451,9 +509,19 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
         .where((c) => comprasSeleccionadas.contains(c['id_compras'] as int))
         .toList();
 
-    final totalCompraSeleccionada = comprasSeleccionadasData.fold<double>(
+    final totalCostoSeleccionado = comprasSeleccionadasData.fold<double>(
+      0.0,
+      (sum, c) => sum + (c['total_costo'] ?? 0.0),
+    );
+
+    final totalVentaSeleccionada = comprasSeleccionadasData.fold<double>(
       0.0,
       (sum, c) => sum + (c['total_calculado'] ?? 0.0),
+    );
+
+    final gananciaSeleccionada = comprasSeleccionadasData.fold<double>(
+      0.0,
+      (sum, c) => sum + (c['ganancia_total'] ?? 0.0),
     );
 
     return Column(
@@ -550,10 +618,26 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
                     ),
                   ),
                   Text(
-                    'Total: C\$${totalCompraSeleccionada.toStringAsFixed(2)}',
+                    'Invertido: C\$${totalCostoSeleccionado.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Venta Esp.: C\$${totalVentaSeleccionada.toStringAsFixed(2)}',
                     style: const TextStyle(
                       fontSize: 14,
                       color: Colors.blue,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Ganancia Esp.: C\$${gananciaSeleccionada.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.green,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -594,15 +678,17 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
       final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
       final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
       final tipo = prod['tipo']?.toString() ?? 'N/A';
-      final precioCompra = (p['precio_compra'] as num?)?.toDouble();
+      final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
+      final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
 
-      final key = '$nombre|$tipo|$precioCompra';
+      final key = '$nombre|$tipo|$precioCompra|$precioVenta';
 
       if (!productosAgrupados.containsKey(key)) {
         productosAgrupados[key] = {
           'nombre': nombre,
           'tipo': tipo,
           'precio_compra': precioCompra,
+          'precio_venta': precioVenta,
           'cantidad': 1,
         };
       } else {
@@ -633,7 +719,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
           },
         ),
         title: Text(
-          'Compra #$idCompra - C\$${(c['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
+          'ID de Compra: $idCompra - C\$${(c['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
         ),
         subtitle: Text(
@@ -653,8 +739,10 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
                 const SizedBox(height: 6),
                 ...listaAgrupada.map((p) {
                   final precioCompra = p['precio_compra'] as double? ?? 0.0;
+                  final precioVenta = p['precio_venta'] as double? ?? 0.0;
                   final cantidad = p['cantidad'] as int? ?? 0;
-                  final total = precioCompra * cantidad;
+                  final gananciaUnit = precioVenta - precioCompra;
+                  final gananciaTotal = gananciaUnit * cantidad;
 
                   return Card(
                     color: isDark ? Colors.grey[800] : Colors.grey[100],
@@ -676,7 +764,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Precio: C\$${precioCompra.toStringAsFixed(2)} | Total: C\$${total.toStringAsFixed(2)}',
+                            'Compra: C\$${precioCompra.toStringAsFixed(2)} | Venta Esp.: C\$${precioVenta.toStringAsFixed(2)} | Ganancia Esp.: C\$${gananciaTotal.toStringAsFixed(2)}',
                             style: const TextStyle(fontSize: 12),
                           ),
                         ],
@@ -686,13 +774,28 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
                 }),
                 const Divider(height: 16),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Total: C\$${(c['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
+                      'Invertido: C\$${(c['total_costo'] ?? 0.0).toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      'Venta Esp.: C\$${(c['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.blue,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      'Ganancia Esp.: C\$${(c['ganancia_total'] ?? 0.0).toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
                         fontSize: 12,
                       ),
                     ),

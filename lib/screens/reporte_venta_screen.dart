@@ -229,7 +229,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
               pw.Header(
                 level: 0,
                 child: pw.Text(
-                  'Venta #${venta['id_venta']}',
+                  'ID de Venta: ${venta['id_venta']}',
                   style: pw.TextStyle(
                     fontSize: 18,
                     fontWeight: pw.FontWeight.bold,
@@ -502,7 +502,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
                 child: ListTile(
                   leading: const Icon(Icons.shopping_cart, color: Colors.blue),
                   title: Text(
-                    'Venta #${v['id_venta']} - C\$${(v['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
+                    'ID de Venta: ${v['id_venta']} - C\$${(v['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
                   ),
                   subtitle: Text(
                     'Fecha: ${v['fecha']}\n'
@@ -733,7 +733,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
           },
         ),
         title: Text(
-          'Venta #$idVenta - C\$${(v['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
+          'ID de Venta: $idVenta - C\$${(v['total_calculado'] ?? 0.0).toStringAsFixed(2)}',
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
         ),
         subtitle: Text(
