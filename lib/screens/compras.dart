@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:farmacia_desktop/models/producto_db.dart';
-import 'package:farmacia_desktop/providers/compra_provider.dart';
-import 'package:farmacia_desktop/screens/factura/widgets/producto_search_dialog.dart';
-import 'package:farmacia_desktop/modal/seleccionar_empleado_modal.dart';
-import 'package:farmacia_desktop/modal/agregar_producto_modal.dart';
-import 'package:farmacia_desktop/modal/agregar_proveedor_modal.dart';
+import 'package:abari/models/producto_db.dart';
+import 'package:abari/providers/compra_provider.dart';
+import 'package:abari/screens/factura/widgets/producto_search_dialog.dart';
+import 'package:abari/modal/seleccionar_empleado_modal.dart';
+import 'package:abari/modal/agregar_producto_modal.dart';
+import 'package:abari/modal/agregar_proveedor_modal.dart';
 
 class ComprasScreen extends StatelessWidget {
   const ComprasScreen({super.key});
@@ -44,8 +44,8 @@ class _ComprasScreenContent extends StatelessWidget {
       text: (producto.precioVenta ?? 0.0).toStringAsFixed(2),
     );
 
-    DateTime fechaVenc = DateTime.tryParse(producto.fechaVencimiento) ??
-        DateTime.now();
+    DateTime fechaVenc =
+        DateTime.tryParse(producto.fechaVencimiento) ?? DateTime.now();
     final formatoFecha = DateFormat('dd/MM/yyyy');
 
     final result = await showDialog<bool>(
@@ -62,9 +62,7 @@ class _ComprasScreenContent extends StatelessWidget {
                   children: [
                     Text(
                       producto.nombreProducto,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -78,8 +76,9 @@ class _ComprasScreenContent extends StatelessWidget {
                     const SizedBox(height: 12),
                     TextField(
                       controller: precioCompraController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
                         labelText: 'Precio de compra (por unidad)',
                         border: OutlineInputBorder(),
@@ -88,8 +87,9 @@ class _ComprasScreenContent extends StatelessWidget {
                     const SizedBox(height: 12),
                     TextField(
                       controller: precioVentaController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
                         labelText: 'Precio de venta (por unidad)',
                         border: OutlineInputBorder(),
@@ -160,10 +160,9 @@ class _ComprasScreenContent extends StatelessWidget {
     final cantidad = int.tryParse(cantidadController.text) ?? 0;
     final precioCompra =
         double.tryParse(precioCompraController.text.replaceAll(',', '.')) ??
-            0.0;
+        0.0;
     final precioVenta =
-        double.tryParse(precioVentaController.text.replaceAll(',', '.')) ??
-            0.0;
+        double.tryParse(precioVentaController.text.replaceAll(',', '.')) ?? 0.0;
 
     if (cantidad <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -178,9 +177,7 @@ class _ComprasScreenContent extends StatelessWidget {
         cantidad: cantidad,
         precioCompra: precioCompra,
         precioVenta: precioVenta,
-      ).copyWith(
-        fechaVencimiento: fechaVenc.toIso8601String().split('T')[0],
-      ),
+      ).copyWith(fechaVencimiento: fechaVenc.toIso8601String().split('T')[0]),
     );
   }
 
@@ -244,14 +241,11 @@ class _ComprasScreenContent extends StatelessWidget {
                               tooltip: 'Nuevo proveedor',
                               icon: const Icon(Icons.add_business),
                               onPressed: () {
-                                mostrarAgregarProveedor(
-                                  context,
-                                  () {
-                                    final compraProvider =
-                                        context.read<CompraProvider>();
-                                    compraProvider.cargarProveedores();
-                                  },
-                                );
+                                mostrarAgregarProveedor(context, () {
+                                  final compraProvider = context
+                                      .read<CompraProvider>();
+                                  compraProvider.cargarProveedores();
+                                });
                               },
                             ),
                             const SizedBox(width: 16),
@@ -289,9 +283,7 @@ class _ComprasScreenContent extends StatelessWidget {
                           child: Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.grey.shade700,
-                              ),
+                              border: Border.all(color: Colors.grey.shade700),
                               color: Theme.of(context).colorScheme.surface,
                             ),
                             child: Column(
@@ -302,9 +294,9 @@ class _ComprasScreenContent extends StatelessWidget {
                                     vertical: 12,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHighest,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerHighest,
                                     borderRadius: const BorderRadius.vertical(
                                       top: Radius.circular(12),
                                     ),
@@ -320,9 +312,9 @@ class _ComprasScreenContent extends StatelessWidget {
                                               .labelMedium
                                               ?.copyWith(
                                                 fontWeight: FontWeight.bold,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSurface,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
                                               ),
                                         ),
                                       ),
@@ -334,9 +326,9 @@ class _ComprasScreenContent extends StatelessWidget {
                                               .labelMedium
                                               ?.copyWith(
                                                 fontWeight: FontWeight.bold,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSurface,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
                                               ),
                                         ),
                                       ),
@@ -348,9 +340,9 @@ class _ComprasScreenContent extends StatelessWidget {
                                               .labelMedium
                                               ?.copyWith(
                                                 fontWeight: FontWeight.bold,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSurface,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
                                               ),
                                         ),
                                       ),
@@ -362,9 +354,9 @@ class _ComprasScreenContent extends StatelessWidget {
                                               .labelMedium
                                               ?.copyWith(
                                                 fontWeight: FontWeight.bold,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSurface,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
                                               ),
                                         ),
                                       ),
@@ -376,9 +368,9 @@ class _ComprasScreenContent extends StatelessWidget {
                                               .labelMedium
                                               ?.copyWith(
                                                 fontWeight: FontWeight.bold,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSurface,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
                                               ),
                                         ),
                                       ),
@@ -401,14 +393,13 @@ class _ComprasScreenContent extends StatelessWidget {
                                             return Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 8,
-                                              ),
+                                                    horizontal: 16,
+                                                    vertical: 8,
+                                                  ),
                                               decoration: BoxDecoration(
                                                 border: Border(
                                                   top: BorderSide(
-                                                    color:
-                                                        Colors.grey.shade300,
+                                                    color: Colors.grey.shade300,
                                                   ),
                                                 ),
                                               ),
@@ -445,7 +436,8 @@ class _ComprasScreenContent extends StatelessWidget {
                                                     ),
                                                     onPressed: () {
                                                       provider.eliminarProducto(
-                                                          index);
+                                                        index,
+                                                      );
                                                     },
                                                   ),
                                                 ],
@@ -465,7 +457,8 @@ class _ComprasScreenContent extends StatelessWidget {
                           children: [
                             Expanded(
                               child: ElevatedButton.icon(
-                                onPressed: () => _agregarProductoDialog(context),
+                                onPressed: () =>
+                                    _agregarProductoDialog(context),
                                 icon: const Icon(Icons.add_circle_outline),
                                 label: const Text('Agregar producto a compra'),
                                 style: ElevatedButton.styleFrom(
@@ -479,13 +472,10 @@ class _ComprasScreenContent extends StatelessWidget {
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () {
-                                  mostrarAgregarProducto(
-                                    context,
-                                    () {
-                                      // Después de crear productos, no hace
-                                      // falta recargar nada específico aquí.
-                                    },
-                                  );
+                                  mostrarAgregarProducto(context, () {
+                                    // Después de crear productos, no hace
+                                    // falta recargar nada específico aquí.
+                                  });
                                 },
                                 icon: const Icon(Icons.add_box_outlined),
                                 label: const Text('Nuevo producto'),
@@ -559,8 +549,9 @@ class _ComprasScreenContent extends StatelessWidget {
                                                 if (!context.mounted) return;
 
                                                 if (error != null) {
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
                                                     SnackBar(
                                                       content: Text(error),
                                                       backgroundColor:
@@ -568,8 +559,9 @@ class _ComprasScreenContent extends StatelessWidget {
                                                     ),
                                                   );
                                                 } else {
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
                                                     SnackBar(
                                                       content: const Text(
                                                         '¡Compra guardada exitosamente!',
@@ -618,24 +610,20 @@ class _ComprasScreenContent extends StatelessWidget {
                               children: [
                                 const Text(
                                   'Empleado',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                  style: TextStyle(fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 8),
                                 provider.empleado.isEmpty
                                     ? OutlinedButton.icon(
                                         onPressed: () {
-                                          mostrarSeleccionarEmpleado(
-                                            context,
-                                            (empleado) {
-                                              provider.setEmpleado(
-                                                empleado.nombreEmpleado,
-                                                empleadoId:
-                                                    empleado.idEmpleado,
-                                              );
-                                            },
-                                          );
+                                          mostrarSeleccionarEmpleado(context, (
+                                            empleado,
+                                          ) {
+                                            provider.setEmpleado(
+                                              empleado.nombreEmpleado,
+                                              empleadoId: empleado.idEmpleado,
+                                            );
+                                          });
                                         },
                                         icon: const Icon(Icons.badge),
                                         label: const Text(
@@ -650,8 +638,10 @@ class _ComprasScreenContent extends StatelessWidget {
                                             child: Text(provider.empleado),
                                           ),
                                           IconButton(
-                                            icon: const Icon(Icons.close,
-                                                size: 18),
+                                            icon: const Icon(
+                                              Icons.close,
+                                              size: 18,
+                                            ),
                                             onPressed: () {
                                               provider.setEmpleado('');
                                             },
@@ -674,9 +664,7 @@ class _ComprasScreenContent extends StatelessWidget {
                               children: [
                                 const Text(
                                   'Fecha de compra',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                  style: TextStyle(fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 8),
                                 InkWell(
@@ -704,12 +692,13 @@ class _ComprasScreenContent extends StatelessWidget {
                                     ),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.calendar_today,
-                                            size: 18),
+                                        const Icon(
+                                          Icons.calendar_today,
+                                          size: 18,
+                                        ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          formatoFecha
-                                              .format(provider.fecha),
+                                          formatoFecha.format(provider.fecha),
                                         ),
                                       ],
                                     ),

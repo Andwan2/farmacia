@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:farmacia_desktop/models/producto_db.dart';
-import 'package:farmacia_desktop/models/payment_method.dart';
+import 'package:abari/models/producto_db.dart';
+import 'package:abari/models/payment_method.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Modelo simple para representar un proveedor
@@ -26,7 +26,8 @@ class ProveedorCompra {
 
 /// Item de producto dentro de una compra
 class ProductoCompraItem {
-  final int? idProductoBase; // Puede ser null si es un producto totalmente nuevo
+  final int?
+  idProductoBase; // Puede ser null si es un producto totalmente nuevo
   final int idPresentacion;
   final String nombre;
   final String tipo;
@@ -72,8 +73,12 @@ class ProductoCompraItem {
     );
   }
 
-  factory ProductoCompraItem.fromProductoDB(ProductoDB producto,
-      {required int cantidad, required double precioCompra, required double precioVenta}) {
+  factory ProductoCompraItem.fromProductoDB(
+    ProductoDB producto, {
+    required int cantidad,
+    required double precioCompra,
+    required double precioVenta,
+  }) {
     return ProductoCompraItem(
       idProductoBase: producto.idProducto,
       idPresentacion: producto.idPresentacion,
@@ -143,10 +148,7 @@ class CompraProvider extends ChangeNotifier {
 
   /// Total de venta esperable (usando precioVenta)
   double get totalVentaEsperable {
-    return _productos.fold(
-      0.0,
-      (sum, p) => sum + (p.precioVenta * p.cantidad),
-    );
+    return _productos.fold(0.0, (sum, p) => sum + (p.precioVenta * p.cantidad));
   }
 
   /// Ganancia esperable
@@ -243,8 +245,9 @@ class CompraProvider extends ChangeNotifier {
       // Si no hay método seleccionado aún, intentar preseleccionar "Cordoba NIO"
       if (_metodosPago.isNotEmpty && _metodoPago.isEmpty) {
         final metodoCordoba = _metodosPago.firstWhere(
-          (m) => m.name.toLowerCase().contains('cordoba') ||
-                  m.name.toLowerCase().contains('nio'),
+          (m) =>
+              m.name.toLowerCase().contains('cordoba') ||
+              m.name.toLowerCase().contains('nio'),
           orElse: () => _metodosPago.first,
         );
         _metodoPago = metodoCordoba.name;
@@ -373,10 +376,12 @@ class CompraProvider extends ChangeNotifier {
 
         // 3. Insertar relaciones en producto_a_comprar
         final filasRelacion = idsProductos
-            .map((idProducto) => {
-                  'id_compra': idCompra,
-                  'id_producto': idProducto,
-                })
+            .map(
+              (idProducto) => {
+                'id_compra': idCompra,
+                'id_producto': idProducto,
+              },
+            )
             .toList();
 
         await Supabase.instance.client

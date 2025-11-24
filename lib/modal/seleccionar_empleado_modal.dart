@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:farmacia_desktop/models/empleado_db.dart';
+import 'package:abari/models/empleado_db.dart';
 
 Future<void> mostrarSeleccionarEmpleado(
   BuildContext context,
@@ -10,9 +10,7 @@ Future<void> mostrarSeleccionarEmpleado(
     context: context,
     builder: (context) {
       return Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Container(
           width: 600,
           padding: const EdgeInsets.all(24),
@@ -23,11 +21,7 @@ Future<void> mostrarSeleccionarEmpleado(
               // Título
               Row(
                 children: [
-                  const Icon(
-                    Icons.badge,
-                    color: Color(0xFF16A34A),
-                    size: 28,
-                  ),
+                  const Icon(Icons.badge, color: Color(0xFF16A34A), size: 28),
                   const SizedBox(width: 12),
                   const Text(
                     'Seleccionar Empleado',
@@ -45,18 +39,16 @@ Future<void> mostrarSeleccionarEmpleado(
                 ],
               ),
               const SizedBox(height: 24),
-              
+
               // Lista de empleados
               Flexible(
                 child: FutureBuilder<List<EmpleadoDB>>(
                   future: _cargarEmpleados(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(
-                        child: CircularProgressIndicator(),
-                      );
+                      return const Center(child: CircularProgressIndicator());
                     }
-                    
+
                     if (snapshot.hasError) {
                       return Center(
                         child: Column(
@@ -85,9 +77,9 @@ Future<void> mostrarSeleccionarEmpleado(
                         ),
                       );
                     }
-                    
+
                     final empleados = snapshot.data ?? [];
-                    
+
                     if (empleados.isEmpty) {
                       return const Center(
                         child: Column(
@@ -110,7 +102,7 @@ Future<void> mostrarSeleccionarEmpleado(
                         ),
                       );
                     }
-                    
+
                     return ListView.builder(
                       shrinkWrap: true,
                       itemCount: empleados.length,
@@ -122,7 +114,9 @@ Future<void> mostrarSeleccionarEmpleado(
                             leading: CircleAvatar(
                               backgroundColor: const Color(0xFF16A34A),
                               child: Text(
-                                empleado.nombreEmpleado.substring(0, 1).toUpperCase(),
+                                empleado.nombreEmpleado
+                                    .substring(0, 1)
+                                    .toUpperCase(),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -176,12 +170,12 @@ Future<List<EmpleadoDB>> _cargarEmpleados() async {
   try {
     final response = await Supabase.instance.client
         .from('empleado')
-        .select('id_empleado, nombre_empleado, id_cargo, telefono, cargo_empleado!inner(cargo)')
+        .select(
+          'id_empleado, nombre_empleado, id_cargo, telefono, cargo_empleado!inner(cargo)',
+        )
         .order('nombre_empleado', ascending: true);
-    
-    return (response as List)
-        .map((json) => EmpleadoDB.fromJson(json))
-        .toList();
+
+    return (response as List).map((json) => EmpleadoDB.fromJson(json)).toList();
   } catch (e) {
     throw Exception('Error al cargar empleados: $e');
   }

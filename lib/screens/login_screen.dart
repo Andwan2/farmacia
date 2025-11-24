@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
-import 'package:farmacia_desktop/providers/theme_provider.dart';
+import 'package:abari/providers/theme_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -64,54 +64,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     final formKey = GlobalKey<FormState>();
-    return Scaffold(
-      backgroundColor: isDarkMode ? null : const Color(0xFFF5F7FA),
-      body: Stack(
+    return SafeArea(
+      child: Stack(
         children: [
-          // Switch de tema en la esquina superior derecha
-          Positioned(
-            top: 20,
-            right: 20,
-            child: Consumer<ThemeProvider>(
-              builder: (context, themeProvider, child) {
-                return Container(
-                  decoration: BoxDecoration(
-                    color: isDarkMode ? Colors.grey[800] : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          themeProvider.isDarkMode
-                              ? Icons.dark_mode
-                              : Icons.light_mode,
-                          color: themeProvider.isDarkMode
-                              ? Colors.orange
-                              : Colors.blue,
-                        ),
-                        onPressed: () {
-                          themeProvider.toggleTheme();
-                        },
-                        tooltip: themeProvider.isDarkMode
-                            ? 'Modo claro'
-                            : 'Modo oscuro',
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
           // Contenido del login
           Center(
             child: ScrollConfiguration(
@@ -128,25 +83,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       Container(
                         width: 80,
                         height: 80,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF1E88E5), Color(0xFF43A047)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.medication,
-                          size: 40,
-                          color: Colors.white,
-                        ),
+                        child: Image.asset('assets/images/logo.png'),
                       ),
                       const SizedBox(height: 24),
 
                       // Título
                       const Text(
-                        'PharmaSys',
+                        'ABARI',
                         style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
@@ -156,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       // Subtítulo
                       Text(
-                        'Sistema de Gestión para Farmacias',
+                        'Gestión de inventario para tiendas de abarrote',
                         style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                       ),
                       const SizedBox(height: 40),
@@ -200,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 FocusScope.of(context).nextFocus();
                               },
                               decoration: InputDecoration(
-                                hintText: 'usuario@farmacia.com',
+                                hintText: 'usuario@abari.com',
                                 filled: true,
                                 fillColor: isDarkMode
                                     ? Colors.grey[800]
@@ -406,6 +349,48 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
+            ),
+          ),
+
+          // Switch de tema en la esquina superior derecha
+          Positioned(
+            top: 20,
+            right: 20,
+            child: Consumer<ThemeProvider>(
+              builder: (context, themeProvider, child) {
+                return Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? Colors.grey[800] : Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        themeProvider.isDarkMode
+                            ? Icons.dark_mode
+                            : Icons.light_mode,
+                        color: themeProvider.isDarkMode
+                            ? Colors.orange
+                            : Colors.blue,
+                      ),
+                      onPressed: () {
+                        themeProvider.toggleTheme();
+                      },
+                      tooltip: themeProvider.isDarkMode
+                          ? 'Modo claro'
+                          : 'Modo oscuro',
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],

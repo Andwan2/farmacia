@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:farmacia_desktop/providers/factura_provider.dart';
+import 'package:abari/providers/factura_provider.dart';
 import 'package:intl/intl.dart';
 
 class InvoiceHeaderFields extends StatelessWidget {
@@ -14,7 +14,7 @@ class InvoiceHeaderFields extends StatelessWidget {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    
+
     if (picked != null) {
       provider.setFecha(picked);
     }
@@ -25,7 +25,7 @@ class InvoiceHeaderFields extends StatelessWidget {
     return Consumer<FacturaProvider>(
       builder: (context, provider, child) {
         final formatoFecha = DateFormat('dd/MM/yyyy');
-        
+
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -52,7 +52,8 @@ class InvoiceHeaderFields extends StatelessWidget {
                   value: provider.metodoPago,
                   icon: Icons.credit_card,
                   opciones: const ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA'],
-                  onChanged: (valor) => provider.setMetodoPago(valor ?? 'EFECTIVO'),
+                  onChanged: (valor) =>
+                      provider.setMetodoPago(valor ?? 'EFECTIVO'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -125,10 +126,7 @@ class _HeaderField extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(
-                icon,
-                size: 20,
-              ),
+              Icon(icon, size: 20),
             ],
           ),
         ],
@@ -186,10 +184,7 @@ class _HeaderFieldEditable extends StatelessWidget {
                     ),
                   ),
                 ),
-                Icon(
-                  icon,
-                  size: 20,
-                ),
+                Icon(icon, size: 20),
               ],
             ),
           ],
@@ -217,9 +212,7 @@ class _HeaderFieldText extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(4),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(4)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -254,10 +247,7 @@ class _HeaderFieldText extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(
-                icon,
-                size: 20,
-              ),
+              Icon(icon, size: 20),
             ],
           ),
         ],
@@ -286,9 +276,7 @@ class _HeaderFieldDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(4),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(4)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -325,10 +313,7 @@ class _HeaderFieldDropdown extends StatelessWidget {
                   onChanged: onChanged,
                 ),
               ),
-              Icon(
-                icon,
-                size: 20,
-              ),
+              Icon(icon, size: 20),
             ],
           ),
         ],

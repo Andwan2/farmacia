@@ -1,5 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:farmacia_desktop/models/producto_db.dart';
+import 'package:abari/models/producto_db.dart';
 
 class ProductoService {
   final _client = Supabase.instance.client;

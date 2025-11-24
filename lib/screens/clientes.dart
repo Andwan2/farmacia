@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Importa tus modales externos
-import 'package:farmacia_desktop/modal/agregar_cliente_modal.dart';
-import 'package:farmacia_desktop/modal/editar_cliente_modal.dart';
+import 'package:abari/modal/agregar_cliente_modal.dart';
+import 'package:abari/modal/editar_cliente_modal.dart';
 
 class ClientesScreen extends StatefulWidget {
   const ClientesScreen({super.key});
@@ -132,8 +132,11 @@ class ClienteCard extends StatelessWidget {
               children: [
                 const CircleAvatar(child: Icon(Icons.person)),
                 const SizedBox(height: 8),
-                Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text('Cel:'+(telefono ?? 'Teléfono no disponible')),
+                Text(
+                  nombre,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text('Cel:' + (telefono ?? 'Teléfono no disponible')),
               ],
             ),
           ),

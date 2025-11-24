@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:farmacia_desktop/router.dart';
-import 'package:farmacia_desktop/providers/theme_provider.dart';
+import 'package:abari/router.dart';
+import 'package:abari/providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

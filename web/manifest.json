@@ -1,6 +1,6 @@
 {
-    "name": "farmacia_desktop",
-    "short_name": "farmacia_desktop",
+    "name": "abari",
+    "short_name": "abari",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

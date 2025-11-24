@@ -1,4 +1,4 @@
-package com.example.farmacia_desktop
+package com.example.abari
 
 import io.flutter.embedding.android.FlutterActivity
 

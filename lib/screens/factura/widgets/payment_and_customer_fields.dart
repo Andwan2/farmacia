@@ -2,13 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:farmacia_desktop/providers/factura_provider.dart';
+import 'package:abari/providers/factura_provider.dart';
 
 class PaymentAndCustomerFields extends StatefulWidget {
   const PaymentAndCustomerFields({super.key});
 
   @override
-  State<PaymentAndCustomerFields> createState() => _PaymentAndCustomerFieldsState();
+  State<PaymentAndCustomerFields> createState() =>
+      _PaymentAndCustomerFieldsState();
 }
 
 class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
@@ -45,15 +46,16 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
                   const SizedBox(height: 12),
                   provider.isLoadingMetodosPago
                       ? _buildShimmerLoader()
-                      : provider.metodosPagoCargados && provider.metodosPago.isNotEmpty
-                          ? _buildAutocompleteConDatos(provider)
-                          : _buildAutocompleteFallback(provider),
+                      : provider.metodosPagoCargados &&
+                            provider.metodosPago.isNotEmpty
+                      ? _buildAutocompleteConDatos(provider)
+                      : _buildAutocompleteFallback(provider),
                 ],
               ),
             ),
-            
+
             const SizedBox(width: 16),
-            
+
             // Cliente
             Expanded(
               child: Column(
@@ -69,9 +71,10 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
                   const SizedBox(height: 12),
                   provider.isLoadingClientes
                       ? _buildShimmerLoader()
-                      : provider.clientesCargados && provider.clientes.isNotEmpty
-                          ? _buildAutocompleteClientesConDatos(provider)
-                          : _buildAutocompleteClientesFallback(provider),
+                      : provider.clientesCargados &&
+                            provider.clientes.isNotEmpty
+                      ? _buildAutocompleteClientesConDatos(provider)
+                      : _buildAutocompleteClientesFallback(provider),
                 ],
               ),
             ),
@@ -83,10 +86,8 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
 
   Widget _buildAutocompleteConDatos(FacturaProvider provider) {
     // Obtener todos los métodos de pago de la DB
-    final opciones = provider.metodosPago
-        .map((metodo) => metodo.name)
-        .toList();
-    
+    final opciones = provider.metodosPago.map((metodo) => metodo.name).toList();
+
     return Autocomplete<String>(
       key: ValueKey('metodo_pago_${provider.formKey}'),
       optionsBuilder: (TextEditingValue textEditingValue) {
@@ -94,39 +95,47 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
           return opciones;
         }
         return opciones.where((String option) {
-          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+          return option.toLowerCase().contains(
+            textEditingValue.text.toLowerCase(),
+          );
         });
       },
       onSelected: (String selection) {
         provider.setMetodoPago(selection);
       },
-      fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
-        return TextField(
-          controller: textEditingController,
-          focusNode: focusNode,
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.credit_card),
-            hintText: 'Método de pago',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
-          ),
-          onSubmitted: (String value) {
-            onFieldSubmitted();
+      fieldViewBuilder:
+          (
+            BuildContext context,
+            TextEditingController textEditingController,
+            FocusNode focusNode,
+            VoidCallback onFieldSubmitted,
+          ) {
+            return TextField(
+              controller: textEditingController,
+              focusNode: focusNode,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.credit_card),
+                hintText: 'Método de pago',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+              ),
+              onSubmitted: (String value) {
+                onFieldSubmitted();
+              },
+            );
           },
-        );
-      },
     );
   }
 
   Widget _buildAutocompleteFallback(FacturaProvider provider) {
     // Opciones por defecto si no hay conexión a BD
     const opciones = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA'];
-    
+
     return Autocomplete<String>(
       key: ValueKey('metodo_pago_fallback_${provider.formKey}'),
       initialValue: TextEditingValue(text: provider.metodoPago),
@@ -135,32 +144,40 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
           return opciones;
         }
         return opciones.where((String option) {
-          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+          return option.toLowerCase().contains(
+            textEditingValue.text.toLowerCase(),
+          );
         });
       },
       onSelected: (String selection) {
         provider.setMetodoPago(selection);
       },
-      fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
-        return TextField(
-          controller: textEditingController,
-          focusNode: focusNode,
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.credit_card),
-            hintText: 'Método de pago',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
-          ),
-          onSubmitted: (String value) {
-            onFieldSubmitted();
+      fieldViewBuilder:
+          (
+            BuildContext context,
+            TextEditingController textEditingController,
+            FocusNode focusNode,
+            VoidCallback onFieldSubmitted,
+          ) {
+            return TextField(
+              controller: textEditingController,
+              focusNode: focusNode,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.credit_card),
+                hintText: 'Método de pago',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+              ),
+              onSubmitted: (String value) {
+                onFieldSubmitted();
+              },
+            );
           },
-        );
-      },
     );
   }
 
@@ -184,7 +201,7 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
     final opciones = provider.clientes
         .map((cliente) => cliente.nombreCliente)
         .toList();
-    
+
     return Autocomplete<String>(
       key: ValueKey('cliente_${provider.formKey}'),
       optionsBuilder: (TextEditingValue textEditingValue) {
@@ -192,39 +209,47 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
           return opciones;
         }
         return opciones.where((String option) {
-          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+          return option.toLowerCase().contains(
+            textEditingValue.text.toLowerCase(),
+          );
         });
       },
       onSelected: (String selection) {
         provider.setCliente(selection);
       },
-      fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
-        return TextField(
-          controller: textEditingController,
-          focusNode: focusNode,
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.person),
-            hintText: 'Seleccionar cliente',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
-          ),
-          onSubmitted: (String value) {
-            onFieldSubmitted();
+      fieldViewBuilder:
+          (
+            BuildContext context,
+            TextEditingController textEditingController,
+            FocusNode focusNode,
+            VoidCallback onFieldSubmitted,
+          ) {
+            return TextField(
+              controller: textEditingController,
+              focusNode: focusNode,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.person),
+                hintText: 'Seleccionar cliente',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+              ),
+              onSubmitted: (String value) {
+                onFieldSubmitted();
+              },
+            );
           },
-        );
-      },
     );
   }
 
   Widget _buildAutocompleteClientesFallback(FacturaProvider provider) {
     // Opciones por defecto si no hay conexión a BD
     const opciones = ['Cliente General', 'Cliente Frecuente'];
-    
+
     return Autocomplete<String>(
       key: ValueKey('cliente_fallback_${provider.formKey}'),
       initialValue: TextEditingValue(text: provider.cliente),
@@ -233,33 +258,40 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
           return opciones;
         }
         return opciones.where((String option) {
-          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+          return option.toLowerCase().contains(
+            textEditingValue.text.toLowerCase(),
+          );
         });
       },
       onSelected: (String selection) {
         provider.setCliente(selection);
       },
-      fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
-        return TextField(
-          controller: textEditingController,
-          focusNode: focusNode,
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.person),
-            hintText: 'Seleccionar cliente',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
-          ),
-          onSubmitted: (String value) {
-            onFieldSubmitted();
+      fieldViewBuilder:
+          (
+            BuildContext context,
+            TextEditingController textEditingController,
+            FocusNode focusNode,
+            VoidCallback onFieldSubmitted,
+          ) {
+            return TextField(
+              controller: textEditingController,
+              focusNode: focusNode,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.person),
+                hintText: 'Seleccionar cliente',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+              ),
+              onSubmitted: (String value) {
+                onFieldSubmitted();
+              },
+            );
           },
-        );
-      },
     );
   }
-
 }

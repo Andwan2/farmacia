@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:farmacia_desktop/providers/theme_provider.dart';
+import 'package:abari/providers/theme_provider.dart';
 
 /// Shell que contiene el AppBar y Drawer persistentes
 class AppShell extends StatelessWidget {
@@ -13,9 +13,7 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sistema de inventario de farmacia André'),
-      ),
+      appBar: AppBar(title: const Text('ABARI')),
       drawer: const AppDrawer(),
       body: child,
     );
@@ -100,6 +98,7 @@ class AppDrawer extends StatelessWidget {
               }
             },
           ),
+          const SizedBox(width: double.infinity, height: 40),
         ],
       ),
     );

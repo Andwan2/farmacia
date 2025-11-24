@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:farmacia_desktop/models/producto_db.dart';
-import 'package:farmacia_desktop/services/producto_service.dart';
-import 'package:farmacia_desktop/utils/debouncer.dart';
+import 'package:abari/models/producto_db.dart';
+import 'package:abari/services/producto_service.dart';
+import 'package:abari/utils/debouncer.dart';
 
 class ProductoSearchDialog extends StatefulWidget {
   final List<int> idsYaAgregados;
-  
-  const ProductoSearchDialog({
-    super.key,
-    this.idsYaAgregados = const [],
-  });
+
+  const ProductoSearchDialog({super.key, this.idsYaAgregados = const []});
 
   @override
   State<ProductoSearchDialog> createState() => _ProductoSearchDialogState();
@@ -19,7 +16,7 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
   final _controller = TextEditingController();
   final _debouncer = Debouncer(delay: const Duration(milliseconds: 300));
   final _productoService = ProductoService();
-  
+
   List<ProductoDB> _resultados = [];
   bool _isSearching = false;
 
@@ -40,14 +37,14 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
 
     _debouncer.run(() async {
       setState(() => _isSearching = true);
-      
+
       final productos = await _productoService.buscarProductos(query);
-      
+
       // Filtrar productos cuyo ID ya esté agregado a la factura
       final productosFiltrados = productos.where((producto) {
         return !widget.idsYaAgregados.contains(producto.idProducto);
       }).toList();
-      
+
       setState(() {
         _resultados = productosFiltrados;
         _isSearching = false;
@@ -58,9 +55,7 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         width: 600,
         height: 500,
@@ -73,10 +68,7 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
               children: [
                 const Text(
                   'Buscar Producto',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
                 ),
                 const Spacer(),
                 IconButton(
@@ -86,7 +78,7 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Campo de búsqueda
             TextField(
               controller: _controller,
@@ -111,11 +103,9 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Resultados
-            Expanded(
-              child: _buildResultados(),
-            ),
+            Expanded(child: _buildResultados()),
           ],
         ),
       ),
@@ -128,18 +118,11 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.search,
-              size: 64,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.search, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
               'Escribe para buscar productos',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
           ],
         ),
@@ -147,9 +130,7 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
     }
 
     if (_isSearching) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_resultados.isEmpty) {
@@ -157,18 +138,11 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.inbox_outlined,
-              size: 64,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
               'No se encontraron productos',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
           ],
         ),
@@ -183,17 +157,11 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
         return ListTile(
           leading: CircleAvatar(
             backgroundColor: Colors.blue[100],
-            child: Icon(
-              Icons.medication,
-              color: Colors.blue[700],
-            ),
+            child: Icon(Icons.medication, color: Colors.blue[700]),
           ),
           title: Text(
             producto.nombreProducto,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -206,10 +174,7 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
               const SizedBox(height: 2),
               Text(
                 'Vence: ${producto.fechaVencimiento}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             ],
           ),

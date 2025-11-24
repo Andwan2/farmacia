@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:farmacia_desktop/modal/agregar_proveedor_modal.dart';
-import 'package:farmacia_desktop/modal/editar_proveedor_modal.dart';
+import 'package:abari/modal/agregar_proveedor_modal.dart';
+import 'package:abari/modal/editar_proveedor_modal.dart';
 
 class ProveedoresScreen extends StatefulWidget {
   const ProveedoresScreen({super.key});
@@ -25,7 +25,9 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
   Future<void> cargarProveedores() async {
     final response = await Supabase.instance.client
         .from('proveedor')
-        .select('id_proveedor, nombre_proveedor, ruc_proveedor, numero_telefono');
+        .select(
+          'id_proveedor, nombre_proveedor, ruc_proveedor, numero_telefono',
+        );
 
     setState(() {
       proveedores = List<Map<String, dynamic>>.from(response);
@@ -51,10 +53,14 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
         title: const Text('Proveedores'),
         actions: [
           ElevatedButton.icon(
-            onPressed: () => mostrarAgregarProveedor(context, cargarProveedores),
+            onPressed: () =>
+                mostrarAgregarProveedor(context, cargarProveedores),
             icon: const Icon(Icons.add),
             label: const Text('Agregar'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.lightBlue, foregroundColor: Colors.white,),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.lightBlue,
+              foregroundColor: Colors.white,
+            ),
           ),
         ],
       ),
@@ -67,7 +73,9 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
               decoration: InputDecoration(
                 hintText: 'Buscar proveedor',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ),
@@ -85,9 +93,13 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
                 final proveedor = filtrados[index];
                 return ProveedorCard(
                   nombre: proveedor['nombre_proveedor'],
-                  ruc: 'RUC: '+(proveedor['ruc_proveedor']),
-                  telefono: 'Cel: '+(proveedor['numero_telefono']),
-                  onEdit: () => mostrarEditarProveedor(context, proveedor, cargarProveedores),
+                  ruc: 'RUC: ' + (proveedor['ruc_proveedor']),
+                  telefono: 'Cel: ' + (proveedor['numero_telefono']),
+                  onEdit: () => mostrarEditarProveedor(
+                    context,
+                    proveedor,
+                    cargarProveedores,
+                  ),
                 );
               },
             ),
@@ -121,10 +133,7 @@ class ProveedorCard extends StatelessWidget {
           Positioned(
             top: 8,
             right: 8,
-            child: IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: onEdit,
-            ),
+            child: IconButton(icon: const Icon(Icons.edit), onPressed: onEdit),
           ),
           Center(
             child: Column(
@@ -132,7 +141,10 @@ class ProveedorCard extends StatelessWidget {
               children: [
                 const CircleAvatar(child: Icon(Icons.business)),
                 const SizedBox(height: 8),
-                Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  nombre,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
                 Text(ruc ?? 'RUC no disponible'),
                 Text(telefono ?? 'Teléfono no disponible'),
               ],

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:farmacia_desktop/providers/theme_provider.dart';
-import 'package:farmacia_desktop/modal/editar_producto_modal.dart';
-import 'package:farmacia_desktop/modal/agregar_producto_modal.dart';
+import 'package:abari/providers/theme_provider.dart';
+import 'package:abari/modal/editar_producto_modal.dart';
+import 'package:abari/modal/agregar_producto_modal.dart';
 
 class ProductosScreen extends StatefulWidget {
   const ProductosScreen({super.key});

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:farmacia_desktop/providers/factura_provider.dart';
+import 'package:abari/providers/factura_provider.dart';
 
 class SaleSummary extends StatelessWidget {
   final VoidCallback onReset;
@@ -28,15 +28,16 @@ class SaleSummary extends StatelessWidget {
 
         return Container(
           width: 400,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(16)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               // Header
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 width: double.infinity,
                 child: Text(
                   'Resumen de Venta',
@@ -50,13 +51,15 @@ class SaleSummary extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
                 child: Column(
-                  children: [                   
+                  children: [
                     // Información adicional
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(
@@ -67,7 +70,9 @@ class SaleSummary extends StatelessWidget {
                               Text(
                                 'Total:',
                                 style: textTheme.bodyLarge?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                               ),
                               Text(
@@ -86,7 +91,9 @@ class SaleSummary extends StatelessWidget {
                               Text(
                                 'Cantidad Total:',
                                 style: textTheme.bodyLarge?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                               ),
                               Text(
@@ -145,10 +152,18 @@ class SaleSummary extends StatelessWidget {
                             onPressed: isValid ? onConfirm : null,
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 20),
-                              backgroundColor: Theme.of(context).colorScheme.primary,
-                              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                              disabledBackgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                              disabledForegroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.onPrimary,
+                              disabledBackgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
+                              disabledForegroundColor: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
@@ -158,9 +173,11 @@ class SaleSummary extends StatelessWidget {
                               children: [
                                 Icon(
                                   Icons.save,
-                                  color: isValid 
-                                    ? Theme.of(context).colorScheme.onPrimary
-                                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: isValid
+                                      ? Theme.of(context).colorScheme.onPrimary
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
@@ -168,8 +185,12 @@ class SaleSummary extends StatelessWidget {
                                   style: textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w600,
                                     color: isValid
-                                      ? Theme.of(context).colorScheme.onPrimary
-                                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimary
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ],
@@ -191,7 +212,7 @@ class SaleSummary extends StatelessWidget {
   void _showResetConfirmation(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    
+
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -243,7 +264,10 @@ class SaleSummary extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
               ),
               child: Text(
                 'Reiniciar',
@@ -267,7 +291,7 @@ class SaleSummary extends StatelessWidget {
   }) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
