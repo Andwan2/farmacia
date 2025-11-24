@@ -21,15 +21,293 @@ class _InventarioPageState extends State<ProductosScreen> {
   bool mostrarEliminados = false;
 
   // Filtros
-  String? filtroTipo;
-  String? filtroPresentacion;
+  List<String> filtrosPresentacion = []; // Múltiples presentaciones
   String ordenarPor =
       'nombre'; // nombre, precio_venta, precio_compra, vencimiento
+
+  // Contador de filtros activos
+  int get filtrosActivos {
+    int count = 0;
+    count += filtrosPresentacion.length;
+    if (ordenarPor != 'nombre') count++;
+    return count;
+  }
+
+  // Helper para obtener nombre legible del orden
+  String _getNombreOrden(String orden) {
+    switch (orden) {
+      case 'nombre':
+        return 'Nombre';
+      case 'vencimiento':
+        return 'Vencimiento';
+      case 'stock':
+        return 'Stock';
+      case 'agregado_reciente':
+        return 'Más reciente';
+      case 'agregado_antiguo':
+        return 'Más antiguo';
+      default:
+        return orden;
+    }
+  }
+
+  // Mostrar modal de filtros
+  void _mostrarFiltros(BuildContext context) {
+    // Variables temporales para los filtros
+    List<String> tempFiltrosPresentacion = List.from(filtrosPresentacion);
+    String tempOrdenarPor = ordenarPor;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            // Obtener presentaciones únicas
+            final presentacionesUnicas =
+                presentaciones.values
+                    .map((p) => p['descripcion'] as String)
+                    .toSet()
+                    .toList()
+                  ..sort();
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header fijo
+                Container(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Theme.of(context).dividerColor,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filtros',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setModalState(() {
+                            tempFiltrosPresentacion.clear();
+                            tempOrdenarPor = 'nombre';
+                          });
+                        },
+                        child: const Text('Limpiar todo'),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Contenido scrolleable
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Filtro por Presentación (múltiple)
+                        const Text(
+                          'Presentación',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: presentacionesUnicas.map((pres) {
+                            final isSelected = tempFiltrosPresentacion.contains(
+                              pres,
+                            );
+                            return FilterChip(
+                              label: Text(pres),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                setModalState(() {
+                                  if (selected) {
+                                    tempFiltrosPresentacion.add(pres);
+                                  } else {
+                                    tempFiltrosPresentacion.remove(pres);
+                                  }
+                                });
+                              },
+                              selectedColor: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              checkmarkColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Ordenar por
+                        const Text(
+                          'Ordenar por',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            FilterChip(
+                              label: const Text('Nombre'),
+                              selected: tempOrdenarPor == 'nombre',
+                              onSelected: (selected) {
+                                setModalState(() => tempOrdenarPor = 'nombre');
+                              },
+                              selectedColor: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              checkmarkColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                            ),
+                            FilterChip(
+                              label: const Text('Vencimiento'),
+                              selected: tempOrdenarPor == 'vencimiento',
+                              onSelected: (selected) {
+                                setModalState(
+                                  () => tempOrdenarPor = 'vencimiento',
+                                );
+                              },
+                              selectedColor: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              checkmarkColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                            ),
+                            FilterChip(
+                              label: const Text('Stock'),
+                              selected: tempOrdenarPor == 'stock',
+                              onSelected: (selected) {
+                                setModalState(() => tempOrdenarPor = 'stock');
+                              },
+                              selectedColor: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              checkmarkColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                            ),
+                            FilterChip(
+                              label: const Text('Más reciente'),
+                              selected: tempOrdenarPor == 'agregado_reciente',
+                              onSelected: (selected) {
+                                setModalState(
+                                  () => tempOrdenarPor = 'agregado_reciente',
+                                );
+                              },
+                              selectedColor: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              checkmarkColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                            ),
+                            FilterChip(
+                              label: const Text('Más antiguo'),
+                              selected: tempOrdenarPor == 'agregado_antiguo',
+                              onSelected: (selected) {
+                                setModalState(
+                                  () => tempOrdenarPor = 'agregado_antiguo',
+                                );
+                              },
+                              selectedColor: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              checkmarkColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+
+                        // Botones de acción
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(context),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                ),
+                                child: const Text('Cerrar'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    filtrosPresentacion =
+                                        tempFiltrosPresentacion;
+                                    ordenarPor = tempOrdenarPor;
+                                  });
+                                  Navigator.pop(context);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  backgroundColor: Colors.black,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text('Aplicar filtros'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(
+                          height: MediaQuery.of(context).viewInsets.bottom,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     cargarDatos();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   Future<void> cargarDatos() async {
@@ -621,26 +899,23 @@ class _InventarioPageState extends State<ProductosScreen> {
       productosPorTipo[key] = p;
     }
 
-    // Filtrar por búsqueda, tipo y presentación
+    // Filtrar por búsqueda, presentación
     var listaFiltrada = productosPorTipo.values.where((p) {
       final nombre = p['nombre_producto']?.toString() ?? '';
-      final tipo = p['tipo']?.toString() ?? '';
       final idPres = p['id_presentacion'] as int;
       final presentacion = presentaciones[idPres]?['descripcion'] ?? '';
 
       // Filtro de búsqueda
-      final cumpleBusqueda =
-          nombre.toLowerCase().contains(busqueda.toLowerCase()) ||
-          tipo.toLowerCase().contains(busqueda.toLowerCase());
-
-      // Filtro de tipo
-      final cumpleTipo = filtroTipo == null || tipo == filtroTipo;
+      final cumpleBusqueda = nombre.toLowerCase().contains(
+        busqueda.toLowerCase(),
+      );
 
       // Filtro de presentación
       final cumplePresentacion =
-          filtroPresentacion == null || presentacion == filtroPresentacion;
+          filtrosPresentacion.isEmpty ||
+          filtrosPresentacion.contains(presentacion);
 
-      return cumpleBusqueda && cumpleTipo && cumplePresentacion;
+      return cumpleBusqueda && cumplePresentacion;
     }).toList();
 
     // Ordenar
@@ -680,425 +955,386 @@ class _InventarioPageState extends State<ProductosScreen> {
     });
 
     return Scaffold(
-      body: Column(
-        children: [
-          // Barra de búsqueda y filtros
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              children: [
-                // Campo de búsqueda
-                TextField(
-                  decoration: const InputDecoration(
-                    labelText: 'Buscar producto',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (value) => setState(() => busqueda = value),
-                ),
-                const SizedBox(height: 8),
-
-                // Fila de filtros
-                Row(
-                  children: [
-                    // Filtro por Tipo
-                    Expanded(
-                      child: Autocomplete<String>(
-                        optionsBuilder: (TextEditingValue textEditingValue) {
-                          // Obtener tipos únicos
-                          final tiposUnicos = productosPorTipo.values
-                              .map((p) => p['tipo'] as String)
-                              .toSet()
-                              .toList();
-
-                          if (textEditingValue.text.isEmpty) {
-                            return tiposUnicos;
-                          }
-                          return tiposUnicos.where((String option) {
-                            return option.toLowerCase().contains(
-                              textEditingValue.text.toLowerCase(),
-                            );
-                          });
-                        },
-                        onSelected: (String selection) {
-                          setState(() => filtroTipo = selection);
-                        },
-                        fieldViewBuilder:
-                            (context, controller, focusNode, onFieldSubmitted) {
-                              if (filtroTipo != null &&
-                                  controller.text.isEmpty) {
-                                controller.text = filtroTipo!;
-                              }
-                              return TextField(
-                                controller: controller,
-                                focusNode: focusNode,
-                                decoration: InputDecoration(
-                                  labelText: 'Filtrar por tipo',
-                                  border: const OutlineInputBorder(),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  suffixIcon: filtroTipo != null
-                                      ? IconButton(
-                                          icon: const Icon(
-                                            Icons.clear,
-                                            size: 18,
-                                          ),
-                                          onPressed: () {
-                                            setState(() {
-                                              filtroTipo = null;
-                                              controller.clear();
-                                            });
-                                          },
-                                        )
-                                      : null,
-                                ),
-                                onChanged: (value) {
-                                  if (value.isEmpty) {
-                                    setState(() => filtroTipo = null);
-                                  }
-                                },
-                              );
-                            },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Filtro por Presentación
-                    Expanded(
-                      child: Autocomplete<String>(
-                        optionsBuilder: (TextEditingValue textEditingValue) {
-                          final presentacionesUnicas = presentaciones.values
-                              .map((p) => p['descripcion'] as String)
-                              .toSet()
-                              .toList();
-
-                          if (textEditingValue.text.isEmpty) {
-                            return presentacionesUnicas;
-                          }
-                          return presentacionesUnicas.where((String option) {
-                            return option.toLowerCase().contains(
-                              textEditingValue.text.toLowerCase(),
-                            );
-                          });
-                        },
-                        onSelected: (String selection) {
-                          setState(() => filtroPresentacion = selection);
-                        },
-                        fieldViewBuilder:
-                            (context, controller, focusNode, onFieldSubmitted) {
-                              if (filtroPresentacion != null &&
-                                  controller.text.isEmpty) {
-                                controller.text = filtroPresentacion!;
-                              }
-                              return TextField(
-                                controller: controller,
-                                focusNode: focusNode,
-                                decoration: InputDecoration(
-                                  labelText: 'Filtrar por presentación',
-                                  border: const OutlineInputBorder(),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  suffixIcon: filtroPresentacion != null
-                                      ? IconButton(
-                                          icon: const Icon(
-                                            Icons.clear,
-                                            size: 18,
-                                          ),
-                                          onPressed: () {
-                                            setState(() {
-                                              filtroPresentacion = null;
-                                              controller.clear();
-                                            });
-                                          },
-                                        )
-                                      : null,
-                                ),
-                                onChanged: (value) {
-                                  if (value.isEmpty) {
-                                    setState(() => filtroPresentacion = null);
-                                  }
-                                },
-                              );
-                            },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Ordenar por
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: ordenarPor,
-                        decoration: const InputDecoration(
-                          labelText: 'Ordenar por',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'nombre',
-                            child: Text('Nombre'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'vencimiento',
-                            child: Text('Fecha de vencimiento'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'stock',
-                            child: Text('Stock'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'agregado_reciente',
-                            child: Text('Más reciente'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'agregado_antiguo',
-                            child: Text('Más antiguo'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setState(() => ordenarPor = value!);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                // Botón de agregar y switch para mostrar productos eliminados
-                Row(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        await mostrarAgregarProducto(context, cargarDatos);
-                      },
-                      icon: const Icon(Icons.add_circle_outline),
-                      label: const Text('Agregar producto'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 16,
-                        ),
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: SwitchListTile(
-                        title: Text(
-                          mostrarEliminados
-                              ? 'Mostrando productos eliminados'
-                              : 'Mostrando productos activos',
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                        subtitle: Text(
-                          mostrarEliminados
-                              ? 'Los productos eliminados se muestran con su estado (Vendido/Removido)'
-                              : 'Activa para ver productos eliminados',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                        value: mostrarEliminados,
-                        onChanged: (value) {
-                          setState(() {
-                            mostrarEliminados = value;
-                          });
-                          cargarDatos();
-                        },
-                        secondary: Icon(
-                          mostrarEliminados
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                        ),
-                        dense: true,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: cargando
-                ? const Center(child: CircularProgressIndicator())
-                : Consumer<ThemeProvider>(
-                    builder: (context, themeProvider, child) {
-                      return ListView.builder(
-                        itemCount: listaFiltrada.length,
-                        itemBuilder: (context, index) {
-                          final p = listaFiltrada[index];
-                          final nombre = p['nombre_producto'] as String;
-                          final idPres = p['id_presentacion'] as int;
-                          final tipo = p['tipo'] as String;
-                          final medida = p['medida']?.toString() ?? '';
-                          final presentacion =
-                              presentaciones[idPres]?['descripcion'] ?? '—';
-                          final unidad =
-                              presentaciones[idPres]?['unidad_medida'] ?? '';
-                          final fechaStr = p['fecha_vencimiento'] as String;
-                          final fecha = DateTime.parse(fechaStr);
-                          final diasRestantes = fecha
-                              .difference(DateTime.now())
-                              .inDays;
-
-                          // Usar el stock del grupo si existe, sino usar el stock por tipo
-                          final stockGrupo = p['_stock_grupo'] as int? ?? 1;
-                          final fechaMin = p['_fecha_min'] as DateTime?;
-                          final fechaMax = p['_fecha_max'] as DateTime?;
-                          final estado = p['estado'] as String?;
-                          final precioCompra = p['precio_compra'] as num?;
-                          final precioVenta = p['precio_venta'] as num?;
-
-                          return Card(
-                            color: diasRestantes < 60
-                                ? (themeProvider.isDarkMode
-                                      ? Colors.orange[900]?.withOpacity(0.4)
-                                      : Colors.orange[100])
-                                : null,
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            child: ListTile(
-                              title: Text(
-                                nombre,
-                                style: const TextStyle(fontSize: 16),
+      body: cargando
+          ? const Center(child: CircularProgressIndicator())
+          : Consumer<ThemeProvider>(
+              builder: (context, themeProvider, child) {
+                return CustomScrollView(
+                  slivers: [
+                    // SliverAppBar con barra de búsqueda y chips siempre visibles
+                    SliverAppBar(
+                      floating: false,
+                      pinned: true,
+                      expandedHeight: 217,
+                      toolbarHeight: 200,
+                      backgroundColor: Theme.of(
+                        context,
+                      ).scaffoldBackgroundColor,
+                      elevation: 0,
+                      flexibleSpace: LayoutBuilder(
+                        builder: (BuildContext context, BoxConstraints constraints) {
+                          // Calcular altura del bottom dinámicamente
+                          final double bottomHeight = 0;
+                          /*  70 +
+                              (filtrosPresentacion.isNotEmpty ||
+                                      ordenarPor != 'nombre'
+                                  ? 50
+                                  : 0);
+                              */
+                          return FlexibleSpaceBar(
+                            background: Container(
+                              color: Theme.of(context).scaffoldBackgroundColor,
+                              padding: EdgeInsets.only(
+                                top: bottomHeight,
+                                left: 16,
+                                right: 16,
                               ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Text('$presentacion • $tipo'),
-                                  Text(
-                                    'Medida: $medida $unidad • Stock: $stockGrupo',
-                                  ),
-                                  Row(
-                                    children: [
-                                      if (precioCompra != null)
-                                        Text(
-                                          'Compra: C\$ ${precioCompra.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.blue[700],
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      if (precioCompra != null &&
-                                          precioVenta != null)
-                                        const Text(
-                                          ' • ',
-                                          style: TextStyle(fontSize: 12),
-                                        ),
-                                      if (precioVenta != null)
-                                        Text(
-                                          'Venta: C\$ ${precioVenta.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.green[700],
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  if (mostrarEliminados && estado != null)
-                                    Container(
-                                      margin: const EdgeInsets.only(top: 4),
+                                  const SizedBox(height: 8),
+                                  // Botón de agregar (se oculta al hacer scroll)
+                                  ElevatedButton.icon(
+                                    onPressed: () async {
+                                      await mostrarAgregarProducto(
+                                        context,
+                                        cargarDatos,
+                                      );
+                                    },
+                                    icon: const Icon(
+                                      Icons.add_circle_outline,
+                                      size: 20,
+                                    ),
+                                    label: const Text('Agregar producto'),
+                                    style: ElevatedButton.styleFrom(
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
+                                        horizontal: 20,
+                                        vertical: 14,
                                       ),
-                                      decoration: BoxDecoration(
-                                        color: estado == 'Vendido'
-                                            ? Colors.green.withOpacity(0.2)
-                                            : Colors.red.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: estado == 'Vendido'
-                                              ? Colors.green
-                                              : Colors.red,
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'Estado: $estado',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: estado == 'Vendido'
-                                              ? Colors.green[800]
-                                              : Colors.red[800],
-                                        ),
-                                      ),
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
                                     ),
-                                  if (fechaMin != null &&
-                                      fechaMax != null &&
-                                      fechaMin != fechaMax)
-                                    Text(
-                                      'Rango de vencimiento: ${fechaMin.toIso8601String().split('T').first} - ${fechaMax.toIso8601String().split('T').first}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        'Vence: ${fecha.toIso8601String().split('T').first}',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                      Text(
-                                        diasRestantes < 60
-                                            ? '⚠️ $diasRestantes días'
-                                            : '$diasRestantes días',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: diasRestantes < 30
-                                              ? Colors.red
-                                              : Colors.grey,
-                                        ),
-                                      ),
-                                    ],
                                   ),
-                                  if (!mostrarEliminados) ...[
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () async {
-                                        await mostrarEditarProducto(
-                                          context,
-                                          p,
-                                          cargarDatos,
-                                        );
-                                      },
+                                  const SizedBox(height: 8),
+                                  // Switch (se oculta al hacer scroll)
+                                  SwitchListTile(
+                                    title: Text(
+                                      mostrarEliminados
+                                          ? 'Mostrar solo productos inactivos'
+                                          : 'Mostrar solo productos activos',
+                                      style: const TextStyle(fontSize: 13),
                                     ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete),
-                                      onPressed: () =>
-                                          eliminarProducto(context, p),
+                                    value: mostrarEliminados,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        mostrarEliminados = value;
+                                      });
+                                      cargarDatos();
+                                    },
+                                    secondary: Icon(
+                                      mostrarEliminados
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                      size: 20,
                                     ),
-                                  ],
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
                                 ],
                               ),
                             ),
                           );
                         },
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
+                      ),
+                      bottom: PreferredSize(
+                        preferredSize: Size.fromHeight(
+                          70 +
+                              (filtrosPresentacion.isNotEmpty ||
+                                      ordenarPor != 'nombre'
+                                  ? 50
+                                  : 0),
+                        ),
+                        child: Container(
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Barra de búsqueda con botón de filtros (siempre visible)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      decoration: const InputDecoration(
+                                        hintText: 'Buscar producto',
+                                        prefixIcon: Icon(Icons.search),
+                                        border: OutlineInputBorder(),
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 14,
+                                        ),
+                                      ),
+                                      onChanged: (value) =>
+                                          setState(() => busqueda = value),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Botón de filtros con badge
+                                  Stack(
+                                    children: [
+                                      IconButton(
+                                        onPressed: () =>
+                                            _mostrarFiltros(context),
+                                        icon: const Icon(Icons.filter_list),
+                                        style: IconButton.styleFrom(
+                                          backgroundColor: Theme.of(
+                                            context,
+                                          ).colorScheme.primaryContainer,
+                                          padding: const EdgeInsets.all(16),
+                                        ),
+                                      ),
+                                      if (filtrosActivos > 0)
+                                        Positioned(
+                                          right: 4,
+                                          top: 4,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.red,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            constraints: const BoxConstraints(
+                                              minWidth: 18,
+                                              minHeight: 18,
+                                            ),
+                                            child: Text(
+                                              '$filtrosActivos',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              // Chips de filtros activos (siempre visible)
+                              if (filtrosPresentacion.isNotEmpty ||
+                                  ordenarPor != 'nombre') ...[
+                                const SizedBox(height: 12),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    ...filtrosPresentacion.map(
+                                      (pres) => Chip(
+                                        label: Text(pres),
+                                        onDeleted: () {
+                                          setState(() {
+                                            filtrosPresentacion.remove(pres);
+                                          });
+                                        },
+                                        deleteIcon: const Icon(
+                                          Icons.close,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ),
+                                    if (ordenarPor != 'nombre')
+                                      Chip(
+                                        label: Text(
+                                          'Orden: ${_getNombreOrden(ordenarPor)}',
+                                        ),
+                                        onDeleted: () => setState(
+                                          () => ordenarPor = 'nombre',
+                                        ),
+                                        deleteIcon: const Icon(
+                                          Icons.close,
+                                          size: 18,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Lista de productos
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final p = listaFiltrada[index];
+                        final nombre = p['nombre_producto'] as String;
+                        final idPres = p['id_presentacion'] as int;
+                        final tipo = p['tipo'] as String;
+                        final medida = p['medida']?.toString() ?? '';
+                        final presentacion =
+                            presentaciones[idPres]?['descripcion'] ?? '—';
+                        final unidad =
+                            presentaciones[idPres]?['unidad_medida'] ?? '';
+                        final fechaStr = p['fecha_vencimiento'] as String;
+                        final fecha = DateTime.parse(fechaStr);
+                        final diasRestantes = fecha
+                            .difference(DateTime.now())
+                            .inDays;
+
+                        // Usar el stock del grupo si existe, sino usar el stock por tipo
+                        final stockGrupo = p['_stock_grupo'] as int? ?? 1;
+                        final fechaMin = p['_fecha_min'] as DateTime?;
+                        final fechaMax = p['_fecha_max'] as DateTime?;
+                        final estado = p['estado'] as String?;
+                        final precioCompra = p['precio_compra'] as num?;
+                        final precioVenta = p['precio_venta'] as num?;
+
+                        return Card(
+                          color: diasRestantes < 60
+                              ? (themeProvider.isDarkMode
+                                    ? Colors.orange[900]?.withOpacity(0.4)
+                                    : Colors.orange[100])
+                              : null,
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          child: ListTile(
+                            title: Text(
+                              nombre,
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('$presentacion • $tipo'),
+                                Text(
+                                  'Medida: $medida $unidad • Stock: $stockGrupo',
+                                ),
+                                Row(
+                                  children: [
+                                    if (precioCompra != null)
+                                      Text(
+                                        'Compra: C\$ ${precioCompra.toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.blue[700],
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    if (precioCompra != null &&
+                                        precioVenta != null)
+                                      const Text(
+                                        ' • ',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                    if (precioVenta != null)
+                                      Text(
+                                        'Venta: C\$ ${precioVenta.toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.green[700],
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                if (mostrarEliminados && estado != null)
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: estado == 'Vendido'
+                                          ? Colors.green.withOpacity(0.2)
+                                          : Colors.red.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: estado == 'Vendido'
+                                            ? Colors.green
+                                            : Colors.red,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Estado: $estado',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: estado == 'Vendido'
+                                            ? Colors.green[800]
+                                            : Colors.red[800],
+                                      ),
+                                    ),
+                                  ),
+                                if (fechaMin != null &&
+                                    fechaMax != null &&
+                                    fechaMin != fechaMax)
+                                  Text(
+                                    'Rango de vencimiento: ${fechaMin.toIso8601String().split('T').first} - ${fechaMax.toIso8601String().split('T').first}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'Vence: ${fecha.toIso8601String().split('T').first}',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                    Text(
+                                      diasRestantes < 60
+                                          ? '⚠️ $diasRestantes días'
+                                          : '$diasRestantes días',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: diasRestantes < 30
+                                            ? Colors.red
+                                            : Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (!mostrarEliminados) ...[
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit),
+                                    onPressed: () async {
+                                      await mostrarEditarProducto(
+                                        context,
+                                        p,
+                                        cargarDatos,
+                                      );
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete),
+                                    onPressed: () =>
+                                        eliminarProducto(context, p),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      }, childCount: listaFiltrada.length),
+                    ),
+                  ],
+                );
+              },
+            ),
     );
   }
 }
