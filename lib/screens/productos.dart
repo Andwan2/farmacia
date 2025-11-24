@@ -955,386 +955,324 @@ class _InventarioPageState extends State<ProductosScreen> {
     });
 
     return Scaffold(
-      body: cargando
-          ? const Center(child: CircularProgressIndicator())
-          : Consumer<ThemeProvider>(
-              builder: (context, themeProvider, child) {
-                return CustomScrollView(
-                  slivers: [
-                    // SliverAppBar con barra de búsqueda y chips siempre visibles
-                    SliverAppBar(
-                      floating: false,
-                      pinned: true,
-                      expandedHeight: 217,
-                      toolbarHeight: 200,
-                      backgroundColor: Theme.of(
-                        context,
-                      ).scaffoldBackgroundColor,
-                      elevation: 0,
-                      flexibleSpace: LayoutBuilder(
-                        builder: (BuildContext context, BoxConstraints constraints) {
-                          // Calcular altura del bottom dinámicamente
-                          final double bottomHeight = 0;
-                          /*  70 +
-                              (filtrosPresentacion.isNotEmpty ||
-                                      ordenarPor != 'nombre'
-                                  ? 50
-                                  : 0);
-                              */
-                          return FlexibleSpaceBar(
-                            background: Container(
-                              color: Theme.of(context).scaffoldBackgroundColor,
-                              padding: EdgeInsets.only(
-                                top: bottomHeight,
-                                left: 16,
-                                right: 16,
+      body: Column(
+        children: [
+          // Barra de búsqueda y filtros
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Barra de búsqueda con botón de filtros
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          hintText: 'Buscar producto',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                        ),
+                        onChanged: (value) => setState(() => busqueda = value),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Botón de filtros con badge
+                    Stack(
+                      children: [
+                        IconButton(
+                          onPressed: () => _mostrarFiltros(context),
+                          icon: const Icon(Icons.filter_list),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primaryContainer,
+                            padding: const EdgeInsets.all(16),
+                          ),
+                        ),
+                        if (filtrosActivos > 0)
+                          Positioned(
+                            right: 4,
+                            top: 4,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                              constraints: const BoxConstraints(
+                                minWidth: 18,
+                                minHeight: 18,
+                              ),
+                              child: Text(
+                                '$filtrosActivos',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+                // Chips de filtros activos
+                if (filtrosPresentacion.isNotEmpty ||
+                    ordenarPor != 'nombre') ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ...filtrosPresentacion.map(
+                        (pres) => Chip(
+                          label: Text(pres),
+                          onDeleted: () {
+                            setState(() {
+                              filtrosPresentacion.remove(pres);
+                            });
+                          },
+                          deleteIcon: const Icon(Icons.close, size: 18),
+                        ),
+                      ),
+                      if (ordenarPor != 'nombre')
+                        Chip(
+                          label: Text('Orden: ${_getNombreOrden(ordenarPor)}'),
+                          onDeleted: () =>
+                              setState(() => ordenarPor = 'nombre'),
+                          deleteIcon: const Icon(Icons.close, size: 18),
+                        ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+                // Botón de agregar producto
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await mostrarAgregarProducto(context, cargarDatos);
+                  },
+                  icon: const Icon(Icons.add_circle_outline, size: 20),
+                  label: const Text('Agregar producto'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Switch
+                SwitchListTile(
+                  title: Text(
+                    mostrarEliminados
+                        ? 'Mostrar solo productos inactivos'
+                        : 'Mostrar solo productos activos',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  value: mostrarEliminados,
+                  onChanged: (value) {
+                    setState(() {
+                      mostrarEliminados = value;
+                    });
+                    cargarDatos();
+                  },
+                  secondary: Icon(
+                    mostrarEliminados ? Icons.visibility_off : Icons.visibility,
+                    size: 20,
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
+          ),
+          // Lista de productos
+          Expanded(
+            child: cargando
+                ? const Center(child: CircularProgressIndicator())
+                : Consumer<ThemeProvider>(
+                    builder: (context, themeProvider, child) {
+                      return ListView.builder(
+                        itemCount: listaFiltrada.length,
+                        itemBuilder: (context, index) {
+                          final p = listaFiltrada[index];
+                          final nombre = p['nombre_producto'] as String;
+                          final idPres = p['id_presentacion'] as int;
+                          final tipo = p['tipo'] as String;
+                          final medida = p['medida']?.toString() ?? '';
+                          final presentacion =
+                              presentaciones[idPres]?['descripcion'] ?? '—';
+                          final unidad =
+                              presentaciones[idPres]?['unidad_medida'] ?? '';
+                          final fechaStr = p['fecha_vencimiento'] as String;
+                          final fecha = DateTime.parse(fechaStr);
+                          final diasRestantes = fecha
+                              .difference(DateTime.now())
+                              .inDays;
+
+                          // Usar el stock del grupo si existe, sino usar el stock por tipo
+                          final stockGrupo = p['_stock_grupo'] as int? ?? 1;
+                          final fechaMin = p['_fecha_min'] as DateTime?;
+                          final fechaMax = p['_fecha_max'] as DateTime?;
+                          final estado = p['estado'] as String?;
+                          final precioCompra = p['precio_compra'] as num?;
+                          final precioVenta = p['precio_venta'] as num?;
+
+                          return Card(
+                            color: diasRestantes < 60
+                                ? (themeProvider.isDarkMode
+                                      ? Colors.orange[900]?.withOpacity(0.4)
+                                      : Colors.orange[100])
+                                : null,
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            child: ListTile(
+                              title: Text(
+                                nombre,
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const SizedBox(height: 8),
-                                  // Botón de agregar (se oculta al hacer scroll)
-                                  ElevatedButton.icon(
-                                    onPressed: () async {
-                                      await mostrarAgregarProducto(
-                                        context,
-                                        cargarDatos,
-                                      );
-                                    },
-                                    icon: const Icon(
-                                      Icons.add_circle_outline,
-                                      size: 20,
-                                    ),
-                                    label: const Text('Agregar producto'),
-                                    style: ElevatedButton.styleFrom(
+                                  Text('$presentacion • $tipo'),
+                                  Text(
+                                    'Medida: $medida $unidad • Stock: $stockGrupo',
+                                  ),
+                                  Row(
+                                    children: [
+                                      if (precioCompra != null)
+                                        Text(
+                                          'Compra: C\$ ${precioCompra.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.blue[700],
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      if (precioCompra != null &&
+                                          precioVenta != null)
+                                        const Text(
+                                          ' • ',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      if (precioVenta != null)
+                                        Text(
+                                          'Venta: C\$ ${precioVenta.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.green[700],
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  if (mostrarEliminados && estado != null)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 4),
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 20,
-                                        vertical: 14,
+                                        horizontal: 8,
+                                        vertical: 2,
                                       ),
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white,
+                                      decoration: BoxDecoration(
+                                        color: estado == 'Vendido'
+                                            ? Colors.green.withOpacity(0.2)
+                                            : Colors.red.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color: estado == 'Vendido'
+                                              ? Colors.green
+                                              : Colors.red,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Estado: $estado',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: estado == 'Vendido'
+                                              ? Colors.green[800]
+                                              : Colors.red[800],
+                                        ),
+                                      ),
                                     ),
+                                  if (fechaMin != null &&
+                                      fechaMax != null &&
+                                      fechaMin != fechaMax)
+                                    Text(
+                                      'Rango de vencimiento: ${fechaMin.toIso8601String().split('T').first} - ${fechaMax.toIso8601String().split('T').first}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        'Vence: ${fecha.toIso8601String().split('T').first}',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                      Text(
+                                        diasRestantes < 60
+                                            ? '⚠️ $diasRestantes días'
+                                            : '$diasRestantes días',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: diasRestantes < 30
+                                              ? Colors.red
+                                              : Colors.grey,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 8),
-                                  // Switch (se oculta al hacer scroll)
-                                  SwitchListTile(
-                                    title: Text(
-                                      mostrarEliminados
-                                          ? 'Mostrar solo productos inactivos'
-                                          : 'Mostrar solo productos activos',
-                                      style: const TextStyle(fontSize: 13),
+                                  if (!mostrarEliminados) ...[
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit),
+                                      onPressed: () async {
+                                        await mostrarEditarProducto(
+                                          context,
+                                          p,
+                                          cargarDatos,
+                                        );
+                                      },
                                     ),
-                                    value: mostrarEliminados,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        mostrarEliminados = value;
-                                      });
-                                      cargarDatos();
-                                    },
-                                    secondary: Icon(
-                                      mostrarEliminados
-                                          ? Icons.visibility_off
-                                          : Icons.visibility,
-                                      size: 20,
+                                    IconButton(
+                                      icon: const Icon(Icons.delete),
+                                      onPressed: () =>
+                                          eliminarProducto(context, p),
                                     ),
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
+                                  ],
                                 ],
                               ),
                             ),
                           );
                         },
-                      ),
-                      bottom: PreferredSize(
-                        preferredSize: Size.fromHeight(
-                          70 +
-                              (filtrosPresentacion.isNotEmpty ||
-                                      ordenarPor != 'nombre'
-                                  ? 50
-                                  : 0),
-                        ),
-                        child: Container(
-                          color: Theme.of(context).scaffoldBackgroundColor,
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Barra de búsqueda con botón de filtros (siempre visible)
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      decoration: const InputDecoration(
-                                        hintText: 'Buscar producto',
-                                        prefixIcon: Icon(Icons.search),
-                                        border: OutlineInputBorder(),
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 14,
-                                        ),
-                                      ),
-                                      onChanged: (value) =>
-                                          setState(() => busqueda = value),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  // Botón de filtros con badge
-                                  Stack(
-                                    children: [
-                                      IconButton(
-                                        onPressed: () =>
-                                            _mostrarFiltros(context),
-                                        icon: const Icon(Icons.filter_list),
-                                        style: IconButton.styleFrom(
-                                          backgroundColor: Theme.of(
-                                            context,
-                                          ).colorScheme.primaryContainer,
-                                          padding: const EdgeInsets.all(16),
-                                        ),
-                                      ),
-                                      if (filtrosActivos > 0)
-                                        Positioned(
-                                          right: 4,
-                                          top: 4,
-                                          child: Container(
-                                            padding: const EdgeInsets.all(4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.red,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            constraints: const BoxConstraints(
-                                              minWidth: 18,
-                                              minHeight: 18,
-                                            ),
-                                            child: Text(
-                                              '$filtrosActivos',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              // Chips de filtros activos (siempre visible)
-                              if (filtrosPresentacion.isNotEmpty ||
-                                  ordenarPor != 'nombre') ...[
-                                const SizedBox(height: 12),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    ...filtrosPresentacion.map(
-                                      (pres) => Chip(
-                                        label: Text(pres),
-                                        onDeleted: () {
-                                          setState(() {
-                                            filtrosPresentacion.remove(pres);
-                                          });
-                                        },
-                                        deleteIcon: const Icon(
-                                          Icons.close,
-                                          size: 18,
-                                        ),
-                                      ),
-                                    ),
-                                    if (ordenarPor != 'nombre')
-                                      Chip(
-                                        label: Text(
-                                          'Orden: ${_getNombreOrden(ordenarPor)}',
-                                        ),
-                                        onDeleted: () => setState(
-                                          () => ordenarPor = 'nombre',
-                                        ),
-                                        deleteIcon: const Icon(
-                                          Icons.close,
-                                          size: 18,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Lista de productos
-                    SliverList(
-                      delegate: SliverChildBuilderDelegate((context, index) {
-                        final p = listaFiltrada[index];
-                        final nombre = p['nombre_producto'] as String;
-                        final idPres = p['id_presentacion'] as int;
-                        final tipo = p['tipo'] as String;
-                        final medida = p['medida']?.toString() ?? '';
-                        final presentacion =
-                            presentaciones[idPres]?['descripcion'] ?? '—';
-                        final unidad =
-                            presentaciones[idPres]?['unidad_medida'] ?? '';
-                        final fechaStr = p['fecha_vencimiento'] as String;
-                        final fecha = DateTime.parse(fechaStr);
-                        final diasRestantes = fecha
-                            .difference(DateTime.now())
-                            .inDays;
-
-                        // Usar el stock del grupo si existe, sino usar el stock por tipo
-                        final stockGrupo = p['_stock_grupo'] as int? ?? 1;
-                        final fechaMin = p['_fecha_min'] as DateTime?;
-                        final fechaMax = p['_fecha_max'] as DateTime?;
-                        final estado = p['estado'] as String?;
-                        final precioCompra = p['precio_compra'] as num?;
-                        final precioVenta = p['precio_venta'] as num?;
-
-                        return Card(
-                          color: diasRestantes < 60
-                              ? (themeProvider.isDarkMode
-                                    ? Colors.orange[900]?.withOpacity(0.4)
-                                    : Colors.orange[100])
-                              : null,
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          child: ListTile(
-                            title: Text(
-                              nombre,
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('$presentacion • $tipo'),
-                                Text(
-                                  'Medida: $medida $unidad • Stock: $stockGrupo',
-                                ),
-                                Row(
-                                  children: [
-                                    if (precioCompra != null)
-                                      Text(
-                                        'Compra: C\$ ${precioCompra.toStringAsFixed(2)}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.blue[700],
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    if (precioCompra != null &&
-                                        precioVenta != null)
-                                      const Text(
-                                        ' • ',
-                                        style: TextStyle(fontSize: 12),
-                                      ),
-                                    if (precioVenta != null)
-                                      Text(
-                                        'Venta: C\$ ${precioVenta.toStringAsFixed(2)}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.green[700],
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                if (mostrarEliminados && estado != null)
-                                  Container(
-                                    margin: const EdgeInsets.only(top: 4),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: estado == 'Vendido'
-                                          ? Colors.green.withOpacity(0.2)
-                                          : Colors.red.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(
-                                        color: estado == 'Vendido'
-                                            ? Colors.green
-                                            : Colors.red,
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      'Estado: $estado',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: estado == 'Vendido'
-                                            ? Colors.green[800]
-                                            : Colors.red[800],
-                                      ),
-                                    ),
-                                  ),
-                                if (fechaMin != null &&
-                                    fechaMax != null &&
-                                    fechaMin != fechaMax)
-                                  Text(
-                                    'Rango de vencimiento: ${fechaMin.toIso8601String().split('T').first} - ${fechaMax.toIso8601String().split('T').first}',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      'Vence: ${fecha.toIso8601String().split('T').first}',
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                    Text(
-                                      diasRestantes < 60
-                                          ? '⚠️ $diasRestantes días'
-                                          : '$diasRestantes días',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: diasRestantes < 30
-                                            ? Colors.red
-                                            : Colors.grey,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                if (!mostrarEliminados) ...[
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit),
-                                    onPressed: () async {
-                                      await mostrarEditarProducto(
-                                        context,
-                                        p,
-                                        cargarDatos,
-                                      );
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete),
-                                    onPressed: () =>
-                                        eliminarProducto(context, p),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        );
-                      }, childCount: listaFiltrada.length),
-                    ),
-                  ],
-                );
-              },
-            ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
