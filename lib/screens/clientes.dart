@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // Importa tus modales externos
 import 'package:abari/modal/agregar_cliente_modal.dart';
 import 'package:abari/modal/editar_cliente_modal.dart';
+import 'package:abari/core/widgets/entity_card.dart';
 
 class ClientesScreen extends StatefulWidget {
   const ClientesScreen({super.key});
@@ -66,22 +67,32 @@ class _ClientesScreenState extends State<ClientesScreen> {
             ),
           ),
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(12),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                childAspectRatio: 3 / 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: filtrados.length,
-              itemBuilder: (context, index) {
-                final cliente = filtrados[index];
-                return ClienteCard(
-                  nombre: cliente['nombre_cliente'],
-                  telefono: cliente['numero_telefono'],
-                  onEdit: () =>
-                      mostrarEditarCliente(context, cliente, cargarClientes),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Mobile: 2 cards por fila, Tablet+: 4 cards por fila
+                final crossAxisCount = constraints.maxWidth < 600 ? 2 : 4;
+                
+                return GridView.builder(
+                  padding: const EdgeInsets.all(12),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: 3 / 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: filtrados.length,
+                  itemBuilder: (context, index) {
+                    final cliente = filtrados[index];
+                    return EntityCard(
+                      nombre: cliente['nombre_cliente'],
+                      icon: Icons.person,
+                      subtitulos: [
+                        'Cel: ${cliente['numero_telefono'] ?? 'Teléfono no disponible'}',
+                      ],
+                      onEdit: () =>
+                          mostrarEditarCliente(context, cliente, cargarClientes),
+                    );
+                  },
                 );
               },
             ),
@@ -99,49 +110,3 @@ class _ClientesScreenState extends State<ClientesScreen> {
   }
 }
 
-//  Tarjeta visual de cliente
-class ClienteCard extends StatelessWidget {
-  final String nombre;
-  final String? telefono;
-  final VoidCallback onEdit;
-
-  const ClienteCard({
-    super.key,
-    required this.nombre,
-    this.telefono,
-    required this.onEdit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 3,
-      child: Stack(
-        children: [
-          Positioned(
-            top: 8,
-            right: 8,
-            child: IconButton(
-              icon: const Icon(Icons.edit, size: 20),
-              onPressed: onEdit,
-            ),
-          ),
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const CircleAvatar(child: Icon(Icons.person)),
-                const SizedBox(height: 8),
-                Text(
-                  nombre,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text('Cel:' + (telefono ?? 'Teléfono no disponible')),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

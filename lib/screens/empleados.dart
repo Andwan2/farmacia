@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:abari/modal/agregar_empleado_modal.dart';
 import 'package:abari/modal/editar_empleado_modal.dart';
+import 'package:abari/core/widgets/entity_card.dart';
 
 class EmpleadosScreen extends StatefulWidget {
   const EmpleadosScreen({super.key});
@@ -65,23 +66,33 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
             ),
           ),
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(12),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                childAspectRatio: 3 / 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: filtrados.length,
-              itemBuilder: (context, index) {
-                final empleado = filtrados[index];
-                return EmpleadoCard(
-                  nombre: empleado['nombre_empleado'],
-                  telefono: empleado['telefono'],
-                  cargo: empleado['cargo_empleado']?['cargo'],
-                  onEdit: () =>
-                      mostrarEditarEmpleado(context, empleado, cargarEmpleados),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Mobile: 2 cards por fila, Tablet+: 4 cards por fila
+                final crossAxisCount = constraints.maxWidth < 600 ? 2 : 4;
+                
+                return GridView.builder(
+                  padding: const EdgeInsets.all(12),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: 3 / 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: filtrados.length,
+                  itemBuilder: (context, index) {
+                    final empleado = filtrados[index];
+                    return EntityCard(
+                      nombre: empleado['nombre_empleado'],
+                      icon: Icons.person,
+                      subtitulos: [
+                        empleado['telefono'] ?? 'Teléfono no disponible',
+                        'Cargo: ${empleado['cargo_empleado']?['cargo'] ?? 'No definido'}',
+                      ],
+                      onEdit: () =>
+                          mostrarEditarEmpleado(context, empleado, cargarEmpleados),
+                    );
+                  },
                 );
               },
             ),
@@ -99,51 +110,3 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
   }
 }
 
-class EmpleadoCard extends StatelessWidget {
-  final String nombre;
-  final String? telefono;
-  final String? cargo;
-  final VoidCallback onEdit;
-
-  const EmpleadoCard({
-    super.key,
-    required this.nombre,
-    this.telefono,
-    this.cargo,
-    required this.onEdit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 3,
-      child: Stack(
-        children: [
-          Positioned(
-            top: 8,
-            right: 8,
-            child: IconButton(icon: const Icon(Icons.edit), onPressed: onEdit),
-          ),
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const CircleAvatar(child: Icon(Icons.person)),
-                const SizedBox(height: 8),
-                Text(
-                  nombre,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(telefono ?? 'Teléfono no disponible'),
-                Text(
-                  'Cargo: ${cargo ?? 'No definido'}',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
