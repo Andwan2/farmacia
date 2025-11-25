@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:abari/models/producto_db.dart';
 import 'package:abari/services/producto_service.dart';
-import 'package:abari/utils/debouncer.dart';
+import 'package:abari/core/utils/debouncer.dart';
 
 class ProductoSearchDialog extends StatefulWidget {
   final List<int> idsYaAgregados;

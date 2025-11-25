@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:abari/modal/agregar_proveedor_modal.dart';
 import 'package:abari/modal/editar_proveedor_modal.dart';
+import 'package:abari/core/widgets/entity_card.dart';
 
 class ProveedoresScreen extends StatefulWidget {
   const ProveedoresScreen({super.key});
@@ -80,26 +81,36 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
             ),
           ),
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(12),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                childAspectRatio: 3 / 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: filtrados.length,
-              itemBuilder: (context, index) {
-                final proveedor = filtrados[index];
-                return ProveedorCard(
-                  nombre: proveedor['nombre_proveedor'],
-                  ruc: 'RUC: ' + (proveedor['ruc_proveedor']),
-                  telefono: 'Cel: ' + (proveedor['numero_telefono']),
-                  onEdit: () => mostrarEditarProveedor(
-                    context,
-                    proveedor,
-                    cargarProveedores,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Mobile: 2 cards por fila, Tablet+: 4 cards por fila
+                final crossAxisCount = constraints.maxWidth < 600 ? 2 : 4;
+                
+                return GridView.builder(
+                  padding: const EdgeInsets.all(12),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    // childAspectRatio: 3 / 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
                   ),
+                  itemCount: filtrados.length,
+                  itemBuilder: (context, index) {
+                    final proveedor = filtrados[index];
+                    return EntityCard(
+                      nombre: proveedor['nombre_proveedor'],
+                      icon: Icons.business,
+                      subtitulos: [
+                        'RUC: ${proveedor['ruc_proveedor'] ?? 'No disponible'}',
+                        'Cel: ${proveedor['numero_telefono'] ?? 'No disponible'}',
+                      ],
+                      onEdit: () => mostrarEditarProveedor(
+                        context,
+                        proveedor,
+                        cargarProveedores,
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -110,48 +121,3 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
   }
 }
 
-class ProveedorCard extends StatelessWidget {
-  final String nombre;
-  final String? ruc;
-  final String? telefono;
-  final VoidCallback onEdit;
-
-  const ProveedorCard({
-    super.key,
-    required this.nombre,
-    this.ruc,
-    this.telefono,
-    required this.onEdit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 3,
-      child: Stack(
-        children: [
-          Positioned(
-            top: 8,
-            right: 8,
-            child: IconButton(icon: const Icon(Icons.edit), onPressed: onEdit),
-          ),
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const CircleAvatar(child: Icon(Icons.business)),
-                const SizedBox(height: 8),
-                Text(
-                  nombre,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(ruc ?? 'RUC no disponible'),
-                Text(telefono ?? 'Teléfono no disponible'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
