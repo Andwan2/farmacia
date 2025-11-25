@@ -27,57 +27,67 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 800;
+    
     return Consumer<FacturaProvider>(
       builder: (context, provider, child) {
+        final metodoPagoField = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'MÉTODO DE PAGO',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            provider.isLoadingMetodosPago
+                ? _buildShimmerLoader()
+                : provider.metodosPagoCargados &&
+                      provider.metodosPago.isNotEmpty
+                ? _buildAutocompleteConDatos(provider)
+                : _buildAutocompleteFallback(provider),
+          ],
+        );
+
+        final clienteField = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'CLIENTE',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            provider.isLoadingClientes
+                ? _buildShimmerLoader()
+                : provider.clientesCargados &&
+                      provider.clientes.isNotEmpty
+                ? _buildAutocompleteClientesConDatos(provider)
+                : _buildAutocompleteClientesFallback(provider),
+          ],
+        );
+
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              metodoPagoField,
+              const SizedBox(height: 16),
+              clienteField,
+            ],
+          );
+        }
+
         return Row(
           children: [
-            // Método de pago
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'MÉTODO DE PAGO',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  provider.isLoadingMetodosPago
-                      ? _buildShimmerLoader()
-                      : provider.metodosPagoCargados &&
-                            provider.metodosPago.isNotEmpty
-                      ? _buildAutocompleteConDatos(provider)
-                      : _buildAutocompleteFallback(provider),
-                ],
-              ),
-            ),
-
+            Expanded(child: metodoPagoField),
             const SizedBox(width: 16),
-
-            // Cliente
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'CLIENTE',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  provider.isLoadingClientes
-                      ? _buildShimmerLoader()
-                      : provider.clientesCargados &&
-                            provider.clientes.isNotEmpty
-                      ? _buildAutocompleteClientesConDatos(provider)
-                      : _buildAutocompleteClientesFallback(provider),
-                ],
-              ),
-            ),
+            Expanded(child: clienteField),
           ],
         );
       },
