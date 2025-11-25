@@ -91,8 +91,8 @@ class FacturaProvider extends ChangeNotifier {
         idProducto: producto.idProducto,
         cantidad: cantidad,
         nombre: producto.nombreProducto,
-        presentacion: producto.tipo,
-        medida: producto.medida,
+        presentacion: producto.codigo,
+        medida: producto.cantidad.toString(),
         fechaVencimiento: producto.fechaVencimiento,
         precio: producto.precioVenta ?? 0.0,
       ),
@@ -294,7 +294,7 @@ class FacturaProvider extends ChangeNotifier {
         final stockDisponible = await Supabase.instance.client
             .from('producto')
             .select('id_producto')
-            .eq('tipo', producto.presentacion)
+            .eq('codigo', producto.presentacion)
             .eq('estado', 'Disponible')
             .count(CountOption.exact);
 
@@ -340,7 +340,7 @@ class FacturaProvider extends ChangeNotifier {
         final productosDisponibles = await Supabase.instance.client
             .from('producto')
             .select('id_producto')
-            .eq('tipo', producto.presentacion)
+            .eq('codigo', producto.presentacion)
             .eq('estado', 'Disponible')
             .order('fecha_vencimiento', ascending: true)
             .limit(producto.cantidad);

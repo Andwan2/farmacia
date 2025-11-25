@@ -9,11 +9,13 @@ Future<void> mostrarEditarProducto(
   VoidCallback onSuccess,
 ) async {
   final nombreController = TextEditingController(
-    text: producto['nombre_producto'],
+    text: producto['nombre_producto']?.toString() ?? '',
   );
-  final tipoController = TextEditingController(text: producto['tipo']);
-  final medidaController = TextEditingController(
-    text: producto['medida']?.toString() ?? '',
+  final codigoController = TextEditingController(
+    text: producto['codigo']?.toString() ?? '',
+  );
+  final cantidadProductoController = TextEditingController(
+    text: producto['cantidad']?.toString() ?? '',
   );
   final fechaVencimientoController = TextEditingController(
     text: producto['fecha_vencimiento']?.toString().split('T').first ?? '',
@@ -21,18 +23,32 @@ Future<void> mostrarEditarProducto(
   final fechaAgregadoController = TextEditingController(
     text: producto['fecha_agregado']?.toString() ?? '',
   );
+  final precioCompraController = TextEditingController(
+    text: producto['precio_compra']?.toString() ?? '',
+  );
+  final precioVentaController = TextEditingController(
+    text: producto['precio_venta']?.toString() ?? '',
+  );
 
   // Cargar presentaciones disponibles
   final presentaciones = await Supabase.instance.client
       .from('presentacion')
-      .select('id_presentacion,descripcion,unidad_medida')
+      .select('id_presentacion,descripcion')
       .order('descripcion', ascending: true);
 
+  // Cargar unidades de medida disponibles
+  final unidadesMedida = await Supabase.instance.client
+      .from('unidad_medida')
+      .select('id,nombre,abreviatura')
+      .order('nombre', ascending: true);
+
   final listaPresentaciones = presentaciones as List;
+  final listaUnidadesMedida = unidadesMedida as List;
   int? presentacionSeleccionada = producto['id_presentacion'] as int?;
+  int? unidadMedidaSeleccionada = producto['id_unidad_medida'] as int?;
 
   // Guardar valores originales para identificar productos del mismo grupo
-  final tipoOriginal = producto['tipo'] as String;
+  final codigoOriginal = producto['codigo']?.toString() ?? '';
   final fechaVencimientoOriginal =
       producto['fecha_vencimiento']?.toString().split('T').first ?? '';
   final estadoOriginal = producto['estado'] as String? ?? 'Disponible';
@@ -286,10 +302,12 @@ Future<void> mostrarEditarProducto(
                           ),
                           const SizedBox(height: 10),
                           TextField(
-                            controller: tipoController,
+                            controller: codigoController,
                             decoration: const InputDecoration(
-                              labelText: 'Tipo',
+                              labelText: 'Código',
                               border: OutlineInputBorder(),
+                              helperText:
+                                  'Identificador para agrupar productos similares',
                             ),
                           ),
                           const SizedBox(height: 10),
@@ -299,16 +317,16 @@ Future<void> mostrarEditarProducto(
                               labelText: 'Presentación',
                               border: OutlineInputBorder(),
                             ),
-                            items: listaPresentaciones.map<DropdownMenuItem<int>>((
-                              p,
-                            ) {
-                              return DropdownMenuItem<int>(
-                                value: p['id_presentacion'] as int,
-                                child: Text(
-                                  '${p['descripcion']} (${p['unidad_medida']})',
-                                ),
-                              );
-                            }).toList(),
+                            items: listaPresentaciones
+                                .map<DropdownMenuItem<int>>((p) {
+                                  return DropdownMenuItem<int>(
+                                    value: p['id_presentacion'] as int,
+                                    child: Text(
+                                      p['descripcion']?.toString() ?? '',
+                                    ),
+                                  );
+                                })
+                                .toList(),
                             onChanged: (value) {
                               setState(() {
                                 presentacionSeleccionada = value;
@@ -316,17 +334,51 @@ Future<void> mostrarEditarProducto(
                             },
                           ),
                           const SizedBox(height: 10),
-                          TextField(
-                            controller: medidaController,
-                            decoration: const InputDecoration(
-                              labelText: 'Medida',
-                              border: OutlineInputBorder(),
-                              helperText: 'Puede ser entero o decimal',
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                              signed: false,
-                            ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: TextField(
+                                  controller: cantidadProductoController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Cantidad',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                        signed: false,
+                                      ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                flex: 3,
+                                child: DropdownButtonFormField<int>(
+                                  value: unidadMedidaSeleccionada,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Unidad de medida',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: listaUnidadesMedida
+                                      .map<DropdownMenuItem<int>>((u) {
+                                        return DropdownMenuItem<int>(
+                                          value: u['id'] as int,
+                                          child: Text(
+                                            '${u['nombre']} (${u['abreviatura']})',
+                                          ),
+                                        );
+                                      })
+                                      .toList(),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      unidadMedidaSeleccionada = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 10),
                           TextField(
@@ -412,6 +464,43 @@ Future<void> mostrarEditarProducto(
                               }
                             },
                           ),
+                          const SizedBox(height: 10),
+                          // Precios
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: precioCompraController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Precio compra',
+                                    border: OutlineInputBorder(),
+                                    hintText: 'Opcional',
+                                    prefixText: 'C\$ ',
+                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: precioVentaController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Precio venta',
+                                    border: OutlineInputBorder(),
+                                    hintText: 'Opcional',
+                                    prefixText: 'C\$ ',
+                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -438,8 +527,9 @@ Future<void> mostrarEditarProducto(
                         ElevatedButton(
                           onPressed: () async {
                             final nombre = nombreController.text.trim();
-                            final tipo = tipoController.text.trim();
-                            final medida = medidaController.text.trim();
+                            final codigo = codigoController.text.trim();
+                            final cantidad = cantidadProductoController.text
+                                .trim();
                             final fechaVencimiento = fechaVencimientoController
                                 .text
                                 .trim();
@@ -455,10 +545,10 @@ Future<void> mostrarEditarProducto(
                               return;
                             }
 
-                            if (tipo.isEmpty) {
+                            if (codigo.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('El tipo es obligatorio'),
+                                  content: Text('El código es obligatorio'),
                                 ),
                               );
                               return;
@@ -469,6 +559,17 @@ Future<void> mostrarEditarProducto(
                                 const SnackBar(
                                   content: Text(
                                     'Debe seleccionar una presentación',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+
+                            if (unidadMedidaSeleccionada == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Debe seleccionar una unidad de medida',
                                   ),
                                 ),
                               );
@@ -508,12 +609,14 @@ Future<void> mostrarEditarProducto(
                                     .from('producto')
                                     .update({
                                       'nombre_producto': nombre,
-                                      'tipo': tipo,
+                                      'codigo': codigo,
                                       'id_presentacion':
                                           presentacionSeleccionada,
-                                      'medida': medida.isEmpty
+                                      'id_unidad_medida':
+                                          unidadMedidaSeleccionada,
+                                      'cantidad': cantidad.isEmpty
                                           ? null
-                                          : double.tryParse(medida),
+                                          : double.tryParse(cantidad),
                                       'fecha_vencimiento': fechaVencimiento,
                                       'fecha_agregado':
                                           fechaAgregadoController
@@ -521,8 +624,20 @@ Future<void> mostrarEditarProducto(
                                               .isNotEmpty
                                           ? fechaAgregadoController.text
                                           : null,
+                                      'precio_compra':
+                                          precioCompraController.text.isNotEmpty
+                                          ? double.tryParse(
+                                              precioCompraController.text,
+                                            )
+                                          : null,
+                                      'precio_venta':
+                                          precioVentaController.text.isNotEmpty
+                                          ? double.tryParse(
+                                              precioVentaController.text,
+                                            )
+                                          : null,
                                     })
-                                    .eq('tipo', tipoOriginal)
+                                    .eq('codigo', codigoOriginal)
                                     .eq(
                                       'fecha_vencimiento',
                                       fechaVencimientoOriginal,
@@ -544,7 +659,7 @@ Future<void> mostrarEditarProducto(
                                     .client
                                     .from('producto')
                                     .select('id_producto')
-                                    .eq('tipo', tipoOriginal)
+                                    .eq('codigo', codigoOriginal)
                                     .eq(
                                       'fecha_vencimiento',
                                       fechaVencimientoOriginal,
@@ -573,18 +688,32 @@ Future<void> mostrarEditarProducto(
                                     .from('producto')
                                     .update({
                                       'nombre_producto': nombre,
-                                      'tipo': tipo,
+                                      'codigo': codigo,
                                       'id_presentacion':
                                           presentacionSeleccionada,
-                                      'medida': medida.isEmpty
+                                      'id_unidad_medida':
+                                          unidadMedidaSeleccionada,
+                                      'cantidad': cantidad.isEmpty
                                           ? null
-                                          : double.tryParse(medida),
+                                          : double.tryParse(cantidad),
                                       'fecha_vencimiento': fechaVencimiento,
                                       'fecha_agregado':
                                           fechaAgregadoController
                                               .text
                                               .isNotEmpty
                                           ? fechaAgregadoController.text
+                                          : null,
+                                      'precio_compra':
+                                          precioCompraController.text.isNotEmpty
+                                          ? double.tryParse(
+                                              precioCompraController.text,
+                                            )
+                                          : null,
+                                      'precio_venta':
+                                          precioVentaController.text.isNotEmpty
+                                          ? double.tryParse(
+                                              precioVentaController.text,
+                                            )
                                           : null,
                                     })
                                     .inFilter('id_producto', idsActualizar);

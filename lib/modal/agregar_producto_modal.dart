@@ -8,58 +8,278 @@ Future<void> mostrarAgregarProducto(
   VoidCallback onSuccess,
 ) async {
   final nombreController = TextEditingController();
-  final medidaController = TextEditingController();
-  final cantidadController = TextEditingController(text: '1');
+  final cantidadController = TextEditingController();
+  final stockController = TextEditingController(text: '1');
   final fechaVencimientoController = TextEditingController();
   final fechaAgregadoController = TextEditingController();
+  final precioCompraController = TextEditingController();
+  final precioVentaController = TextEditingController();
 
   // Cargar presentaciones disponibles
   final presentaciones = await Supabase.instance.client
       .from('presentacion')
-      .select('id_presentacion,descripcion,unidad_medida')
+      .select('id_presentacion,descripcion')
       .order('descripcion', ascending: true);
 
-  final listaPresentaciones = presentaciones as List;
+  // Cargar unidades de medida disponibles
+  final unidadesMedida = await Supabase.instance.client
+      .from('unidad_medida')
+      .select('id,nombre,abreviatura')
+      .order('nombre', ascending: true);
+
+  List<dynamic> listaPresentaciones = presentaciones as List;
+  List<dynamic> listaUnidadesMedida = unidadesMedida as List;
   int? presentacionSeleccionada;
+  int? unidadMedidaSeleccionada;
+  bool sinFechaVencimiento = false;
+
+  // Función para agregar nueva presentación
+  Future<void> agregarNuevaPresentacion(
+    BuildContext context,
+    StateSetter setState,
+  ) async {
+    final descripcionController = TextEditingController();
+
+    final resultado = await showDialog<String?>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.add_box_outlined),
+              SizedBox(width: 8),
+              Text('Nueva Presentación'),
+            ],
+          ),
+          content: TextField(
+            controller: descripcionController,
+            decoration: const InputDecoration(
+              labelText: 'Descripción *',
+              border: OutlineInputBorder(),
+              hintText: 'Ej: Bolsa, Caja, Botella, Lata',
+            ),
+            textCapitalization: TextCapitalization.words,
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final descripcion = descripcionController.text.trim();
+                if (descripcion.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('La descripción es obligatoria'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(context, descripcion);
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (resultado != null) {
+      try {
+        final response = await Supabase.instance.client
+            .from('presentacion')
+            .insert({'descripcion': resultado})
+            .select()
+            .single();
+
+        final nuevasPresentaciones = await Supabase.instance.client
+            .from('presentacion')
+            .select('id_presentacion,descripcion')
+            .order('descripcion', ascending: true);
+
+        setState(() {
+          listaPresentaciones = nuevasPresentaciones as List;
+          presentacionSeleccionada = response['id_presentacion'] as int;
+        });
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Presentación "$resultado" agregada'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  // Función para agregar nueva unidad de medida
+  Future<void> agregarNuevaUnidadMedida(
+    BuildContext context,
+    StateSetter setState,
+  ) async {
+    final nombreController = TextEditingController();
+    final abreviaturaController = TextEditingController();
+
+    final resultado = await showDialog<Map<String, dynamic>?>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.straighten_outlined),
+              SizedBox(width: 8),
+              Text('Nueva Unidad de Medida'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nombreController,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre *',
+                  border: OutlineInputBorder(),
+                  hintText: 'Ej: Gramos, Kilogramos, Litros',
+                ),
+                textCapitalization: TextCapitalization.words,
+                autofocus: true,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: abreviaturaController,
+                decoration: const InputDecoration(
+                  labelText: 'Abreviatura *',
+                  border: OutlineInputBorder(),
+                  hintText: 'Ej: g, kg, ml, L, un',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final nombre = nombreController.text.trim();
+                final abreviatura = abreviaturaController.text.trim();
+                if (nombre.isEmpty || abreviatura.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Todos los campos son obligatorios'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(context, {
+                  'nombre': nombre,
+                  'abreviatura': abreviatura,
+                });
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (resultado != null) {
+      try {
+        final response = await Supabase.instance.client
+            .from('unidad_medida')
+            .insert({
+              'nombre': resultado['nombre'],
+              'abreviatura': resultado['abreviatura'],
+            })
+            .select()
+            .single();
+
+        final nuevasUnidades = await Supabase.instance.client
+            .from('unidad_medida')
+            .select('id,nombre,abreviatura')
+            .order('nombre', ascending: true);
+
+        setState(() {
+          listaUnidadesMedida = nuevasUnidades as List;
+          unidadMedidaSeleccionada = response['id'] as int;
+        });
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Unidad "${resultado['nombre']}" agregada'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
 
   showDialog(
     context: context,
     builder: (context) {
-      int cantidad = 1;
+      int stock = 1;
       bool usarFechaPersonalizada = false;
 
       return StatefulBuilder(
         builder: (context, setState) {
           final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
 
-          // Generar el tipo automáticamente
-          String generarTipo() {
+          // Generar el código automáticamente
+          String generarCodigo() {
             if (nombreController.text.isEmpty ||
-                medidaController.text.isEmpty ||
-                presentacionSeleccionada == null) {
+                cantidadController.text.isEmpty ||
+                presentacionSeleccionada == null ||
+                unidadMedidaSeleccionada == null) {
               return '';
             }
 
-            final presentacion = listaPresentaciones.firstWhere(
-              (p) => p['id_presentacion'] == presentacionSeleccionada,
-              orElse: () => {'unidad_medida': ''},
+            final unidad = listaUnidadesMedida.firstWhere(
+              (u) => u['id'] == unidadMedidaSeleccionada,
+              orElse: () => {'abreviatura': ''},
             );
 
-            final unidadMedida = presentacion['unidad_medida'] ?? '';
-            // Formatear medida: si es entero mostrar sin decimales, si es decimal mantenerlo
-            final medidaTexto = medidaController.text.trim();
-            final medidaNum = double.tryParse(medidaTexto);
-            String medidaFormateada = medidaTexto;
-            if (medidaNum != null) {
-              // Si es un número entero, mostrar sin decimales
-              if (medidaNum == medidaNum.toInt()) {
-                medidaFormateada = medidaNum.toInt().toString();
+            final presentacion = listaPresentaciones.firstWhere(
+              (p) => p['id_presentacion'] == presentacionSeleccionada,
+              orElse: () => {'descripcion': ''},
+            );
+
+            final abreviatura = unidad['abreviatura'] ?? '';
+            final descripcionPres = presentacion['descripcion'] ?? '';
+            final cantidadTexto = cantidadController.text.trim();
+            final cantidadNum = double.tryParse(cantidadTexto);
+            String cantidadFormateada = cantidadTexto;
+            if (cantidadNum != null) {
+              if (cantidadNum == cantidadNum.toInt()) {
+                cantidadFormateada = cantidadNum.toInt().toString();
               } else {
-                // Si es decimal, mantener el valor tal cual
-                medidaFormateada = medidaNum.toString();
+                cantidadFormateada = cantidadNum.toString();
               }
             }
-            return '${nombreController.text} $medidaFormateada $unidadMedida';
+            // Formato: NombreCantidadUnidadPresentacion (sin espacios)
+            final nombre = nombreController.text.trim().replaceAll(' ', '');
+            return '$nombre$cantidadFormateada$abreviatura$descripcionPres'
+                .toUpperCase();
           }
 
           return Dialog(
@@ -134,7 +354,7 @@ Future<void> mostrarAgregarProducto(
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    'El tipo se generará automáticamente: Nombre + Medida + Unidad',
+                                    'El código se generará automáticamente: Nombre + Medida + Unidad',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: isDarkMode
@@ -152,78 +372,225 @@ Future<void> mostrarAgregarProducto(
                             decoration: const InputDecoration(
                               labelText: 'Nombre del producto *',
                               border: OutlineInputBorder(),
-                              hintText: 'Ej: Paracetamol',
+                              hintText: 'Ej: Arroz, Frijoles, Aceite',
                             ),
                             onChanged: (_) => setState(() {}),
                           ),
                           const SizedBox(height: 10),
-                          DropdownButtonFormField<int>(
-                            value: presentacionSeleccionada,
-                            decoration: const InputDecoration(
-                              labelText: 'Presentación *',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: listaPresentaciones.map<DropdownMenuItem<int>>((
-                              p,
-                            ) {
-                              return DropdownMenuItem<int>(
-                                value: p['id_presentacion'] as int,
-                                child: Text(
-                                  '${p['descripcion']} (${p['unidad_medida']})',
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<int>(
+                                  value: presentacionSeleccionada,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Presentación *',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: listaPresentaciones
+                                      .map<DropdownMenuItem<int>>((p) {
+                                        return DropdownMenuItem<int>(
+                                          value: p['id_presentacion'] as int,
+                                          child: Text(
+                                            p['descripcion']?.toString() ?? '',
+                                          ),
+                                        );
+                                      })
+                                      .toList(),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      presentacionSeleccionada = value;
+                                    });
+                                  },
                                 ),
-                              );
-                            }).toList(),
+                              ),
+                              const SizedBox(width: 8),
+                              Tooltip(
+                                message: 'Agregar nueva presentación',
+                                child: IconButton(
+                                  onPressed: () => agregarNuevaPresentacion(
+                                    context,
+                                    setState,
+                                  ),
+                                  icon: const Icon(Icons.add_circle),
+                                  color: isDarkMode
+                                      ? Colors.green[300]
+                                      : Colors.green[700],
+                                  iconSize: 32,
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: isDarkMode
+                                        ? Colors.green.withOpacity(0.2)
+                                        : Colors.green.withOpacity(0.1),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          // Cantidad y Unidad de Medida en una fila
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Campo de cantidad
+                              Expanded(
+                                flex: 2,
+                                child: TextField(
+                                  controller: cantidadController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Cantidad *',
+                                    border: OutlineInputBorder(),
+                                    hintText: 'Ej: 500, 1, 2.5',
+                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                        signed: false,
+                                      ),
+                                  onChanged: (_) => setState(() {}),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Dropdown de unidad de medida
+                              Expanded(
+                                flex: 3,
+                                child: DropdownButtonFormField<int>(
+                                  value: unidadMedidaSeleccionada,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Unidad *',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: listaUnidadesMedida
+                                      .map<DropdownMenuItem<int>>((u) {
+                                        return DropdownMenuItem<int>(
+                                          value: u['id'] as int,
+                                          child: Text(
+                                            '${u['nombre']} (${u['abreviatura']})',
+                                          ),
+                                        );
+                                      })
+                                      .toList(),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      unidadMedidaSeleccionada = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Botón para agregar unidad de medida
+                              Tooltip(
+                                message: 'Agregar unidad de medida',
+                                child: IconButton(
+                                  onPressed: () => agregarNuevaUnidadMedida(
+                                    context,
+                                    setState,
+                                  ),
+                                  icon: const Icon(Icons.add_circle),
+                                  color: isDarkMode
+                                      ? Colors.blue[300]
+                                      : Colors.blue[700],
+                                  iconSize: 32,
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: isDarkMode
+                                        ? Colors.blue.withOpacity(0.2)
+                                        : Colors.blue.withOpacity(0.1),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          // Checkbox para omitir fecha de vencimiento
+                          CheckboxListTile(
+                            title: const Text(
+                              'Sin fecha de vencimiento',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                            subtitle: const Text(
+                              'Marcar si el producto no tiene fecha de caducidad',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                            value: sinFechaVencimiento,
                             onChanged: (value) {
                               setState(() {
-                                presentacionSeleccionada = value;
+                                sinFechaVencimiento = value ?? false;
+                                if (sinFechaVencimiento) {
+                                  fechaVencimientoController.clear();
+                                }
                               });
                             },
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
                           ),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: medidaController,
-                            decoration: const InputDecoration(
-                              labelText: 'Medida *',
-                              border: OutlineInputBorder(),
-                              hintText: 'Ej: 500 o 2.5',
-                              helperText: 'Puede ser entero o decimal',
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                              signed: false,
-                            ),
-                            onChanged: (_) => setState(() {}),
-                          ),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: fechaVencimientoController,
-                            decoration: const InputDecoration(
-                              labelText: 'Fecha de vencimiento *',
-                              border: OutlineInputBorder(),
-                              hintText: 'YYYY-MM-DD',
-                              suffixIcon: Icon(Icons.calendar_today),
-                            ),
-                            readOnly: true,
-                            onTap: () async {
-                              final fechaSeleccionada = await showDatePicker(
-                                context: context,
-                                initialDate: DateTime.now().add(
-                                  const Duration(days: 365),
-                                ),
-                                firstDate: DateTime.now(),
-                                lastDate: DateTime.now().add(
-                                  const Duration(days: 3650),
-                                ),
-                              );
+                          if (!sinFechaVencimiento) ...[
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: fechaVencimientoController,
+                              decoration: const InputDecoration(
+                                labelText: 'Fecha de vencimiento *',
+                                border: OutlineInputBorder(),
+                                hintText: 'YYYY-MM-DD',
+                                suffixIcon: Icon(Icons.calendar_today),
+                              ),
+                              readOnly: true,
+                              onTap: () async {
+                                final fechaSeleccionada = await showDatePicker(
+                                  context: context,
+                                  initialDate: DateTime.now().add(
+                                    const Duration(days: 365),
+                                  ),
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime.now().add(
+                                    const Duration(days: 3650),
+                                  ),
+                                );
 
-                              if (fechaSeleccionada != null) {
-                                fechaVencimientoController.text =
-                                    fechaSeleccionada
-                                        .toIso8601String()
-                                        .split('T')
-                                        .first;
-                              }
-                            },
+                                if (fechaSeleccionada != null) {
+                                  fechaVencimientoController.text =
+                                      fechaSeleccionada
+                                          .toIso8601String()
+                                          .split('T')
+                                          .first;
+                                }
+                              },
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          // Precios (opcionales)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: precioCompraController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Precio compra',
+                                    border: OutlineInputBorder(),
+                                    hintText: 'Opcional',
+                                    prefixText: 'C\$ ',
+                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: precioVentaController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Precio venta',
+                                    border: OutlineInputBorder(),
+                                    hintText: 'Opcional',
+                                    prefixText: 'C\$ ',
+                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 10),
                           // Fecha de agregado (opcional)
@@ -330,12 +697,12 @@ Future<void> mostrarAgregarProducto(
                                       icon: const Icon(
                                         Icons.remove_circle_outline,
                                       ),
-                                      onPressed: cantidad > 1
+                                      onPressed: stock > 1
                                           ? () {
                                               setState(() {
-                                                cantidad--;
-                                                cantidadController.text =
-                                                    cantidad.toString();
+                                                stock--;
+                                                stockController.text = stock
+                                                    .toString();
                                               });
                                             }
                                           : null,
@@ -350,7 +717,7 @@ Future<void> mostrarAgregarProducto(
                                     SizedBox(
                                       width: 80,
                                       child: TextField(
-                                        controller: cantidadController,
+                                        controller: stockController,
                                         decoration: const InputDecoration(
                                           border: OutlineInputBorder(),
                                           contentPadding: EdgeInsets.symmetric(
@@ -366,19 +733,16 @@ Future<void> mostrarAgregarProducto(
                                         ),
                                         keyboardType: TextInputType.number,
                                         onChanged: (value) {
-                                          final nuevaCantidad =
+                                          final nuevoStock =
                                               int.tryParse(value) ?? 1;
                                           setState(() {
-                                            cantidad = nuevaCantidad.clamp(
-                                              1,
-                                              9999,
-                                            );
-                                            cantidadController.text = cantidad
+                                            stock = nuevoStock.clamp(1, 9999);
+                                            stockController.text = stock
                                                 .toString();
-                                            cantidadController.selection =
+                                            stockController.selection =
                                                 TextSelection.fromPosition(
                                                   TextPosition(
-                                                    offset: cantidadController
+                                                    offset: stockController
                                                         .text
                                                         .length,
                                                   ),
@@ -391,12 +755,12 @@ Future<void> mostrarAgregarProducto(
                                       icon: const Icon(
                                         Icons.add_circle_outline,
                                       ),
-                                      onPressed: cantidad < 9999
+                                      onPressed: stock < 9999
                                           ? () {
                                               setState(() {
-                                                cantidad++;
-                                                cantidadController.text =
-                                                    cantidad.toString();
+                                                stock++;
+                                                stockController.text = stock
+                                                    .toString();
                                               });
                                             }
                                           : null,
@@ -414,8 +778,8 @@ Future<void> mostrarAgregarProducto(
                             ),
                           ),
                           const SizedBox(height: 10),
-                          // Vista previa del tipo generado
-                          if (generarTipo().isNotEmpty)
+                          // Vista previa del código generado
+                          if (generarCodigo().isNotEmpty)
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
@@ -429,7 +793,7 @@ Future<void> mostrarAgregarProducto(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'Tipo generado:',
+                                    'Código generado:',
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500,
@@ -437,7 +801,7 @@ Future<void> mostrarAgregarProducto(
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    generarTipo(),
+                                    generarCodigo(),
                                     style: const TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.bold,
@@ -472,7 +836,7 @@ Future<void> mostrarAgregarProducto(
                         ElevatedButton(
                           onPressed: () async {
                             final nombre = nombreController.text.trim();
-                            final medida = medidaController.text.trim();
+                            final cantidad = cantidadController.text.trim();
                             final fechaVencimiento = fechaVencimientoController
                                 .text
                                 .trim();
@@ -500,16 +864,28 @@ Future<void> mostrarAgregarProducto(
                               return;
                             }
 
-                            if (medida.isEmpty) {
+                            if (cantidad.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('La medida es obligatoria'),
+                                  content: Text('La cantidad es obligatoria'),
                                 ),
                               );
                               return;
                             }
 
-                            if (fechaVencimiento.isEmpty) {
+                            if (unidadMedidaSeleccionada == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Debe seleccionar una unidad de medida',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+
+                            if (!sinFechaVencimiento &&
+                                fechaVencimiento.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text(
@@ -521,15 +897,30 @@ Future<void> mostrarAgregarProducto(
                             }
 
                             try {
-                              final tipo = generarTipo();
+                              final codigo = generarCodigo();
 
                               // Preparar datos base
                               final datosBase = {
                                 'nombre_producto': nombre,
-                                'tipo': tipo,
+                                'codigo': codigo,
                                 'id_presentacion': presentacionSeleccionada,
-                                'medida': double.tryParse(medida),
-                                'fecha_vencimiento': fechaVencimiento,
+                                'id_unidad_medida': unidadMedidaSeleccionada,
+                                'cantidad': double.tryParse(cantidad),
+                                'fecha_vencimiento': sinFechaVencimiento
+                                    ? null
+                                    : fechaVencimiento,
+                                'precio_compra':
+                                    precioCompraController.text.isNotEmpty
+                                    ? double.tryParse(
+                                        precioCompraController.text,
+                                      )
+                                    : null,
+                                'precio_venta':
+                                    precioVentaController.text.isNotEmpty
+                                    ? double.tryParse(
+                                        precioVentaController.text,
+                                      )
+                                    : null,
                               };
 
                               // Agregar fecha_agregado solo si se estableció
@@ -538,10 +929,9 @@ Future<void> mostrarAgregarProducto(
                                 datosBase['fecha_agregado'] =
                                     fechaAgregadoController.text;
                               }
-                              // Si no se establece, Supabase usará el default automático
 
-                              // Insertar productos según la cantidad
-                              for (int i = 0; i < cantidad; i++) {
+                              // Insertar productos según el stock
+                              for (int i = 0; i < stock; i++) {
                                 await Supabase.instance.client
                                     .from('producto')
                                     .insert(datosBase);
@@ -551,7 +941,7 @@ Future<void> mostrarAgregarProducto(
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    '$cantidad producto(s) agregado(s) correctamente',
+                                    '$stock producto(s) agregado(s) correctamente',
                                   ),
                                   backgroundColor: Colors.green,
                                 ),

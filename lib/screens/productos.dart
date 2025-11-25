@@ -14,7 +14,9 @@ class ProductosScreen extends StatefulWidget {
 class _InventarioPageState extends State<ProductosScreen> {
   List<dynamic> productos = [];
   Map<int, Map<String, dynamic>> presentaciones =
-      {}; // id_presentacion -> {descripcion, unidad_medida}
+      {}; // id_presentacion -> {descripcion}
+  Map<int, Map<String, dynamic>> unidadesMedida =
+      {}; // id -> {nombre, abreviatura}
   Map<String, int> stockPorTipo = {};
   String busqueda = '';
   bool cargando = true;
@@ -314,71 +316,108 @@ class _InventarioPageState extends State<ProductosScreen> {
     setState(() => cargando = true);
     final client = Supabase.instance.client;
 
-    // 1) Productos
-    // Filtrar por estado: disponibles (Comprado) o eliminados (Vendido/Removido)
-    var query = client
-        .from('producto')
-        .select(
-          'id_producto,nombre_producto,id_presentacion,fecha_vencimiento,tipo,medida,estado,fecha_agregado,precio_compra,precio_venta',
+    try {
+      // 1) Productos - cargar todos primero
+      final resProd = await client
+          .from('producto')
+          .select()
+          .order('nombre_producto', ascending: true);
+
+      List<dynamic> dataProd = (resProd is List) ? resProd : <dynamic>[];
+
+      // Filtrar en memoria por estado
+      if (mostrarEliminados) {
+        dataProd = dataProd
+            .where((p) => p['estado'] == 'Vendido' || p['estado'] == 'Removido')
+            .toList();
+      } else {
+        dataProd = dataProd
+            .where((p) => p['estado'] == null || p['estado'] == 'Disponible')
+            .toList();
+      }
+
+      // 2) Presentaciones para mapear id_presentacion -> descripcion
+      final resPres = await client
+          .from('presentacion')
+          .select('id_presentacion,descripcion')
+          .order('id_presentacion', ascending: true);
+
+      final dataPres = (resPres is List) ? resPres : <dynamic>[];
+      final Map<int, Map<String, dynamic>> presMap = {};
+      for (final p in dataPres) {
+        final id = p['id_presentacion'] as int?;
+        if (id != null) {
+          presMap[id] = {'descripcion': p['descripcion']};
+        }
+      }
+
+      // 3) Unidades de medida para mapear id -> nombre/abreviatura
+      final resUnidades = await client
+          .from('unidad_medida')
+          .select('id,nombre,abreviatura')
+          .order('id', ascending: true);
+
+      final dataUnidades = (resUnidades is List) ? resUnidades : <dynamic>[];
+      final Map<int, Map<String, dynamic>> unidadesMap = {};
+      for (final u in dataUnidades) {
+        final id = u['id'] as int?;
+        if (id != null) {
+          unidadesMap[id] = {
+            'nombre': u['nombre'],
+            'abreviatura': u['abreviatura'],
+          };
+        }
+      }
+
+      // 4) Stock por código (conteo)
+      final Map<String, int> stock = {};
+      for (final item in dataProd) {
+        final codigo = item['codigo']?.toString() ?? 'Sin código';
+        stock[codigo] = (stock[codigo] ?? 0) + 1;
+      }
+
+      setState(() {
+        productos = dataProd;
+        presentaciones = presMap;
+        unidadesMedida = unidadesMap;
+        stockPorTipo = stock;
+        cargando = false;
+      });
+    } catch (e) {
+      debugPrint('Error al cargar datos: $e');
+      setState(() {
+        cargando = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar productos: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
-
-    if (mostrarEliminados) {
-      // Mostrar solo productos eliminados (Vendido o Removido)
-      query = query.inFilter('estado', ['Vendido', 'Removido']);
-    } else {
-      // Mostrar solo productos disponibles
-      query = query.eq('estado', 'Disponible');
+      }
     }
-
-    final resProd = await query.order('nombre_producto', ascending: true);
-
-    final dataProd = (resProd is List) ? resProd : <dynamic>[];
-
-    // 2) Presentaciones para mapear id_presentacion -> descripcion/unidad_medida
-    final resPres = await client
-        .from('presentacion')
-        .select('id_presentacion,descripcion,unidad_medida')
-        .order('id_presentacion', ascending: true);
-
-    final dataPres = (resPres is List) ? resPres : <dynamic>[];
-    final Map<int, Map<String, dynamic>> presMap = {};
-    for (final p in dataPres) {
-      final id = p['id_presentacion'] as int;
-      presMap[id] = {
-        'descripcion': p['descripcion'],
-        'unidad_medida': p['unidad_medida'],
-      };
-    }
-
-    // 3) Stock por tipo (conteo)
-    final Map<String, int> stock = {};
-    for (final item in dataProd) {
-      final tipo = item['tipo'] as String;
-      stock[tipo] = (stock[tipo] ?? 0) + 1;
-    }
-
-    setState(() {
-      productos = dataProd;
-      presentaciones = presMap;
-      stockPorTipo = stock;
-      cargando = false;
-    });
   }
 
   Future<void> eliminarProducto(
     BuildContext context,
     Map<String, dynamic> producto,
   ) async {
-    final nombre = producto['nombre_producto'] as String;
-    final tipo = producto['tipo'] as String;
-    final medida = producto['medida']?.toString() ?? '';
-    final idPres = producto['id_presentacion'] as int;
-    final presentacion = presentaciones[idPres]?['descripcion'] ?? '—';
-    final unidad = presentaciones[idPres]?['unidad_medida'] ?? '';
-    final fechaStr = producto['fecha_vencimiento'] as String;
-    final fecha = DateTime.parse(fechaStr);
+    final nombre = producto['nombre_producto']?.toString() ?? 'Sin nombre';
+    final codigo = producto['codigo']?.toString() ?? 'Sin código';
+    final cantidad = producto['cantidad']?.toString() ?? '';
+    final idPres = producto['id_presentacion'] as int?;
+    final idUnidad = producto['id_unidad_medida'] as int?;
+    final presentacion = idPres != null
+        ? (presentaciones[idPres]?['descripcion'] ?? '—')
+        : '—';
+    final abreviatura = idUnidad != null
+        ? (unidadesMedida[idUnidad]?['abreviatura'] ?? '')
+        : '';
+    final fechaStr = producto['fecha_vencimiento']?.toString();
+    final fecha = fechaStr != null ? DateTime.tryParse(fechaStr) : null;
     final stockGrupo = producto['_stock_grupo'] as int? ?? 1;
-    final tipoOriginal = producto['tipo'] as String;
+    final codigoOriginal = producto['codigo']?.toString() ?? 'Sin código';
     final fechaVencimientoOriginal =
         producto['fecha_vencimiento']?.toString().split('T').first ?? '';
     final estadoOriginal = producto['estado'] as String? ?? 'Disponible';
@@ -410,13 +449,13 @@ class _InventarioPageState extends State<ProductosScreen> {
                     const Divider(),
                     const SizedBox(height: 8),
                     _buildInfoRow('Nombre:', nombre),
-                    _buildInfoRow('Tipo:', tipo),
-                    _buildInfoRow('Presentación:', '$presentacion ($unidad)'),
-                    _buildInfoRow('Medida:', '$medida $unidad'),
+                    _buildInfoRow('Código:', codigo),
+                    _buildInfoRow('Presentación:', presentacion),
+                    _buildInfoRow('Cantidad:', '$cantidad $abreviatura'),
                     _buildInfoRow('Stock:', '$stockGrupo unidades'),
                     _buildInfoRow(
                       'Fecha de vencimiento:',
-                      fecha.toIso8601String().split('T').first,
+                      fecha?.toIso8601String().split('T').first ?? 'Sin fecha',
                     ),
                     const SizedBox(height: 12),
                     const Divider(),
@@ -724,7 +763,7 @@ class _InventarioPageState extends State<ProductosScreen> {
           await Supabase.instance.client
               .from('producto')
               .update({'estado': estadoFinal})
-              .eq('tipo', tipoOriginal)
+              .eq('codigo', codigoOriginal)
               .eq('fecha_vencimiento', fechaVencimientoOriginal)
               .eq('estado', estadoOriginal);
 
@@ -749,7 +788,7 @@ class _InventarioPageState extends State<ProductosScreen> {
           final productosGrupo = await Supabase.instance.client
               .from('producto')
               .select('id_producto')
-              .eq('tipo', tipoOriginal)
+              .eq('codigo', codigoOriginal)
               .eq('fecha_vencimiento', fechaVencimientoOriginal)
               .eq('estado', estadoOriginal)
               .limit(cantidad);
@@ -825,45 +864,55 @@ class _InventarioPageState extends State<ProductosScreen> {
   @override
   Widget build(BuildContext context) {
     // Agrupar productos por tipo y rango de vencimiento
-    final Map<String, List<dynamic>> gruposPorTipo = {};
+    final Map<String, List<dynamic>> gruposPorCodigo = {};
 
-    // Primero agrupar todos los productos por tipo y estado
+    // Primero agrupar todos los productos por código y estado
     for (final p in productos) {
-      final tipo = p['tipo'] as String;
+      final codigo = p['codigo']?.toString() ?? 'Sin código';
       final estado = p['estado'] as String? ?? 'Disponible';
-      final clave = '${tipo}_$estado'; // Agrupar por tipo Y estado
-      if (!gruposPorTipo.containsKey(clave)) {
-        gruposPorTipo[clave] = [];
+      final clave = '${codigo}_$estado'; // Agrupar por código Y estado
+      if (!gruposPorCodigo.containsKey(clave)) {
+        gruposPorCodigo[clave] = [];
       }
-      gruposPorTipo[clave]!.add(p);
+      gruposPorCodigo[clave]!.add(p);
     }
 
     // Ahora separar por rangos de vencimiento si hay diferencias > 60 días
     final List<Map<String, dynamic>> productosAgrupados = [];
 
-    for (final tipo in gruposPorTipo.keys) {
-      final productosDelTipo = gruposPorTipo[tipo]!;
+    for (final codigoKey in gruposPorCodigo.keys) {
+      final productosDelCodigo = gruposPorCodigo[codigoKey]!;
 
       // Ordenar por fecha de vencimiento
-      productosDelTipo.sort((a, b) {
-        final fechaA = DateTime.parse(a['fecha_vencimiento'] as String);
-        final fechaB = DateTime.parse(b['fecha_vencimiento'] as String);
+      productosDelCodigo.sort((a, b) {
+        final fechaStrA = a['fecha_vencimiento']?.toString();
+        final fechaStrB = b['fecha_vencimiento']?.toString();
+        final fechaA = fechaStrA != null ? DateTime.tryParse(fechaStrA) : null;
+        final fechaB = fechaStrB != null ? DateTime.tryParse(fechaStrB) : null;
+        if (fechaA == null && fechaB == null) return 0;
+        if (fechaA == null) return 1;
+        if (fechaB == null) return -1;
         return fechaA.compareTo(fechaB);
       });
 
       // Crear grupos por rango de vencimiento
       final List<List<dynamic>> rangosPorVencimiento = [];
-      List<dynamic> grupoActual = [productosDelTipo[0]];
-      DateTime fechaBaseGrupo = DateTime.parse(
-        productosDelTipo[0]['fecha_vencimiento'] as String,
-      );
+      List<dynamic> grupoActual = [productosDelCodigo[0]];
+      final fechaBaseStr = productosDelCodigo[0]['fecha_vencimiento']
+          ?.toString();
+      DateTime? fechaBaseGrupo = fechaBaseStr != null
+          ? DateTime.tryParse(fechaBaseStr)
+          : null;
 
-      for (int i = 1; i < productosDelTipo.length; i++) {
-        final producto = productosDelTipo[i];
-        final fechaProducto = DateTime.parse(
-          producto['fecha_vencimiento'] as String,
-        );
-        final diferenciaDias = fechaProducto.difference(fechaBaseGrupo).inDays;
+      for (int i = 1; i < productosDelCodigo.length; i++) {
+        final producto = productosDelCodigo[i];
+        final fechaProductoStr = producto['fecha_vencimiento']?.toString();
+        final fechaProducto = fechaProductoStr != null
+            ? DateTime.tryParse(fechaProductoStr)
+            : null;
+        final diferenciaDias = (fechaProducto != null && fechaBaseGrupo != null)
+            ? fechaProducto.difference(fechaBaseGrupo).inDays
+            : 0;
 
         if (diferenciaDias <= 60) {
           // Mismo grupo
@@ -881,29 +930,40 @@ class _InventarioPageState extends State<ProductosScreen> {
       for (final grupo in rangosPorVencimiento) {
         final representante = Map<String, dynamic>.from(grupo[0]);
         representante['_stock_grupo'] = grupo.length;
-        representante['_fecha_min'] = grupo
-            .map((p) => DateTime.parse(p['fecha_vencimiento'] as String))
-            .reduce((a, b) => a.isBefore(b) ? a : b);
-        representante['_fecha_max'] = grupo
-            .map((p) => DateTime.parse(p['fecha_vencimiento'] as String))
-            .reduce((a, b) => a.isAfter(b) ? a : b);
+        final fechasValidas = grupo
+            .map((p) {
+              final fStr = p['fecha_vencimiento']?.toString();
+              return fStr != null ? DateTime.tryParse(fStr) : null;
+            })
+            .whereType<DateTime>()
+            .toList();
+        if (fechasValidas.isNotEmpty) {
+          representante['_fecha_min'] = fechasValidas.reduce(
+            (a, b) => a.isBefore(b) ? a : b,
+          );
+          representante['_fecha_max'] = fechasValidas.reduce(
+            (a, b) => a.isAfter(b) ? a : b,
+          );
+        }
         productosAgrupados.add(representante);
       }
     }
 
     // Crear mapa para compatibilidad con filtros
-    final Map<String, dynamic> productosPorTipo = {};
+    final Map<String, dynamic> productosPorCodigo = {};
     for (final p in productosAgrupados) {
       final estado = p['estado'] as String? ?? 'Disponible';
-      final key = '${p['tipo']}_${p['fecha_vencimiento']}_$estado';
-      productosPorTipo[key] = p;
+      final key = '${p['codigo']}_${p['fecha_vencimiento']}_$estado';
+      productosPorCodigo[key] = p;
     }
 
     // Filtrar por búsqueda, presentación
-    var listaFiltrada = productosPorTipo.values.where((p) {
+    var listaFiltrada = productosPorCodigo.values.where((p) {
       final nombre = p['nombre_producto']?.toString() ?? '';
-      final idPres = p['id_presentacion'] as int;
-      final presentacion = presentaciones[idPres]?['descripcion'] ?? '';
+      final idPres = p['id_presentacion'] as int?;
+      final presentacion = idPres != null
+          ? (presentaciones[idPres]?['descripcion'] ?? '')
+          : '';
 
       // Filtro de búsqueda
       final cumpleBusqueda = nombre.toLowerCase().contains(
@@ -922,31 +982,44 @@ class _InventarioPageState extends State<ProductosScreen> {
     listaFiltrada.sort((a, b) {
       switch (ordenarPor) {
         case 'nombre':
-          return (a['nombre_producto'] as String).compareTo(
-            b['nombre_producto'] as String,
-          );
+          final nombreA = a['nombre_producto']?.toString() ?? '';
+          final nombreB = b['nombre_producto']?.toString() ?? '';
+          return nombreA.compareTo(nombreB);
         case 'vencimiento':
-          final fechaA = DateTime.parse(a['fecha_vencimiento'] as String);
-          final fechaB = DateTime.parse(b['fecha_vencimiento'] as String);
+          final fechaStrA = a['fecha_vencimiento']?.toString();
+          final fechaStrB = b['fecha_vencimiento']?.toString();
+          final fechaA = fechaStrA != null
+              ? DateTime.tryParse(fechaStrA)
+              : null;
+          final fechaB = fechaStrB != null
+              ? DateTime.tryParse(fechaStrB)
+              : null;
+          if (fechaA == null && fechaB == null) return 0;
+          if (fechaA == null) return 1;
+          if (fechaB == null) return -1;
           return fechaA.compareTo(fechaB);
         case 'stock':
           final stockA = a['_stock_grupo'] as int? ?? 1;
           final stockB = b['_stock_grupo'] as int? ?? 1;
           return stockB.compareTo(stockA); // Descendente
         case 'agregado_reciente':
-          final fechaA = a['fecha_agregado'] != null
-              ? DateTime.parse(a['fecha_agregado'] as String)
+          final fechaAgregadoA = a['fecha_agregado']?.toString();
+          final fechaAgregadoB = b['fecha_agregado']?.toString();
+          final fechaA = fechaAgregadoA != null
+              ? (DateTime.tryParse(fechaAgregadoA) ?? DateTime(1970))
               : DateTime(1970);
-          final fechaB = b['fecha_agregado'] != null
-              ? DateTime.parse(b['fecha_agregado'] as String)
+          final fechaB = fechaAgregadoB != null
+              ? (DateTime.tryParse(fechaAgregadoB) ?? DateTime(1970))
               : DateTime(1970);
           return fechaB.compareTo(fechaA); // Descendente (más reciente primero)
         case 'agregado_antiguo':
-          final fechaA = a['fecha_agregado'] != null
-              ? DateTime.parse(a['fecha_agregado'] as String)
+          final fechaAgregadoA2 = a['fecha_agregado']?.toString();
+          final fechaAgregadoB2 = b['fecha_agregado']?.toString();
+          final fechaA = fechaAgregadoA2 != null
+              ? (DateTime.tryParse(fechaAgregadoA2) ?? DateTime(1970))
               : DateTime(1970);
-          final fechaB = b['fecha_agregado'] != null
-              ? DateTime.parse(b['fecha_agregado'] as String)
+          final fechaB = fechaAgregadoB2 != null
+              ? (DateTime.tryParse(fechaAgregadoB2) ?? DateTime(1970))
               : DateTime(1970);
           return fechaA.compareTo(fechaB); // Ascendente (más antiguo primero)
         default:
@@ -1106,19 +1179,26 @@ class _InventarioPageState extends State<ProductosScreen> {
                         itemCount: listaFiltrada.length,
                         itemBuilder: (context, index) {
                           final p = listaFiltrada[index];
-                          final nombre = p['nombre_producto'] as String;
-                          final idPres = p['id_presentacion'] as int;
-                          final tipo = p['tipo'] as String;
-                          final medida = p['medida']?.toString() ?? '';
-                          final presentacion =
-                              presentaciones[idPres]?['descripcion'] ?? '—';
-                          final unidad =
-                              presentaciones[idPres]?['unidad_medida'] ?? '';
-                          final fechaStr = p['fecha_vencimiento'] as String;
-                          final fecha = DateTime.parse(fechaStr);
-                          final diasRestantes = fecha
-                              .difference(DateTime.now())
-                              .inDays;
+                          final nombre =
+                              p['nombre_producto']?.toString() ?? 'Sin nombre';
+                          final idPres = p['id_presentacion'] as int?;
+                          final codigo =
+                              p['codigo']?.toString() ?? 'Sin código';
+                          final cantidad = p['cantidad']?.toString() ?? '';
+                          final idUnidad = p['id_unidad_medida'] as int?;
+                          final presentacion = idPres != null
+                              ? (presentaciones[idPres]?['descripcion'] ?? '—')
+                              : '—';
+                          final abreviatura = idUnidad != null
+                              ? (unidadesMedida[idUnidad]?['abreviatura'] ?? '')
+                              : '';
+                          final fechaStr = p['fecha_vencimiento']?.toString();
+                          final fecha = fechaStr != null
+                              ? DateTime.tryParse(fechaStr)
+                              : null;
+                          final diasRestantes = fecha != null
+                              ? fecha.difference(DateTime.now()).inDays
+                              : 0;
 
                           // Usar el stock del grupo si existe, sino usar el stock por tipo
                           final stockGrupo = p['_stock_grupo'] as int? ?? 1;
@@ -1129,7 +1209,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                           final precioVenta = p['precio_venta'] as num?;
 
                           return Card(
-                            color: diasRestantes < 60
+                            color: (fecha != null && diasRestantes < 60)
                                 ? (themeProvider.isDarkMode
                                       ? Colors.orange[900]?.withOpacity(0.4)
                                       : Colors.orange[100])
@@ -1146,9 +1226,9 @@ class _InventarioPageState extends State<ProductosScreen> {
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('$presentacion • $tipo'),
+                                  Text('$presentacion • $codigo'),
                                   Text(
-                                    'Medida: $medida $unidad • Stock: $stockGrupo',
+                                    'Cantidad: $cantidad $abreviatura • Stock: $stockGrupo',
                                   ),
                                   Row(
                                     children: [
@@ -1228,16 +1308,22 @@ class _InventarioPageState extends State<ProductosScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
                                       Text(
-                                        'Vence: ${fecha.toIso8601String().split('T').first}',
+                                        fecha != null
+                                            ? 'Vence: ${fecha.toIso8601String().split('T').first}'
+                                            : 'Vence: Sin fecha',
                                         style: const TextStyle(fontSize: 12),
                                       ),
                                       Text(
-                                        diasRestantes < 60
-                                            ? '⚠️ $diasRestantes días'
-                                            : '$diasRestantes días',
+                                        fecha == null
+                                            ? 'Sin fecha'
+                                            : (diasRestantes < 60
+                                                  ? '⚠️ $diasRestantes días'
+                                                  : '$diasRestantes días'),
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color: diasRestantes < 30
+                                          color:
+                                              (fecha != null &&
+                                                  diasRestantes < 30)
                                               ? Colors.red
                                               : Colors.grey,
                                         ),

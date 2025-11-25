@@ -168,7 +168,7 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
             children: [
               const SizedBox(height: 4),
               Text(
-                '${producto.tipo} • ${producto.medida}',
+                '${producto.codigo} • ${producto.cantidad.toString()}',
                 style: const TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 2),

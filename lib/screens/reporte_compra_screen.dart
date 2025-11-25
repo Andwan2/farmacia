@@ -248,15 +248,15 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
       for (final p in productos) {
         final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
         final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
-        final tipo = prod['tipo']?.toString() ?? 'N/A';
+        final codigo = prod['codigo']?.toString() ?? 'N/A';
         final precioCompra = (p['precio_compra'] as num?)?.toDouble();
 
-        final key = '$nombre|$tipo|$precioCompra';
+        final key = '$nombre|$codigo|$precioCompra';
 
         if (!productosAgrupados.containsKey(key)) {
           productosAgrupados[key] = {
             'nombre': nombre,
-            'tipo': tipo,
+            'codigo': codigo,
             'precio_compra': precioCompra,
             'cantidad': 1,
           };
@@ -294,7 +294,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
               pw.Table.fromTextArray(
                 headers: const [
                   'Producto',
-                  'Tipo',
+                  'Código',
                   'Cant.',
                   'P. Compra',
                   'Total',
@@ -306,7 +306,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
 
                   return [
                     p['nombre']?.toString() ?? 'N/A',
-                    p['tipo']?.toString() ?? 'N/A',
+                    p['codigo']?.toString() ?? 'N/A',
                     cantidad.toString(),
                     'C\$${precioCompra.toStringAsFixed(2)}',
                     'C\$${total.toStringAsFixed(2)}',
@@ -677,16 +677,16 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
     for (final p in productos) {
       final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
       final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
-      final tipo = prod['tipo']?.toString() ?? 'N/A';
+      final codigo = prod['codigo']?.toString() ?? 'N/A';
       final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
       final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
 
-      final key = '$nombre|$tipo|$precioCompra|$precioVenta';
+      final key = '$nombre|$codigo|$precioCompra|$precioVenta';
 
       if (!productosAgrupados.containsKey(key)) {
         productosAgrupados[key] = {
           'nombre': nombre,
-          'tipo': tipo,
+          'codigo': codigo,
           'precio_compra': precioCompra,
           'precio_venta': precioVenta,
           'cantidad': 1,
@@ -756,7 +756,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${p['nombre']} (${p['tipo']}) - Cant: $cantidad',
+                            '${p['nombre']} (${p['codigo']}) - Cant: $cantidad',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 13,

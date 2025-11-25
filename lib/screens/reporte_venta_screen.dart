@@ -200,16 +200,16 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
       for (final p in productos) {
         final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
         final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
-        final tipo = prod['tipo']?.toString() ?? 'N/A';
+        final codigo = prod['codigo']?.toString() ?? 'N/A';
         final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
         final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
 
-        final key = '$nombre|$tipo|$precioVenta|$precioCompra';
+        final key = '$nombre|$codigo|$precioVenta|$precioCompra';
 
         if (!productosAgrupados.containsKey(key)) {
           productosAgrupados[key] = {
             'nombre': nombre,
-            'tipo': tipo,
+            'codigo': codigo,
             'precio_venta': precioVenta,
             'precio_compra': precioCompra,
             'cantidad': 1,
@@ -255,7 +255,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
               pw.Table.fromTextArray(
                 headers: const [
                   'Producto',
-                  'Tipo',
+                  'Código',
                   'Cant.',
                   'P. Compra',
                   'P. Venta',
@@ -271,7 +271,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
 
                   return [
                     p['nombre']?.toString() ?? 'N/A',
-                    p['tipo']?.toString() ?? 'N/A',
+                    p['codigo']?.toString() ?? 'N/A',
                     cantidad.toString(),
                     'C\$${precioCompra.toStringAsFixed(2)}',
                     'C\$${precioVenta.toStringAsFixed(2)}',
@@ -691,16 +691,16 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     for (final p in productos) {
       final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
       final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
-      final tipo = prod['tipo']?.toString() ?? 'N/A';
+      final codigo = prod['codigo']?.toString() ?? 'N/A';
       final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
       final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
 
-      final key = '$nombre|$tipo|$precioVenta|$precioCompra';
+      final key = '$nombre|$codigo|$precioVenta|$precioCompra';
 
       if (!productosAgrupados.containsKey(key)) {
         productosAgrupados[key] = {
           'nombre': nombre,
-          'tipo': tipo,
+          'codigo': codigo,
           'precio_venta': precioVenta,
           'precio_compra': precioCompra,
           'cantidad': 1,
@@ -770,7 +770,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${p['nombre']} (${p['tipo']}) - Cant: $cantidad',
+                            '${p['nombre']} (${p['codigo']}) - Cant: $cantidad',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
