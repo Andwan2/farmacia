@@ -1065,7 +1065,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                       horizontal: 20,
                       vertical: 14,
                     ),
-                    backgroundColor: Colors.green,
+                    backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
                     minimumSize: const Size(double.infinity, 48),
                   ),

@@ -8,9 +8,9 @@ import 'package:abari/providers/theme_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
-    url: 'https://bezhfrzxsvglxcftwxsj.supabase.co',
+    url: 'https://gtrviyxzjghufruilesy.supabase.co',
     anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlemhmcnp4c3ZnbHhjZnR3eHNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MjM3OTQsImV4cCI6MjA3OTA5OTc5NH0.A1O7KFRTonnbapM2zP5T_V6zfyzIv4-4C_T273v1vW0',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0cnZpeXh6amdodWZydWlsZXN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3MTI4NDcsImV4cCI6MjA3OTI4ODg0N30.5L9LnZt6twnaMj2D_QNlZ75aitA9qrlS6YEsDFClbuo',
   );
   runApp(
     ChangeNotifierProvider(
