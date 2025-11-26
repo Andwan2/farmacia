@@ -18,12 +18,14 @@ class _InventarioPageState extends State<ProductosScreen> {
   Map<int, Map<String, dynamic>> unidadesMedida =
       {}; // id -> {nombre, abreviatura}
   Map<String, int> stockPorTipo = {};
+  List<String> categorias = []; // Lista de categorías únicas
   String busqueda = '';
   bool cargando = true;
   bool mostrarEliminados = false;
 
   // Filtros
   List<String> filtrosPresentacion = []; // Múltiples presentaciones
+  List<String> filtrosCategorias = []; // Múltiples categorías
   String ordenarPor =
       'nombre'; // nombre, precio_venta, precio_compra, vencimiento
 
@@ -31,6 +33,7 @@ class _InventarioPageState extends State<ProductosScreen> {
   int get filtrosActivos {
     int count = 0;
     count += filtrosPresentacion.length;
+    count += filtrosCategorias.length;
     if (ordenarPor != 'nombre') count++;
     return count;
   }
@@ -57,6 +60,7 @@ class _InventarioPageState extends State<ProductosScreen> {
   void _mostrarFiltros(BuildContext context) {
     // Variables temporales para los filtros
     List<String> tempFiltrosPresentacion = List.from(filtrosPresentacion);
+    List<String> tempFiltrosCategorias = List.from(filtrosCategorias);
     String tempOrdenarPor = ordenarPor;
 
     showModalBottomSheet(
@@ -105,6 +109,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                         onPressed: () {
                           setModalState(() {
                             tempFiltrosPresentacion.clear();
+                            tempFiltrosCategorias.clear();
                             tempOrdenarPor = 'nombre';
                           });
                         },
@@ -121,6 +126,47 @@ class _InventarioPageState extends State<ProductosScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Filtro por Categoría (múltiple)
+                        if (categorias.isNotEmpty) ...[
+                          const Text(
+                            'Categoría',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: categorias.map((cat) {
+                              final isSelected = tempFiltrosCategorias.contains(
+                                cat,
+                              );
+                              return FilterChip(
+                                label: Text(cat),
+                                selected: isSelected,
+                                onSelected: (selected) {
+                                  setModalState(() {
+                                    if (selected) {
+                                      tempFiltrosCategorias.add(cat);
+                                    } else {
+                                      tempFiltrosCategorias.remove(cat);
+                                    }
+                                  });
+                                },
+                                selectedColor: Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
+                                checkmarkColor: Theme.of(
+                                  context,
+                                ).colorScheme.secondary,
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+
                         // Filtro por Presentación (múltiple)
                         const Text(
                           'Presentación',
@@ -270,6 +316,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                                   setState(() {
                                     filtrosPresentacion =
                                         tempFiltrosPresentacion;
+                                    filtrosCategorias = tempFiltrosCategorias;
                                     ordenarPor = tempOrdenarPor;
                                   });
                                   Navigator.pop(context);
@@ -376,11 +423,22 @@ class _InventarioPageState extends State<ProductosScreen> {
         stock[codigo] = (stock[codigo] ?? 0) + 1;
       }
 
+      // 5) Extraer categorías únicas
+      final Set<String> categoriasSet = {};
+      for (final item in dataProd) {
+        final cat = item['categoria']?.toString();
+        if (cat != null && cat.isNotEmpty) {
+          categoriasSet.add(cat);
+        }
+      }
+      final categoriasLista = categoriasSet.toList()..sort();
+
       setState(() {
         productos = dataProd;
         presentaciones = presMap;
         unidadesMedida = unidadesMap;
         stockPorTipo = stock;
+        categorias = categoriasLista;
         cargando = false;
       });
     } catch (e) {
@@ -861,6 +919,37 @@ class _InventarioPageState extends State<ProductosScreen> {
     );
   }
 
+  Widget _buildBadge({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDark ? 0.2 : 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Agrupar productos por tipo y rango de vencimiento
@@ -957,13 +1046,14 @@ class _InventarioPageState extends State<ProductosScreen> {
       productosPorCodigo[key] = p;
     }
 
-    // Filtrar por búsqueda, presentación
+    // Filtrar por búsqueda, presentación y categoría
     var listaFiltrada = productosPorCodigo.values.where((p) {
       final nombre = p['nombre_producto']?.toString() ?? '';
       final idPres = p['id_presentacion'] as int?;
       final presentacion = idPres != null
           ? (presentaciones[idPres]?['descripcion'] ?? '')
           : '';
+      final categoria = p['categoria']?.toString() ?? '';
 
       // Filtro de búsqueda
       final cumpleBusqueda = nombre.toLowerCase().contains(
@@ -975,7 +1065,11 @@ class _InventarioPageState extends State<ProductosScreen> {
           filtrosPresentacion.isEmpty ||
           filtrosPresentacion.contains(presentacion);
 
-      return cumpleBusqueda && cumplePresentacion;
+      // Filtro de categoría
+      final cumpleCategoria =
+          filtrosCategorias.isEmpty || filtrosCategorias.contains(categoria);
+
+      return cumpleBusqueda && cumplePresentacion && cumpleCategoria;
     }).toList();
 
     // Ordenar
@@ -1098,12 +1192,27 @@ class _InventarioPageState extends State<ProductosScreen> {
                 ),
                 // Chips de filtros activos
                 if (filtrosPresentacion.isNotEmpty ||
+                    filtrosCategorias.isNotEmpty ||
                     ordenarPor != 'nombre') ...[
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
+                      ...filtrosCategorias.map(
+                        (cat) => Chip(
+                          label: Text(cat),
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.secondaryContainer,
+                          onDeleted: () {
+                            setState(() {
+                              filtrosCategorias.remove(cat);
+                            });
+                          },
+                          deleteIcon: const Icon(Icons.close, size: 18),
+                        ),
+                      ),
                       ...filtrosPresentacion.map(
                         (pres) => Chip(
                           label: Text(pres),
@@ -1169,188 +1278,85 @@ class _InventarioPageState extends State<ProductosScreen> {
               ],
             ),
           ),
-          // Lista de productos
+          // Lista de productos agrupados por categoría
           Expanded(
             child: cargando
                 ? const Center(child: CircularProgressIndicator())
                 : Consumer<ThemeProvider>(
                     builder: (context, themeProvider, child) {
+                      final colorScheme = Theme.of(context).colorScheme;
+                      final isDark = themeProvider.isDarkMode;
+
+                      // Agrupar por categoría
+                      final Map<String, List<dynamic>> porCategoria = {};
+                      for (final p in listaFiltrada) {
+                        final cat =
+                            p['categoria']?.toString() ?? 'Sin categoría';
+                        porCategoria.putIfAbsent(cat, () => []).add(p);
+                      }
+                      final categoriasOrdenadas = porCategoria.keys.toList()
+                        ..sort();
+
                       return ListView.builder(
-                        itemCount: listaFiltrada.length,
-                        itemBuilder: (context, index) {
-                          final p = listaFiltrada[index];
-                          final nombre =
-                              p['nombre_producto']?.toString() ?? 'Sin nombre';
-                          final idPres = p['id_presentacion'] as int?;
-                          final codigo =
-                              p['codigo']?.toString() ?? 'Sin código';
-                          final cantidad = p['cantidad']?.toString() ?? '';
-                          final idUnidad = p['id_unidad_medida'] as int?;
-                          final presentacion = idPres != null
-                              ? (presentaciones[idPres]?['descripcion'] ?? '—')
-                              : '—';
-                          final abreviatura = idUnidad != null
-                              ? (unidadesMedida[idUnidad]?['abreviatura'] ?? '')
-                              : '';
-                          final fechaStr = p['fecha_vencimiento']?.toString();
-                          final fecha = fechaStr != null
-                              ? DateTime.tryParse(fechaStr)
-                              : null;
-                          final diasRestantes = fecha != null
-                              ? fecha.difference(DateTime.now()).inDays
-                              : 0;
+                        padding: const EdgeInsets.only(bottom: 16),
+                        itemCount: categoriasOrdenadas.length,
+                        itemBuilder: (context, catIndex) {
+                          final categoria = categoriasOrdenadas[catIndex];
+                          final productosCategoria = porCategoria[categoria]!;
 
-                          // Usar el stock del grupo si existe, sino usar el stock por tipo
-                          final stockGrupo = p['_stock_grupo'] as int? ?? 1;
-                          final fechaMin = p['_fecha_min'] as DateTime?;
-                          final fechaMax = p['_fecha_max'] as DateTime?;
-                          final estado = p['estado'] as String?;
-                          final precioCompra = p['precio_compra'] as num?;
-                          final precioVenta = p['precio_venta'] as num?;
-
-                          return Card(
-                            color: (fecha != null && diasRestantes < 60)
-                                ? (themeProvider.isDarkMode
-                                      ? Colors.orange[900]?.withOpacity(0.4)
-                                      : Colors.orange[100])
-                                : null,
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            child: ListTile(
-                              title: Text(
-                                nombre,
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('$presentacion • $codigo'),
-                                  Text(
-                                    'Cantidad: $cantidad $abreviatura • Stock: $stockGrupo',
-                                  ),
-                                  Row(
-                                    children: [
-                                      if (precioCompra != null)
-                                        Text(
-                                          'Compra: C\$ ${precioCompra.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.blue[700],
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      if (precioCompra != null &&
-                                          precioVenta != null)
-                                        const Text(
-                                          ' • ',
-                                          style: TextStyle(fontSize: 12),
-                                        ),
-                                      if (precioVenta != null)
-                                        Text(
-                                          'Venta: C\$ ${precioVenta.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.green[700],
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  if (mostrarEliminados && estado != null)
-                                    Container(
-                                      margin: const EdgeInsets.only(top: 4),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: estado == 'Vendido'
-                                            ? Colors.green.withOpacity(0.2)
-                                            : Colors.red.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: estado == 'Vendido'
-                                              ? Colors.green
-                                              : Colors.red,
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'Estado: $estado',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: estado == 'Vendido'
-                                              ? Colors.green[800]
-                                              : Colors.red[800],
-                                        ),
-                                      ),
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Separador de categoría
+                              Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.secondaryContainer
+                                      .withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.category,
+                                      size: 18,
+                                      color: colorScheme.secondary,
                                     ),
-                                  if (fechaMin != null &&
-                                      fechaMax != null &&
-                                      fechaMin != fechaMax)
-                                    Text(
-                                      'Rango de vencimiento: ${fechaMin.toIso8601String().split('T').first} - ${fechaMax.toIso8601String().split('T').first}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        fecha != null
-                                            ? 'Vence: ${fecha.toIso8601String().split('T').first}'
-                                            : 'Vence: Sin fecha',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                      Text(
-                                        fecha == null
-                                            ? 'Sin fecha'
-                                            : (diasRestantes < 60
-                                                  ? '⚠️ $diasRestantes días'
-                                                  : '$diasRestantes días'),
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color:
-                                              (fecha != null &&
-                                                  diasRestantes < 30)
-                                              ? Colors.red
-                                              : Colors.grey,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (!mostrarEliminados) ...[
                                     const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () async {
-                                        await mostrarEditarProducto(
-                                          context,
-                                          p,
-                                          cargarDatos,
-                                        );
-                                      },
+                                    Text(
+                                      categoria,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: colorScheme.secondary,
+                                      ),
                                     ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete),
-                                      onPressed: () =>
-                                          eliminarProducto(context, p),
+                                    const Spacer(),
+                                    Text(
+                                      '${productosCategoria.length} items',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: colorScheme.onSecondaryContainer,
+                                      ),
                                     ),
                                   ],
-                                ],
+                                ),
                               ),
-                            ),
+                              // Productos de esta categoría
+                              ...productosCategoria.map(
+                                (p) => _buildProductoCard(
+                                  context,
+                                  p,
+                                  colorScheme,
+                                  isDark,
+                                ),
+                              ),
+                            ],
                           );
                         },
                       );
@@ -1359,6 +1365,318 @@ class _InventarioPageState extends State<ProductosScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildProductoCard(
+    BuildContext context,
+    dynamic p,
+    ColorScheme colorScheme,
+    bool isDark,
+  ) {
+    final nombre = p['nombre_producto']?.toString() ?? 'Sin nombre';
+    final idPres = p['id_presentacion'] as int?;
+    final codigo = p['codigo']?.toString() ?? 'Sin código';
+    final cantidad = p['cantidad']?.toString() ?? '';
+    final idUnidad = p['id_unidad_medida'] as int?;
+    final presentacion = idPres != null
+        ? (presentaciones[idPres]?['descripcion'] ?? '')
+        : '';
+    final abreviatura = idUnidad != null
+        ? (unidadesMedida[idUnidad]?['abreviatura'] ?? '')
+        : '';
+    final fechaStr = p['fecha_vencimiento']?.toString();
+    final fecha = fechaStr != null ? DateTime.tryParse(fechaStr) : null;
+    final diasRestantes = fecha != null
+        ? fecha.difference(DateTime.now()).inDays
+        : 0;
+    final stockGrupo = p['_stock_grupo'] as int? ?? 1;
+    final estado = p['estado'] as String?;
+    final precioCompra = p['precio_compra'] as num?;
+    final precioVenta = p['precio_venta'] as num?;
+
+    // Construir descripción de presentación compacta
+    final presentacionCompleta = [
+      if (presentacion.isNotEmpty) presentacion,
+      if (cantidad.isNotEmpty) cantidad,
+      if (abreviatura.isNotEmpty) abreviatura,
+    ].join(' ');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: (fecha != null && diasRestantes < 30)
+              ? Colors.red.withOpacity(0.5)
+              : (fecha != null && diasRestantes < 60)
+              ? Colors.orange.withOpacity(0.5)
+              : colorScheme.outlineVariant,
+          width: (fecha != null && diasRestantes < 60) ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Fila 1: Nombre + Precio
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  nombre,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Badge de Stock (estilo similar a Precio)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: stockGrupo > 5
+                      ? Colors.blue[600]
+                      : stockGrupo > 0
+                      ? Colors.orange[600]
+                      : Colors.red[600],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'Stock',
+                      style: TextStyle(fontSize: 9, color: Colors.white70),
+                    ),
+                    Text(
+                      '$stockGrupo',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Badge de Precio
+              if (precioVenta != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green[600],
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Precio',
+                        style: TextStyle(fontSize: 9, color: Colors.green[100]),
+                      ),
+                      Text(
+                        'C\$${precioVenta.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // Fila 2: Presentación
+          if (presentacionCompleta.isNotEmpty)
+            Row(
+              children: [
+                Icon(
+                  Icons.inventory_2_outlined,
+                  size: 14,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    presentacionCompleta,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+
+          // Fila 2.5: Código del producto
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(
+                Icons.qr_code,
+                size: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  'Código: $codigo',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurfaceVariant,
+                    fontFamily: 'monospace',
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+
+          // Fila 3: Precio compra (si existe) + Estado (si eliminado)
+          if (precioCompra != null ||
+              (mostrarEliminados && estado != null)) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (precioCompra != null) ...[
+                  Icon(
+                    Icons.shopping_cart_outlined,
+                    size: 12,
+                    color: Colors.blue[600],
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Costo: C\$${precioCompra.toStringAsFixed(2)}',
+                    style: TextStyle(fontSize: 11, color: Colors.blue[600]),
+                  ),
+                ],
+                const Spacer(),
+                if (mostrarEliminados && estado != null)
+                  _buildBadge(
+                    icon: estado == 'Vendido'
+                        ? Icons.sell
+                        : Icons.delete_outline,
+                    label: estado,
+                    color: estado == 'Vendido' ? Colors.green : Colors.red,
+                    isDark: isDark,
+                  ),
+              ],
+            ),
+          ],
+
+          // Fila 4 (Footer): Vencimiento + Acciones
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // Vencimiento
+              if (fecha != null)
+                Expanded(
+                  child: _buildVencimientoCompacto(
+                    fecha,
+                    diasRestantes,
+                    isDark,
+                  ),
+                )
+              else
+                const Expanded(child: SizedBox()),
+
+              // Acciones
+              if (!mostrarEliminados) ...[
+                InkWell(
+                  onTap: () async {
+                    await mostrarEditarProducto(context, p, cargarDatos);
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(
+                      Icons.edit_outlined,
+                      size: 20,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: () => eliminarProducto(context, p),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(
+                      Icons.delete_outline,
+                      size: 20,
+                      color: colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVencimientoCompacto(
+    DateTime fecha,
+    int diasRestantes,
+    bool isDark,
+  ) {
+    Color color;
+    String texto;
+    IconData icon;
+
+    if (diasRestantes < 0) {
+      color = Colors.red;
+      icon = Icons.warning;
+      texto = 'Vencido hace ${-diasRestantes}d';
+    } else if (diasRestantes == 0) {
+      color = Colors.red;
+      icon = Icons.warning;
+      texto = 'Vence hoy';
+    } else if (diasRestantes <= 30) {
+      color = Colors.red;
+      icon = Icons.schedule;
+      texto = '${fecha.day}/${fecha.month}/${fecha.year} ($diasRestantes días)';
+    } else if (diasRestantes <= 60) {
+      color = Colors.orange;
+      icon = Icons.schedule;
+      texto = '${fecha.day}/${fecha.month}/${fecha.year} ($diasRestantes días)';
+    } else {
+      color = Colors.grey;
+      icon = Icons.event;
+      texto = '${fecha.day}/${fecha.month}/${fecha.year} ($diasRestantes días)';
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            texto,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

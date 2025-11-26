@@ -32,6 +32,21 @@ Future<void> mostrarAgregarProducto(
   int? presentacionSeleccionada;
   int? unidadMedidaSeleccionada;
   bool sinFechaVencimiento = false;
+  String? categoriaSeleccionada;
+
+  // Cargar categorías existentes
+  final categoriasResponse = await Supabase.instance.client
+      .from('producto')
+      .select('categoria')
+      .not('categoria', 'is', null);
+  final Set<String> categoriasSet = {};
+  for (final item in (categoriasResponse as List)) {
+    final cat = item['categoria']?.toString();
+    if (cat != null && cat.isNotEmpty) {
+      categoriasSet.add(cat);
+    }
+  }
+  List<String> listaCategorias = categoriasSet.toList()..sort();
 
   // Función para agregar nueva presentación
   Future<void> agregarNuevaPresentacion(
@@ -367,14 +382,70 @@ Future<void> mostrarAgregarProducto(
                             ),
                           ),
                           const SizedBox(height: 12),
-                          TextField(
-                            controller: nombreController,
-                            decoration: const InputDecoration(
-                              labelText: 'Nombre del producto *',
-                              border: OutlineInputBorder(),
-                              hintText: 'Ej: Arroz, Frijoles, Aceite',
-                            ),
-                            onChanged: (_) => setState(() {}),
+                          // Nombre y Categoría en una fila
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: TextField(
+                                  controller: nombreController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Nombre del producto *',
+                                    border: OutlineInputBorder(),
+                                    hintText: 'Ej: Arroz, Frijoles',
+                                  ),
+                                  onChanged: (_) => setState(() {}),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 2,
+                                child: Autocomplete<String>(
+                                  optionsBuilder:
+                                      (TextEditingValue textEditingValue) {
+                                        if (textEditingValue.text.isEmpty) {
+                                          return listaCategorias;
+                                        }
+                                        return listaCategorias.where(
+                                          (cat) => cat.toLowerCase().contains(
+                                            textEditingValue.text.toLowerCase(),
+                                          ),
+                                        );
+                                      },
+                                  onSelected: (String selection) {
+                                    setState(() {
+                                      categoriaSeleccionada = selection;
+                                    });
+                                  },
+                                  fieldViewBuilder:
+                                      (
+                                        context,
+                                        controller,
+                                        focusNode,
+                                        onFieldSubmitted,
+                                      ) {
+                                        return TextField(
+                                          controller: controller,
+                                          focusNode: focusNode,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Categoría',
+                                            border: OutlineInputBorder(),
+                                            hintText: 'Ej: Bebidas',
+                                          ),
+                                          onChanged: (value) {
+                                            setState(() {
+                                              categoriaSeleccionada =
+                                                  value.isNotEmpty
+                                                  ? value
+                                                  : null;
+                                            });
+                                          },
+                                        );
+                                      },
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 10),
                           Row(
@@ -909,8 +980,7 @@ Future<void> mostrarAgregarProducto(
                               };
 
                               // Agregar fecha_vencimiento solo si tiene valor
-                              if (!sinFechaVencimiento &&
-                                  fechaVencimiento.isNotEmpty) {
+                              if (fechaVencimiento.isNotEmpty) {
                                 datosBase['fecha_vencimiento'] =
                                     fechaVencimiento;
                               }
@@ -932,6 +1002,12 @@ Future<void> mostrarAgregarProducto(
                                   fechaAgregadoController.text.isNotEmpty) {
                                 datosBase['fecha_agregado'] =
                                     fechaAgregadoController.text;
+                              }
+
+                              // Agregar categoría si se seleccionó
+                              if (categoriaSeleccionada != null &&
+                                  categoriaSeleccionada!.isNotEmpty) {
+                                datosBase['categoria'] = categoriaSeleccionada;
                               }
 
                               // Insertar productos según el stock
