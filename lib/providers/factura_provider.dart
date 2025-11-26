@@ -200,13 +200,13 @@ class FacturaProvider extends ChangeNotifier {
 
   void limpiarFactura() {
     _fecha = DateTime.now();
-    _metodoPago = '';
-    _metodoPagoId = null;
+    //_metodoPago = '';
+    //_metodoPagoId = null;
     _cliente = '';
     _clienteId = null;
     _telefonoClienteNuevo = null;
-    _empleado = '';
-    _empleadoId = null;
+    // _empleado = '';
+    // _empleadoId = null;
     _productos.clear();
     _formKey++; // Incrementar key para forzar reconstrucción
     notifyListeners();
