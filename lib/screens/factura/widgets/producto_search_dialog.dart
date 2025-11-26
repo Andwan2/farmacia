@@ -241,12 +241,12 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                     decoration: BoxDecoration(
                       color: stockDisponible > 5
                           ? Colors.green[50]
-                          : Colors.orange[50],
+                          : const Color.fromARGB(255, 250, 249, 249),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
                         color: stockDisponible > 5
                             ? Colors.green[300]!
-                            : Colors.orange[300]!,
+                            : const Color.fromARGB(255, 237, 146, 20)!,
                       ),
                     ),
                     child: Text(
@@ -256,7 +256,7 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                         fontWeight: FontWeight.w600,
                         color: stockDisponible > 5
                             ? Colors.green[700]
-                            : Colors.orange[700],
+                            : const Color.fromARGB(255, 245, 0, 0),
                       ),
                     ),
                   ),
@@ -388,12 +388,17 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                         decoration: BoxDecoration(
                           color: stockDisponible > 5
                               ? Colors.green.withOpacity(0.1)
-                              : Colors.orange.withOpacity(0.1),
+                              : const Color.fromARGB(
+                                  255,
+                                  255,
+                                  251,
+                                  0,
+                                ).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: stockDisponible > 5
                                 ? Colors.green
-                                : Colors.orange,
+                                : const Color.fromARGB(255, 255, 0, 0),
                           ),
                         ),
                         child: Text(
@@ -402,7 +407,7 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                             fontWeight: FontWeight.w600,
                             color: stockDisponible > 5
                                 ? Colors.green[700]
-                                : Colors.orange[700],
+                                : const Color.fromARGB(255, 249, 6, 6),
                           ),
                         ),
                       ),
