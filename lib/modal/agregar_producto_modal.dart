@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> mostrarAgregarProducto(
@@ -197,8 +198,10 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
       default:
         mensaje = 'Completa los campos requeridos';
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje), backgroundColor: Colors.orange),
+    Fluttertoast.showToast(
+      msg: mensaje,
+      backgroundColor: Colors.orange,
+      toastLength: Toast.LENGTH_SHORT,
     );
   }
 
@@ -233,10 +236,9 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
             onPressed: () {
               final descripcion = descripcionController.text.trim();
               if (descripcion.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('La descripción es obligatoria'),
-                  ),
+                Fluttertoast.showToast(
+                  msg: 'Descripción requerida',
+                  backgroundColor: Colors.orange,
                 );
                 return;
               }
@@ -267,17 +269,16 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
         });
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Presentación "$resultado" agregada'),
-              backgroundColor: Colors.green,
-            ),
+          Fluttertoast.showToast(
+            msg: 'Presentación agregada',
+            backgroundColor: Colors.green,
           );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          Fluttertoast.showToast(
+            msg: 'Error al guardar',
+            backgroundColor: Colors.red,
           );
         }
       }
@@ -330,10 +331,9 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
               final nombre = nombreCtrl.text.trim();
               final abreviatura = abreviaturaCtrl.text.trim();
               if (nombre.isEmpty || abreviatura.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Todos los campos son obligatorios'),
-                  ),
+                Fluttertoast.showToast(
+                  msg: 'Campos requeridos',
+                  backgroundColor: Colors.orange,
                 );
                 return;
               }
@@ -370,17 +370,16 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
         });
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Unidad "${resultado['nombre']}" agregada'),
-              backgroundColor: Colors.green,
-            ),
+          Fluttertoast.showToast(
+            msg: 'Unidad agregada',
+            backgroundColor: Colors.green,
           );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          Fluttertoast.showToast(
+            msg: 'Error al guardar',
+            backgroundColor: Colors.red,
           );
         }
       }
@@ -426,18 +425,17 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
 
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$stock producto(s) agregado(s)'),
-            backgroundColor: Colors.green,
-          ),
+        Fluttertoast.showToast(
+          msg: '$stock producto(s) agregado(s)',
+          backgroundColor: Colors.green,
         );
         widget.onSuccess();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        Fluttertoast.showToast(
+          msg: 'Error al agregar',
+          backgroundColor: Colors.red,
         );
       }
     }
