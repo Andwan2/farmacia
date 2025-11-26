@@ -8,6 +8,7 @@ class ProductoFactura {
   final String medida;
   final String fechaVencimiento;
   final double precio;
+  final int stockMaximo; // Stock total disponible en BD
 
   ProductoFactura({
     required this.idProducto,
@@ -17,24 +18,25 @@ class ProductoFactura {
     required this.medida,
     required this.fechaVencimiento,
     required this.precio,
+    this.stockMaximo = 0,
   });
 }
 
 class InvoiceTable extends StatelessWidget {
   final List<ProductoFactura> productos;
-  final Function(int)? onDelete;
+  final Function(int index, int nuevaCantidad)? onCantidadChanged;
 
   const InvoiceTable({
     super.key,
     required this.productos,
-    this.onDelete,
+    this.onCantidadChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 800;
-    
+
     if (isMobile) {
       return _buildMobileView(context);
     }
@@ -43,7 +45,7 @@ class InvoiceTable extends StatelessWidget {
 
   Widget _buildMobileView(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     if (productos.isEmpty) {
       return _buildEmptyState(context);
     }
@@ -53,7 +55,7 @@ class InvoiceTable extends StatelessWidget {
         final index = entry.key;
         final producto = entry.value;
         return GestureDetector(
-          onTap: () => _showProductoDetails(context, producto),
+          onTap: () => _showProductoDetails(context, producto, index),
           child: Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
@@ -85,20 +87,19 @@ class InvoiceTable extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
+                      if (producto.stockMaximo > 0)
+                        Text(
+                          'Stock: ${producto.stockMaximo}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                     ],
                   ),
                 ),
-                // Icono de ver más
-                Icon(
-                  Icons.chevron_right,
-                  color: Colors.grey[400],
-                ),
-                const SizedBox(width: 8),
-                // Botón eliminar
-                IconButton(
-                  icon: Icon(Icons.delete_outline, color: colorScheme.error),
-                  onPressed: onDelete != null ? () => onDelete!(index) : null,
-                ),
+                // Controles de cantidad
+                _buildCantidadControls(context, producto, index),
               ],
             ),
           ),
@@ -107,9 +108,75 @@ class InvoiceTable extends StatelessWidget {
     );
   }
 
-  void _showProductoDetails(BuildContext context, ProductoFactura producto) {
+  Widget _buildCantidadControls(
+    BuildContext context,
+    ProductoFactura producto,
+    int index,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Botón decrementar
+        IconButton(
+          icon: Icon(
+            Icons.remove_circle_outline,
+            color: producto.cantidad > 1
+                ? colorScheme.error
+                : colorScheme.outline,
+          ),
+          onPressed: producto.cantidad > 1
+              ? () => onCantidadChanged?.call(index, producto.cantidad - 1)
+              : null,
+          tooltip: producto.cantidad > 1
+              ? 'Reducir cantidad'
+              : 'Cantidad mínima',
+          iconSize: 28,
+        ),
+        // Cantidad actual
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '${producto.cantidad}',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: colorScheme.onSurface,
+            ),
+          ),
+        ),
+        // Botón incrementar
+        IconButton(
+          icon: Icon(
+            Icons.add_circle_outline,
+            color: producto.cantidad < producto.stockMaximo
+                ? colorScheme.primary
+                : colorScheme.outline,
+          ),
+          onPressed: producto.cantidad < producto.stockMaximo
+              ? () => onCantidadChanged?.call(index, producto.cantidad + 1)
+              : null,
+          tooltip: producto.cantidad < producto.stockMaximo
+              ? 'Aumentar cantidad'
+              : 'Stock máximo alcanzado',
+          iconSize: 28,
+        ),
+      ],
+    );
+  }
+
+  void _showProductoDetails(
+    BuildContext context,
+    ProductoFactura producto,
+    int index,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -130,13 +197,13 @@ class InvoiceTable extends StatelessWidget {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.grey[300],
+                      color: colorScheme.outlineVariant,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Título
                 Text(
                   producto.nombre,
@@ -146,27 +213,37 @@ class InvoiceTable extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Detalles
-                _buildDetailRow('Cantidad', producto.cantidad.toString()),
-                _buildDetailRow('Presentación', producto.presentacion),
-                _buildDetailRow('Medida', producto.medida),
-                _buildDetailRow('Vencimiento', producto.fechaVencimiento),
                 _buildDetailRow(
+                  context,
+                  'Cantidad',
+                  producto.cantidad.toString(),
+                ),
+                _buildDetailRow(context, 'Presentación', producto.presentacion),
+                _buildDetailRow(context, 'Medida', producto.medida),
+                _buildDetailRow(
+                  context,
+                  'Vencimiento',
+                  producto.fechaVencimiento,
+                ),
+                _buildDetailRow(
+                  context,
                   'Precio Unitario',
                   'C\$${producto.precio.toStringAsFixed(2)}',
                   isPrimary: true,
                 ),
                 const Divider(height: 24),
                 _buildDetailRow(
+                  context,
                   'Subtotal',
                   'C\$${(producto.precio * producto.cantidad).toStringAsFixed(2)}',
                   isPrimary: true,
                   isLarge: true,
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Botón cerrar
                 SizedBox(
                   width: double.infinity,
@@ -174,7 +251,7 @@ class InvoiceTable extends StatelessWidget {
                     onPressed: () => Navigator.pop(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: colorScheme.primary,
-                      foregroundColor: Colors.white,
+                      foregroundColor: colorScheme.onPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -191,7 +268,14 @@ class InvoiceTable extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailRow(String label, String value, {bool isPrimary = false, bool isLarge = false}) {
+  Widget _buildDetailRow(
+    BuildContext context,
+    String label,
+    String value, {
+    bool isPrimary = false,
+    bool isLarge = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -201,7 +285,7 @@ class InvoiceTable extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: isLarge ? 16 : 14,
-              color: Colors.grey[600],
+              color: colorScheme.onSurfaceVariant,
             ),
           ),
           Text(
@@ -209,7 +293,7 @@ class InvoiceTable extends StatelessWidget {
             style: TextStyle(
               fontSize: isLarge ? 20 : 16,
               fontWeight: isPrimary ? FontWeight.bold : FontWeight.w500,
-              color: isPrimary ? Colors.blue : null,
+              color: isPrimary ? colorScheme.primary : colorScheme.onSurface,
             ),
           ),
         ],
@@ -219,15 +303,12 @@ class InvoiceTable extends StatelessWidget {
 
   Widget _buildDesktopView(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outlineVariant,
-          width: 1,
-        ),
+        border: Border.all(color: colorScheme.outlineVariant, width: 1),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -237,10 +318,7 @@ class InvoiceTable extends StatelessWidget {
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerHighest,
               border: Border(
-                bottom: BorderSide(
-                  color: colorScheme.outlineVariant,
-                  width: 2,
-                ),
+                bottom: BorderSide(color: colorScheme.outlineVariant, width: 2),
               ),
             ),
             child: Row(
@@ -272,7 +350,7 @@ class InvoiceTable extends StatelessWidget {
   Widget _buildEmptyState(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
       child: Column(
@@ -306,7 +384,7 @@ class InvoiceTable extends StatelessWidget {
   Widget _buildHeaderCell(BuildContext context, String text, {int flex = 1}) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    
+
     return Expanded(
       flex: flex,
       child: Container(
@@ -323,14 +401,17 @@ class InvoiceTable extends StatelessWidget {
     );
   }
 
-  Widget _buildRow(BuildContext context, ProductoFactura producto, bool isEven, int index) {
+  Widget _buildRow(
+    BuildContext context,
+    ProductoFactura producto,
+    bool isEven,
+    int index,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Container(
       decoration: BoxDecoration(
-        color: isEven 
-          ? colorScheme.surfaceContainerLow
-          : colorScheme.surface,
+        color: isEven ? colorScheme.surfaceContainerLow : colorScheme.surface,
         border: Border(
           bottom: BorderSide(
             color: colorScheme.outlineVariant.withOpacity(0.5),
@@ -345,17 +426,27 @@ class InvoiceTable extends StatelessWidget {
           _buildCell(context, producto.presentacion, flex: 2),
           _buildCell(context, producto.medida, flex: 2),
           _buildCell(context, producto.fechaVencimiento, flex: 2),
-          _buildCell(context, 'C\$${producto.precio.toStringAsFixed(2)}', flex: 2, isMoney: true),
-          _buildActionCell(context, index),
+          _buildCell(
+            context,
+            'C\$${producto.precio.toStringAsFixed(2)}',
+            flex: 2,
+            isMoney: true,
+          ),
+          _buildActionCell(context, producto, index),
         ],
       ),
     );
   }
 
-  Widget _buildCell(BuildContext context, String text, {int flex = 1, bool isMoney = false}) {
+  Widget _buildCell(
+    BuildContext context,
+    String text, {
+    int flex = 1,
+    bool isMoney = false,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    
+
     return Expanded(
       flex: flex,
       child: Container(
@@ -371,25 +462,69 @@ class InvoiceTable extends StatelessWidget {
     );
   }
 
-  Widget _buildActionCell(BuildContext context, int index) {
+  Widget _buildActionCell(
+    BuildContext context,
+    ProductoFactura producto,
+    int index,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Expanded(
       flex: 2,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Center(
-          child: IconButton(
-            icon: Icon(
-              Icons.delete_outline,
-              color: colorScheme.error,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Botón decrementar
+            IconButton(
+              icon: Icon(
+                Icons.remove_circle_outline,
+                color: producto.cantidad > 1
+                    ? colorScheme.error
+                    : colorScheme.outline,
+                size: 22,
+              ),
+              onPressed: producto.cantidad > 1
+                  ? () => onCantidadChanged?.call(index, producto.cantidad - 1)
+                  : null,
+              tooltip: producto.cantidad > 1
+                  ? 'Reducir cantidad'
+                  : 'Cantidad mínima',
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(),
             ),
-            onPressed: onDelete != null ? () => onDelete!(index) : null,
-            tooltip: 'Eliminar producto',
-            style: IconButton.styleFrom(
-              padding: const EdgeInsets.all(8),
+            // Cantidad
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                '${producto.cantidad}',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.onSurface,
+                ),
+              ),
             ),
-          ),
+            // Botón incrementar
+            IconButton(
+              icon: Icon(
+                Icons.add_circle_outline,
+                color: producto.cantidad < producto.stockMaximo
+                    ? colorScheme.primary
+                    : colorScheme.outline,
+                size: 22,
+              ),
+              onPressed: producto.cantidad < producto.stockMaximo
+                  ? () => onCantidadChanged?.call(index, producto.cantidad + 1)
+                  : null,
+              tooltip: producto.cantidad < producto.stockMaximo
+                  ? 'Aumentar cantidad'
+                  : 'Stock máximo',
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(),
+            ),
+          ],
         ),
       ),
     );

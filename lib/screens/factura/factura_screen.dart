@@ -31,14 +31,14 @@ class _FacturaScreenContent extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 800;
     final padding = isMobile ? 16.0 : 64.0;
-    
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.all(padding),
-          child: isMobile 
-            ? _buildMobileLayout(context)
-            : _buildDesktopLayout(context),
+          child: isMobile
+              ? _buildMobileLayout(context)
+              : _buildDesktopLayout(context),
         ),
       ),
     );
@@ -72,10 +72,18 @@ class _FacturaScreenContent extends StatelessWidget {
         const SizedBox(height: 16),
 
         // Botón agregar producto
-        AddProductButton(
-          onProductSelected: (producto) {
-            final provider = context.read<FacturaProvider>();
-            provider.agregarProducto(producto);
+        Consumer<FacturaProvider>(
+          builder: (context, provider, child) {
+            return AddProductButton(
+              cantidadesEnCarrito: provider.cantidadesPorCodigo,
+              onProductSelected: (producto, cantidad, stockTotal) {
+                provider.agregarProducto(
+                  producto,
+                  cantidad: cantidad,
+                  stockMaximo: stockTotal,
+                );
+              },
+            );
           },
         ),
 
@@ -126,10 +134,18 @@ class _FacturaScreenContent extends StatelessWidget {
               const SizedBox(height: 24),
 
               // Botón agregar producto
-              AddProductButton(
-                onProductSelected: (producto) {
-                  final provider = context.read<FacturaProvider>();
-                  provider.agregarProducto(producto);
+              Consumer<FacturaProvider>(
+                builder: (context, provider, child) {
+                  return AddProductButton(
+                    cantidadesEnCarrito: provider.cantidadesPorCodigo,
+                    onProductSelected: (producto, cantidad, stockTotal) {
+                      provider.agregarProducto(
+                        producto,
+                        cantidad: cantidad,
+                        stockMaximo: stockTotal,
+                      );
+                    },
+                  );
                 },
               ),
             ],
@@ -153,43 +169,14 @@ class _FacturaScreenContent extends StatelessWidget {
   Widget _buildProductosTable(BuildContext context) {
     return Consumer<FacturaProvider>(
       builder: (context, provider, child) {
-        // Agrupar productos por tipo
-        final Map<String, List<ProductoFactura>> productosPorTipo = {};
-        for (var producto in provider.productos) {
-          if (!productosPorTipo.containsKey(producto.presentacion)) {
-            productosPorTipo[producto.presentacion] = [];
-          }
-          productosPorTipo[producto.presentacion]!.add(producto);
-        }
-
-        // Crear lista agrupada con cantidad total por tipo
-        final productosAgrupados = productosPorTipo.entries.map((entry) {
-          final tipo = entry.key;
-          final productos = entry.value;
-          final cantidadTotal = productos.length;
-          final primerProducto = productos.first;
-
-          return ProductoFactura(
-            idProducto: primerProducto.idProducto,
-            cantidad: cantidadTotal,
-            nombre: primerProducto.nombre,
-            presentacion: tipo,
-            medida: primerProducto.medida,
-            fechaVencimiento: primerProducto.fechaVencimiento,
-            precio: primerProducto.precio,
-          );
-        }).toList();
-
         return InvoiceTable(
-          productos: productosAgrupados,
-          onDelete: (index) {
-            final productoAEliminar = productosAgrupados[index];
-            final tipoAEliminar = productoAEliminar.presentacion;
-            final indexEnOriginal = provider.productos
-                .indexWhere((p) => p.presentacion == tipoAEliminar);
-            if (indexEnOriginal != -1) {
-              provider.eliminarProducto(indexEnOriginal);
-            }
+          productos: provider.productos,
+          onCantidadChanged: (index, nuevaCantidad) {
+            final producto = provider.productos[index];
+            provider.actualizarCantidadPorCodigo(
+              producto.presentacion,
+              nuevaCantidad,
+            );
           },
         );
       },
@@ -291,7 +278,7 @@ class _FacturaScreenContent extends StatelessWidget {
   Widget _buildEmpleadoYFecha(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 800;
-    
+
     return Consumer<FacturaProvider>(
       builder: (context, provider, child) {
         final formatoFecha = DateFormat('dd/MM/yyyy');
@@ -299,9 +286,7 @@ class _FacturaScreenContent extends StatelessWidget {
         return Container(
           width: isMobile ? double.infinity : 400,
           padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(16)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

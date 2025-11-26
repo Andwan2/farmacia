@@ -81,11 +81,11 @@ class ProductoCompraItem {
   }) {
     return ProductoCompraItem(
       idProductoBase: producto.idProducto,
-      idPresentacion: producto.idPresentacion,
+      idPresentacion: producto.idPresentacion ?? 0,
       nombre: producto.nombreProducto,
       tipo: producto.codigo,
       medida: producto.cantidad.toString(),
-      fechaVencimiento: producto.fechaVencimiento,
+      fechaVencimiento: producto.fechaVencimiento ?? '',
       precioCompra: precioCompra,
       precioVenta: precioVenta,
       cantidad: cantidad,

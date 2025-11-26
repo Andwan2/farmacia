@@ -40,6 +40,16 @@ class FacturaProvider extends ChangeNotifier {
   bool get clientesCargados => _clientesCargados;
   int get formKey => _formKey;
 
+  /// Obtiene un mapa de código -> cantidad en carrito
+  Map<String, int> get cantidadesPorCodigo {
+    final Map<String, int> cantidades = {};
+    for (var producto in _productos) {
+      cantidades[producto.presentacion] =
+          (cantidades[producto.presentacion] ?? 0) + producto.cantidad;
+    }
+    return cantidades;
+  }
+
   double get total {
     return _productos.fold(
       0.0,
@@ -65,16 +75,31 @@ class FacturaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setCliente(String cliente) {
+  void setCliente(String cliente, {int? clienteId}) {
     _cliente = cliente;
-    // Buscar el ID del cliente
-    if (_clientes.isNotEmpty) {
-      final clienteObj = _clientes.firstWhere(
-        (c) => c.nombreCliente == cliente,
-        orElse: () => _clientes.first,
-      );
-      _clienteId = clienteObj.idCliente;
+    if (clienteId != null) {
+      _clienteId = clienteId;
+    } else if (_clientes.isNotEmpty) {
+      // Buscar el ID del cliente si existe
+      try {
+        final clienteObj = _clientes.firstWhere(
+          (c) => c.nombreCliente == cliente,
+        );
+        _clienteId = clienteObj.idCliente;
+      } catch (_) {
+        // Cliente no encontrado, será creado al guardar
+        _clienteId = null;
+      }
     }
+    notifyListeners();
+  }
+
+  // Datos del cliente nuevo (si aplica)
+  String? _telefonoClienteNuevo;
+  String? get telefonoClienteNuevo => _telefonoClienteNuevo;
+
+  void setDatosClienteNuevo({String? telefono}) {
+    _telefonoClienteNuevo = telefono;
     notifyListeners();
   }
 
@@ -85,24 +110,73 @@ class FacturaProvider extends ChangeNotifier {
   }
 
   // Métodos para productos
-  void agregarProducto(ProductoDB producto, {int cantidad = 1}) {
-    _productos.add(
-      ProductoFactura(
-        idProducto: producto.idProducto,
-        cantidad: cantidad,
-        nombre: producto.nombreProducto,
-        presentacion: producto.codigo,
-        medida: producto.cantidad.toString(),
-        fechaVencimiento: producto.fechaVencimiento,
-        precio: producto.precioVenta ?? 0.0,
-      ),
+  void agregarProducto(
+    ProductoDB producto, {
+    int cantidad = 1,
+    int stockMaximo = 0,
+  }) {
+    // Buscar si ya existe un producto con el mismo código
+    final indexExistente = _productos.indexWhere(
+      (p) => p.presentacion == producto.codigo,
     );
+
+    if (indexExistente != -1) {
+      // Si existe, actualizar la cantidad
+      final existente = _productos[indexExistente];
+      _productos[indexExistente] = ProductoFactura(
+        idProducto: existente.idProducto,
+        cantidad: existente.cantidad + cantidad,
+        nombre: existente.nombre,
+        presentacion: existente.presentacion,
+        medida: existente.medida,
+        fechaVencimiento: existente.fechaVencimiento,
+        precio: existente.precio,
+        stockMaximo: existente.stockMaximo,
+      );
+    } else {
+      // Si no existe, agregar nuevo
+      _productos.add(
+        ProductoFactura(
+          idProducto: producto.idProducto,
+          cantidad: cantidad,
+          nombre: producto.nombreProducto,
+          presentacion: producto.codigo,
+          medida: producto.cantidad.toString(),
+          fechaVencimiento: producto.fechaVencimiento ?? '',
+          precio: producto.precioVenta ?? 0.0,
+          stockMaximo: stockMaximo,
+        ),
+      );
+    }
     notifyListeners();
   }
 
   void eliminarProducto(int index) {
     if (index >= 0 && index < _productos.length) {
       _productos.removeAt(index);
+      notifyListeners();
+    }
+  }
+
+  /// Actualiza la cantidad de un producto por su código
+  void actualizarCantidadPorCodigo(String codigo, int nuevaCantidad) {
+    final index = _productos.indexWhere((p) => p.presentacion == codigo);
+    if (index != -1) {
+      if (nuevaCantidad <= 0) {
+        _productos.removeAt(index);
+      } else {
+        final producto = _productos[index];
+        _productos[index] = ProductoFactura(
+          idProducto: producto.idProducto,
+          cantidad: nuevaCantidad,
+          nombre: producto.nombre,
+          presentacion: producto.presentacion,
+          medida: producto.medida,
+          fechaVencimiento: producto.fechaVencimiento,
+          precio: producto.precio,
+          stockMaximo: producto.stockMaximo,
+        );
+      }
       notifyListeners();
     }
   }
@@ -118,6 +192,7 @@ class FacturaProvider extends ChangeNotifier {
         medida: producto.medida,
         fechaVencimiento: producto.fechaVencimiento,
         precio: producto.precio,
+        stockMaximo: producto.stockMaximo,
       );
       notifyListeners();
     }
@@ -129,6 +204,7 @@ class FacturaProvider extends ChangeNotifier {
     _metodoPagoId = null;
     _cliente = '';
     _clienteId = null;
+    _telefonoClienteNuevo = null;
     _empleado = '';
     _empleadoId = null;
     _productos.clear();
@@ -199,14 +275,14 @@ class FacturaProvider extends ChangeNotifier {
   }
 
   // Cargar clientes desde la base de datos
-  Future<void> cargarClientes() async {
+  Future<void> cargarClientes({bool forzar = false}) async {
     print('============================================');
     print('cargarClientes INICIADO');
     print('_isLoadingClientes: $_isLoadingClientes');
     print('_clientesCargados: $_clientesCargados');
     print('============================================');
 
-    if (_isLoadingClientes || _clientesCargados) {
+    if (_isLoadingClientes || (_clientesCargados && !forzar)) {
       print('⚠️ SALIENDO - Ya está cargando o ya fue cargado');
       return;
     }
@@ -271,14 +347,33 @@ class FacturaProvider extends ChangeNotifier {
   }
 
   // Guardar venta en la base de datos
-  Future<String?> guardarVenta() async {
+  Future<String?> guardarVenta({String? telefonoClienteNuevo}) async {
     print('============================================');
     print('GUARDANDO VENTA');
     print('============================================');
 
     try {
-      // 1. Verificar que tenemos todos los IDs necesarios
-      if (_clienteId == null) {
+      // 1. Si el cliente no existe, crearlo primero
+      int? clienteIdFinal = _clienteId;
+
+      if (clienteIdFinal == null && _cliente.isNotEmpty) {
+        print('👤 Creando nuevo cliente: $_cliente');
+        final nuevoCliente = await Supabase.instance.client
+            .from('cliente')
+            .insert({
+              'nombre_cliente': _cliente,
+              'numero_telefono': telefonoClienteNuevo ?? _telefonoClienteNuevo,
+            })
+            .select('id_cliente')
+            .single();
+
+        clienteIdFinal = nuevoCliente['id_cliente'] as int;
+        _clienteId = clienteIdFinal;
+        print('✅ Cliente creado con ID: $clienteIdFinal');
+      }
+
+      // 2. Verificar que tenemos todos los IDs necesarios
+      if (clienteIdFinal == null) {
         return 'Error: ID de cliente no encontrado';
       }
       if (_empleadoId == null) {
@@ -319,7 +414,7 @@ class FacturaProvider extends ChangeNotifier {
               'T',
             )[0], // Solo la fecha YYYY-MM-DD
             'total': total,
-            'id_cliente': _clienteId,
+            'id_cliente': clienteIdFinal,
             'id_empleado': _empleadoId,
             'payment_method_id': _metodoPagoId,
           })

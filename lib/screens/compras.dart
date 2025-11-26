@@ -45,7 +45,7 @@ class _ComprasScreenContent extends StatelessWidget {
     );
 
     DateTime fechaVenc =
-        DateTime.tryParse(producto.fechaVencimiento) ?? DateTime.now();
+        DateTime.tryParse(producto.fechaVencimiento ?? '') ?? DateTime.now();
     final formatoFecha = DateFormat('dd/MM/yyyy');
 
     final result = await showDialog<bool>(

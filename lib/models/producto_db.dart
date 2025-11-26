@@ -1,9 +1,9 @@
 class ProductoDB {
   final int idProducto;
   final String nombreProducto;
-  final int idPresentacion;
-  final int idUnidadMedida;
-  final String fechaVencimiento;
+  final int? idPresentacion;
+  final int? idUnidadMedida;
+  final String? fechaVencimiento;
   final String codigo;
   final double cantidad;
   final String estado;
@@ -13,9 +13,9 @@ class ProductoDB {
   ProductoDB({
     required this.idProducto,
     required this.nombreProducto,
-    required this.idPresentacion,
-    required this.idUnidadMedida,
-    required this.fechaVencimiento,
+    this.idPresentacion,
+    this.idUnidadMedida,
+    this.fechaVencimiento,
     required this.codigo,
     required this.cantidad,
     required this.estado,
@@ -26,12 +26,12 @@ class ProductoDB {
   factory ProductoDB.fromJson(Map<String, dynamic> json) {
     return ProductoDB(
       idProducto: json['id_producto'] as int,
-      nombreProducto: json['nombre_producto'] as String,
-      idPresentacion: json['id_presentacion'] as int,
-      idUnidadMedida: json['id_unidad_medida'] as int,
-      fechaVencimiento: json['fecha_vencimiento'] as String,
-      codigo: json['codigo'] as String,
-      cantidad: (json['cantidad'] as num).toDouble(),
+      nombreProducto: json['nombre_producto'] as String? ?? '',
+      idPresentacion: json['id_presentacion'] as int?,
+      idUnidadMedida: json['id_unidad_medida'] as int?,
+      fechaVencimiento: json['fecha_vencimiento'] as String?,
+      codigo: json['codigo'] as String? ?? '',
+      cantidad: (json['cantidad'] as num?)?.toDouble() ?? 0,
       estado: json['estado'] as String? ?? 'Disponible',
       precioVenta: (json['precio_venta'] as num?)?.toDouble(),
       precioCompra: (json['precio_compra'] as num?)?.toDouble(),
@@ -55,4 +55,29 @@ class ProductoDB {
 
   /// Verifica si el producto está disponible (no Vendido ni Removido)
   bool get estaDisponible => estado != 'Vendido' && estado != 'Removido';
+}
+
+/// Representa un grupo de productos con el mismo código
+class ProductoAgrupado {
+  final String codigo;
+  final String nombreProducto;
+  final double cantidad;
+  final double? precioVenta;
+  final double? precioCompra;
+  final int stock; // Cantidad de unidades disponibles
+  final List<ProductoDB> productos; // Lista de productos individuales
+
+  ProductoAgrupado({
+    required this.codigo,
+    required this.nombreProducto,
+    required this.cantidad,
+    this.precioVenta,
+    this.precioCompra,
+    required this.stock,
+    required this.productos,
+  });
+
+  /// Obtiene el primer producto disponible del grupo
+  ProductoDB? get primerProducto =>
+      productos.isNotEmpty ? productos.first : null;
 }

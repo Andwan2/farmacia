@@ -900,28 +900,32 @@ Future<void> mostrarAgregarProducto(
                               final codigo = generarCodigo();
 
                               // Preparar datos base
-                              final datosBase = {
+                              final Map<String, dynamic> datosBase = {
                                 'nombre_producto': nombre,
                                 'codigo': codigo,
                                 'id_presentacion': presentacionSeleccionada,
                                 'id_unidad_medida': unidadMedidaSeleccionada,
                                 'cantidad': double.tryParse(cantidad),
-                                'fecha_vencimiento': sinFechaVencimiento
-                                    ? null
-                                    : fechaVencimiento,
-                                'precio_compra':
-                                    precioCompraController.text.isNotEmpty
-                                    ? double.tryParse(
-                                        precioCompraController.text,
-                                      )
-                                    : null,
-                                'precio_venta':
-                                    precioVentaController.text.isNotEmpty
-                                    ? double.tryParse(
-                                        precioVentaController.text,
-                                      )
-                                    : null,
                               };
+
+                              // Agregar fecha_vencimiento solo si tiene valor
+                              if (!sinFechaVencimiento &&
+                                  fechaVencimiento.isNotEmpty) {
+                                datosBase['fecha_vencimiento'] =
+                                    fechaVencimiento;
+                              }
+
+                              // Agregar precios solo si tienen valor
+                              if (precioCompraController.text.isNotEmpty) {
+                                datosBase['precio_compra'] = double.tryParse(
+                                  precioCompraController.text,
+                                );
+                              }
+                              if (precioVentaController.text.isNotEmpty) {
+                                datosBase['precio_venta'] = double.tryParse(
+                                  precioVentaController.text,
+                                );
+                              }
 
                               // Agregar fecha_agregado solo si se estableció
                               if (usarFechaPersonalizada &&

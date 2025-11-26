@@ -1,30 +1,31 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:abari/models/producto_db.dart';
-import 'package:abari/providers/factura_provider.dart';
 import 'producto_search_dialog.dart';
 
 class AddProductButton extends StatelessWidget {
-  final ValueChanged<ProductoDB>? onProductSelected;
+  final void Function(ProductoDB producto, int cantidad, int stockTotal)?
+  onProductSelected;
+  final Map<String, int> cantidadesEnCarrito;
 
-  const AddProductButton({super.key, this.onProductSelected});
+  const AddProductButton({
+    super.key,
+    this.onProductSelected,
+    this.cantidadesEnCarrito = const {},
+  });
 
   Future<void> _abrirDialogoBusqueda(BuildContext context) async {
-    // Obtener los IDs de productos ya agregados a la factura
-    final provider = context.read<FacturaProvider>();
-    final idsYaAgregados = provider.productos
-        .map((p) => p.idProducto)
-        .toSet()
-        .toList();
-
-    final producto = await showDialog<ProductoDB>(
+    final resultado = await showDialog<ProductoSeleccionado>(
       context: context,
       builder: (context) =>
-          ProductoSearchDialog(idsYaAgregados: idsYaAgregados),
+          ProductoSearchDialog(cantidadesEnCarrito: cantidadesEnCarrito),
     );
 
-    if (producto != null) {
-      onProductSelected?.call(producto);
+    if (resultado != null) {
+      onProductSelected?.call(
+        resultado.producto,
+        resultado.cantidad,
+        resultado.stockTotal,
+      );
     }
   }
 
