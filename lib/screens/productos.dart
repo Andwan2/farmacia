@@ -476,8 +476,10 @@ class _InventarioPageState extends State<ProductosScreen> {
     final fecha = fechaStr != null ? DateTime.tryParse(fechaStr) : null;
     final stockGrupo = producto['_stock_grupo'] as int? ?? 1;
     final codigoOriginal = producto['codigo']?.toString() ?? 'Sin código';
-    final fechaVencimientoOriginal =
-        producto['fecha_vencimiento']?.toString().split('T').first ?? '';
+    final fechaVencimientoOriginal = producto['fecha_vencimiento']
+        ?.toString()
+        .split('T')
+        .first;
     final estadoOriginal = producto['estado'] as String? ?? 'Disponible';
 
     bool eliminarTodos = true;
@@ -818,12 +820,19 @@ class _InventarioPageState extends State<ProductosScreen> {
         if (resultado['eliminarTodos'] == true) {
           // Eliminar todos los productos del grupo con el mismo estado
           // estadoOriginal ya garantiza que son productos disponibles
-          await Supabase.instance.client
+          var query = Supabase.instance.client
               .from('producto')
               .update({'estado': estadoFinal})
-              .eq('codigo', codigoOriginal)
-              .eq('fecha_vencimiento', fechaVencimientoOriginal)
-              .eq('estado', estadoOriginal);
+              .eq('codigo', codigoOriginal);
+
+          // Manejar fecha_vencimiento null correctamente
+          if (fechaVencimientoOriginal != null) {
+            query = query.eq('fecha_vencimiento', fechaVencimientoOriginal);
+          } else {
+            query = query.isFilter('fecha_vencimiento', null);
+          }
+
+          await query.eq('estado', estadoOriginal);
 
           await cargarDatos();
 
@@ -843,11 +852,22 @@ class _InventarioPageState extends State<ProductosScreen> {
 
           // Obtener los IDs de los productos a eliminar con el mismo estado
           // estadoOriginal ya garantiza que son productos disponibles
-          final productosGrupo = await Supabase.instance.client
+          var selectQuery = Supabase.instance.client
               .from('producto')
               .select('id_producto')
-              .eq('codigo', codigoOriginal)
-              .eq('fecha_vencimiento', fechaVencimientoOriginal)
+              .eq('codigo', codigoOriginal);
+
+          // Manejar fecha_vencimiento null correctamente
+          if (fechaVencimientoOriginal != null) {
+            selectQuery = selectQuery.eq(
+              'fecha_vencimiento',
+              fechaVencimientoOriginal,
+            );
+          } else {
+            selectQuery = selectQuery.isFilter('fecha_vencimiento', null);
+          }
+
+          final productosGrupo = await selectQuery
               .eq('estado', estadoOriginal)
               .limit(cantidad);
 
