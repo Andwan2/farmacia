@@ -1,44 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:provider/provider.dart';
-import 'package:abari/providers/theme_provider.dart';
 
 Future<void> mostrarAgregarProducto(
   BuildContext context,
   VoidCallback onSuccess,
 ) async {
-  final nombreController = TextEditingController();
-  final cantidadController = TextEditingController();
-  final stockController = TextEditingController(text: '1');
-  final fechaVencimientoController = TextEditingController();
-  final fechaAgregadoController = TextEditingController();
-  final precioCompraController = TextEditingController();
-  final precioVentaController = TextEditingController();
-
-  // Cargar presentaciones disponibles
+  // Cargar datos iniciales
   final presentaciones = await Supabase.instance.client
       .from('presentacion')
       .select('id_presentacion,descripcion')
       .order('descripcion', ascending: true);
 
-  // Cargar unidades de medida disponibles
   final unidadesMedida = await Supabase.instance.client
       .from('unidad_medida')
       .select('id,nombre,abreviatura')
       .order('nombre', ascending: true);
 
-  List<dynamic> listaPresentaciones = presentaciones as List;
-  List<dynamic> listaUnidadesMedida = unidadesMedida as List;
-  int? presentacionSeleccionada;
-  int? unidadMedidaSeleccionada;
-  bool sinFechaVencimiento = false;
-  String? categoriaSeleccionada;
-
-  // Cargar categorías existentes
   final categoriasResponse = await Supabase.instance.client
       .from('producto')
       .select('categoria')
       .not('categoria', 'is', null);
+
   final Set<String> categoriasSet = {};
   for (final item in (categoriasResponse as List)) {
     final cat = item['categoria']?.toString();
@@ -46,63 +28,227 @@ Future<void> mostrarAgregarProducto(
       categoriasSet.add(cat);
     }
   }
-  List<String> listaCategorias = categoriasSet.toList()..sort();
 
-  // Función para agregar nueva presentación
-  Future<void> agregarNuevaPresentacion(
-    BuildContext context,
-    StateSetter setState,
-  ) async {
+  if (!context.mounted) return;
+
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (context) => _AgregarProductoPage(
+        listaPresentaciones: presentaciones as List,
+        listaUnidadesMedida: unidadesMedida as List,
+        listaCategorias: categoriasSet.toList()..sort(),
+        onSuccess: onSuccess,
+      ),
+    ),
+  );
+}
+
+class _AgregarProductoPage extends StatefulWidget {
+  final List<dynamic> listaPresentaciones;
+  final List<dynamic> listaUnidadesMedida;
+  final List<String> listaCategorias;
+  final VoidCallback onSuccess;
+
+  const _AgregarProductoPage({
+    required this.listaPresentaciones,
+    required this.listaUnidadesMedida,
+    required this.listaCategorias,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_AgregarProductoPage> createState() => _AgregarProductoPageState();
+}
+
+class _AgregarProductoPageState extends State<_AgregarProductoPage> {
+  // Controllers
+  final nombreController = TextEditingController();
+  final cantidadController = TextEditingController();
+  final stockController = TextEditingController(text: '1');
+  final fechaVencimientoController = TextEditingController();
+  final fechaAgregadoController = TextEditingController();
+  final precioCompraController = TextEditingController();
+  final precioVentaController = TextEditingController();
+  final pageController = PageController();
+
+  // State
+  int stock = 1;
+  bool usarFechaPersonalizada = false;
+  int currentStep = 0;
+  static const totalSteps = 3;
+
+  int? presentacionSeleccionada;
+  int? unidadMedidaSeleccionada;
+  bool sinFechaVencimiento = false;
+  String? categoriaSeleccionada;
+
+  late List<dynamic> listaPresentaciones;
+  late List<dynamic> listaUnidadesMedida;
+
+  final stepTitles = ['Básico', 'Presentación', 'Detalles'];
+  final stepIcons = [
+    Icons.info_outline,
+    Icons.inventory_2_outlined,
+    Icons.check_circle_outline,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    listaPresentaciones = List.from(widget.listaPresentaciones);
+    listaUnidadesMedida = List.from(widget.listaUnidadesMedida);
+  }
+
+  @override
+  void dispose() {
+    nombreController.dispose();
+    cantidadController.dispose();
+    stockController.dispose();
+    fechaVencimientoController.dispose();
+    fechaAgregadoController.dispose();
+    precioCompraController.dispose();
+    precioVentaController.dispose();
+    pageController.dispose();
+    super.dispose();
+  }
+
+  String generarCodigo() {
+    if (nombreController.text.isEmpty ||
+        cantidadController.text.isEmpty ||
+        presentacionSeleccionada == null ||
+        unidadMedidaSeleccionada == null) {
+      return '';
+    }
+    final unidad = listaUnidadesMedida.firstWhere(
+      (u) => u['id'] == unidadMedidaSeleccionada,
+      orElse: () => {'abreviatura': ''},
+    );
+    final presentacion = listaPresentaciones.firstWhere(
+      (p) => p['id_presentacion'] == presentacionSeleccionada,
+      orElse: () => {'descripcion': ''},
+    );
+    final abreviatura = unidad['abreviatura'] ?? '';
+    final descripcionPres = presentacion['descripcion'] ?? '';
+    final cantidadNum = double.tryParse(cantidadController.text.trim());
+    String cantidadFormateada = cantidadController.text.trim();
+    if (cantidadNum != null) {
+      cantidadFormateada = cantidadNum == cantidadNum.toInt()
+          ? cantidadNum.toInt().toString()
+          : cantidadNum.toString();
+    }
+    final nombre = nombreController.text.trim().replaceAll(' ', '');
+    return '$nombre$cantidadFormateada$abreviatura$descripcionPres'
+        .toUpperCase();
+  }
+
+  bool validarPaso(int paso) {
+    switch (paso) {
+      case 0:
+        return nombreController.text.trim().isNotEmpty;
+      case 1:
+        return presentacionSeleccionada != null &&
+            cantidadController.text.trim().isNotEmpty &&
+            unidadMedidaSeleccionada != null;
+      case 2:
+        return sinFechaVencimiento ||
+            fechaVencimientoController.text.isNotEmpty;
+      default:
+        return true;
+    }
+  }
+
+  void irAPaso(int paso) {
+    // Solo permitir ir a pasos anteriores o al siguiente si el actual es válido
+    if (paso < currentStep) {
+      // Ir hacia atrás siempre permitido
+      pageController.animateToPage(
+        paso,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+      setState(() => currentStep = paso);
+    } else if (paso == currentStep + 1 && validarPaso(currentStep)) {
+      // Ir al siguiente solo si el actual es válido
+      pageController.animateToPage(
+        paso,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+      setState(() => currentStep = paso);
+    } else if (paso > currentStep && !validarPaso(currentStep)) {
+      // Mostrar mensaje si intenta avanzar sin completar
+      _mostrarErrorValidacion();
+    }
+  }
+
+  void _mostrarErrorValidacion() {
+    String mensaje;
+    switch (currentStep) {
+      case 0:
+        mensaje = 'Ingresa el nombre del producto';
+        break;
+      case 1:
+        mensaje = 'Completa la presentación, cantidad y unidad';
+        break;
+      case 2:
+        mensaje = 'Selecciona una fecha de vencimiento o marca "Sin fecha"';
+        break;
+      default:
+        mensaje = 'Completa los campos requeridos';
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(mensaje), backgroundColor: Colors.orange),
+    );
+  }
+
+  Future<void> _agregarNuevaPresentacion() async {
     final descripcionController = TextEditingController();
-
     final resultado = await showDialog<String?>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.add_box_outlined),
-              SizedBox(width: 8),
-              Text('Nueva Presentación'),
-            ],
-          ),
-          content: TextField(
-            controller: descripcionController,
-            decoration: const InputDecoration(
-              labelText: 'Descripción *',
-              border: OutlineInputBorder(),
-              hintText: 'Ej: Bolsa, Caja, Botella, Lata',
-            ),
-            textCapitalization: TextCapitalization.words,
-            autofocus: true,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final descripcion = descripcionController.text.trim();
-                if (descripcion.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('La descripción es obligatoria'),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                  return;
-                }
-                Navigator.pop(context, descripcion);
-              },
-              child: const Text('Guardar'),
-            ),
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.add_box_outlined),
+            SizedBox(width: 8),
+            Text('Nueva Presentación'),
           ],
-        );
-      },
+        ),
+        content: TextField(
+          controller: descripcionController,
+          decoration: const InputDecoration(
+            labelText: 'Descripción *',
+            border: OutlineInputBorder(),
+            hintText: 'Ej: Bolsa, Caja, Botella',
+          ),
+          textCapitalization: TextCapitalization.words,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final descripcion = descripcionController.text.trim();
+              if (descripcion.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('La descripción es obligatoria'),
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(context, descripcion);
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
     );
 
-    if (resultado != null) {
+    if (resultado != null && mounted) {
       try {
         final response = await Supabase.instance.client
             .from('presentacion')
@@ -110,17 +256,17 @@ Future<void> mostrarAgregarProducto(
             .select()
             .single();
 
-        final nuevasPresentaciones = await Supabase.instance.client
+        final nuevas = await Supabase.instance.client
             .from('presentacion')
             .select('id_presentacion,descripcion')
             .order('descripcion', ascending: true);
 
         setState(() {
-          listaPresentaciones = nuevasPresentaciones as List;
+          listaPresentaciones = nuevas as List;
           presentacionSeleccionada = response['id_presentacion'] as int;
         });
 
-        if (context.mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Presentación "$resultado" agregada'),
@@ -129,7 +275,7 @@ Future<void> mostrarAgregarProducto(
           );
         }
       } catch (e) {
-        if (context.mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
           );
@@ -138,80 +284,71 @@ Future<void> mostrarAgregarProducto(
     }
   }
 
-  // Función para agregar nueva unidad de medida
-  Future<void> agregarNuevaUnidadMedida(
-    BuildContext context,
-    StateSetter setState,
-  ) async {
-    final nombreController = TextEditingController();
-    final abreviaturaController = TextEditingController();
-
+  Future<void> _agregarNuevaUnidadMedida() async {
+    final nombreCtrl = TextEditingController();
+    final abreviaturaCtrl = TextEditingController();
     final resultado = await showDialog<Map<String, dynamic>?>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.straighten_outlined),
-              SizedBox(width: 8),
-              Text('Nueva Unidad de Medida'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nombreController,
-                decoration: const InputDecoration(
-                  labelText: 'Nombre *',
-                  border: OutlineInputBorder(),
-                  hintText: 'Ej: Gramos, Kilogramos, Litros',
-                ),
-                textCapitalization: TextCapitalization.words,
-                autofocus: true,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.straighten_outlined),
+            SizedBox(width: 8),
+            Text('Nueva Unidad'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nombreCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nombre *',
+                border: OutlineInputBorder(),
+                hintText: 'Ej: Gramos, Kilogramos',
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: abreviaturaController,
-                decoration: const InputDecoration(
-                  labelText: 'Abreviatura *',
-                  border: OutlineInputBorder(),
-                  hintText: 'Ej: g, kg, ml, L, un',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              child: const Text('Cancelar'),
+              autofocus: true,
             ),
-            ElevatedButton(
-              onPressed: () {
-                final nombre = nombreController.text.trim();
-                final abreviatura = abreviaturaController.text.trim();
-                if (nombre.isEmpty || abreviatura.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Todos los campos son obligatorios'),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                  return;
-                }
-                Navigator.pop(context, {
-                  'nombre': nombre,
-                  'abreviatura': abreviatura,
-                });
-              },
-              child: const Text('Guardar'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: abreviaturaCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Abreviatura *',
+                border: OutlineInputBorder(),
+                hintText: 'Ej: g, kg, ml',
+              ),
             ),
           ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final nombre = nombreCtrl.text.trim();
+              final abreviatura = abreviaturaCtrl.text.trim();
+              if (nombre.isEmpty || abreviatura.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Todos los campos son obligatorios'),
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(context, {
+                'nombre': nombre,
+                'abreviatura': abreviatura,
+              });
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
     );
 
-    if (resultado != null) {
+    if (resultado != null && mounted) {
       try {
         final response = await Supabase.instance.client
             .from('unidad_medida')
@@ -222,17 +359,17 @@ Future<void> mostrarAgregarProducto(
             .select()
             .single();
 
-        final nuevasUnidades = await Supabase.instance.client
+        final nuevas = await Supabase.instance.client
             .from('unidad_medida')
             .select('id,nombre,abreviatura')
             .order('nombre', ascending: true);
 
         setState(() {
-          listaUnidadesMedida = nuevasUnidades as List;
+          listaUnidadesMedida = nuevas as List;
           unidadMedidaSeleccionada = response['id'] as int;
         });
 
-        if (context.mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Unidad "${resultado['nombre']}" agregada'),
@@ -241,7 +378,7 @@ Future<void> mostrarAgregarProducto(
           );
         }
       } catch (e) {
-        if (context.mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
           );
@@ -250,800 +387,467 @@ Future<void> mostrarAgregarProducto(
     }
   }
 
-  showDialog(
-    context: context,
-    builder: (context) {
-      int stock = 1;
-      bool usarFechaPersonalizada = false;
+  Future<void> _guardarProducto() async {
+    final nombre = nombreController.text.trim();
+    final cantidad = cantidadController.text.trim();
+    final fechaVencimiento = fechaVencimientoController.text.trim();
 
-      return StatefulBuilder(
-        builder: (context, setState) {
-          final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
+    try {
+      final codigo = generarCodigo();
+      final Map<String, dynamic> datosBase = {
+        'nombre_producto': nombre,
+        'codigo': codigo,
+        'id_presentacion': presentacionSeleccionada,
+        'id_unidad_medida': unidadMedidaSeleccionada,
+        'cantidad': double.tryParse(cantidad),
+      };
 
-          // Generar el código automáticamente
-          String generarCodigo() {
-            if (nombreController.text.isEmpty ||
-                cantidadController.text.isEmpty ||
-                presentacionSeleccionada == null ||
-                unidadMedidaSeleccionada == null) {
-              return '';
-            }
+      if (fechaVencimiento.isNotEmpty) {
+        datosBase['fecha_vencimiento'] = fechaVencimiento;
+      }
+      if (precioCompraController.text.isNotEmpty) {
+        datosBase['precio_compra'] = double.tryParse(
+          precioCompraController.text,
+        );
+      }
+      if (precioVentaController.text.isNotEmpty) {
+        datosBase['precio_venta'] = double.tryParse(precioVentaController.text);
+      }
+      if (usarFechaPersonalizada && fechaAgregadoController.text.isNotEmpty) {
+        datosBase['fecha_agregado'] = fechaAgregadoController.text;
+      }
+      if (categoriaSeleccionada != null && categoriaSeleccionada!.isNotEmpty) {
+        datosBase['categoria'] = categoriaSeleccionada;
+      }
 
-            final unidad = listaUnidadesMedida.firstWhere(
-              (u) => u['id'] == unidadMedidaSeleccionada,
-              orElse: () => {'abreviatura': ''},
-            );
+      for (int i = 0; i < stock; i++) {
+        await Supabase.instance.client.from('producto').insert(datosBase);
+      }
 
-            final presentacion = listaPresentaciones.firstWhere(
-              (p) => p['id_presentacion'] == presentacionSeleccionada,
-              orElse: () => {'descripcion': ''},
-            );
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$stock producto(s) agregado(s)'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        widget.onSuccess();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 
-            final abreviatura = unidad['abreviatura'] ?? '';
-            final descripcionPres = presentacion['descripcion'] ?? '';
-            final cantidadTexto = cantidadController.text.trim();
-            final cantidadNum = double.tryParse(cantidadTexto);
-            String cantidadFormateada = cantidadTexto;
-            if (cantidadNum != null) {
-              if (cantidadNum == cantidadNum.toInt()) {
-                cantidadFormateada = cantidadNum.toInt().toString();
-              } else {
-                cantidadFormateada = cantidadNum.toString();
-              }
-            }
-            // Formato: NombreCantidadUnidadPresentacion (sin espacios)
-            final nombre = nombreController.text.trim().replaceAll(' ', '');
-            return '$nombre$cantidadFormateada$abreviatura$descripcionPres'
-                .toUpperCase();
-          }
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
 
-          return Dialog(
-            child: Container(
-              width: 550,
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.90,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Header
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: Colors.grey.shade300),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.add_circle_outline, size: 22),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'Agregar producto',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Agregar producto'),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Column(
+            children: [
+              // Barra de progreso
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: (currentStep + 1) / totalSteps,
+                    minHeight: 6,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      currentStep == totalSteps - 1
+                          ? Colors.green
+                          : colorScheme.primary,
                     ),
                   ),
-                  // Content
-                  Flexible(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Información sobre campos automáticos
-                          Container(
-                            padding: const EdgeInsets.all(10),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Step indicators
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: List.generate(totalSteps, (index) {
+                    final isActive = index == currentStep;
+                    final isCompleted = index < currentStep;
+                    final canNavigate =
+                        index <= currentStep ||
+                        (index == currentStep + 1 && validarPaso(currentStep));
+
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: canNavigate ? () => irAPaso(index) : null,
+                        child: Opacity(
+                          opacity: canNavigate ? 1.0 : 0.5,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                              color: isDarkMode
-                                  ? Colors.blue.withOpacity(0.2)
-                                  : Colors.blue.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: isDarkMode
-                                    ? Colors.blue.withOpacity(0.4)
-                                    : Colors.blue.withOpacity(0.3),
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: isActive
+                                      ? colorScheme.primary
+                                      : isCompleted
+                                      ? Colors.green
+                                      : Colors.transparent,
+                                  width: 2,
+                                ),
                               ),
                             ),
                             child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
-                                  Icons.info_outline,
-                                  color: isDarkMode
-                                      ? Colors.blue[300]
-                                      : Colors.blue[700],
+                                  isCompleted
+                                      ? Icons.check_circle
+                                      : stepIcons[index],
+                                  size: 18,
+                                  color: isActive
+                                      ? colorScheme.primary
+                                      : isCompleted
+                                      ? Colors.green
+                                      : colorScheme.onSurfaceVariant,
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'El código se generará automáticamente: Nombre + Medida + Unidad',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: isDarkMode
-                                          ? Colors.blue[200]
-                                          : Colors.blue[900],
-                                    ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  stepTitles[index],
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: isActive
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                    color: isActive
+                                        ? colorScheme.primary
+                                        : isCompleted
+                                        ? Colors.green
+                                        : colorScheme.onSurfaceVariant,
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // Nombre y Categoría en una fila
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: TextField(
-                                  controller: nombreController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Nombre del producto *',
-                                    border: OutlineInputBorder(),
-                                    hintText: 'Ej: Arroz, Frijoles',
-                                  ),
-                                  onChanged: (_) => setState(() {}),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                flex: 2,
-                                child: Autocomplete<String>(
-                                  optionsBuilder:
-                                      (TextEditingValue textEditingValue) {
-                                        if (textEditingValue.text.isEmpty) {
-                                          return listaCategorias;
-                                        }
-                                        return listaCategorias.where(
-                                          (cat) => cat.toLowerCase().contains(
-                                            textEditingValue.text.toLowerCase(),
-                                          ),
-                                        );
-                                      },
-                                  onSelected: (String selection) {
-                                    setState(() {
-                                      categoriaSeleccionada = selection;
-                                    });
-                                  },
-                                  fieldViewBuilder:
-                                      (
-                                        context,
-                                        controller,
-                                        focusNode,
-                                        onFieldSubmitted,
-                                      ) {
-                                        return TextField(
-                                          controller: controller,
-                                          focusNode: focusNode,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Categoría',
-                                            border: OutlineInputBorder(),
-                                            hintText: 'Ej: Bebidas',
-                                          ),
-                                          onChanged: (value) {
-                                            setState(() {
-                                              categoriaSeleccionada =
-                                                  value.isNotEmpty
-                                                  ? value
-                                                  : null;
-                                            });
-                                          },
-                                        );
-                                      },
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: DropdownButtonFormField<int>(
-                                  value: presentacionSeleccionada,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Presentación *',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  items: listaPresentaciones
-                                      .map<DropdownMenuItem<int>>((p) {
-                                        return DropdownMenuItem<int>(
-                                          value: p['id_presentacion'] as int,
-                                          child: Text(
-                                            p['descripcion']?.toString() ?? '',
-                                          ),
-                                        );
-                                      })
-                                      .toList(),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      presentacionSeleccionada = value;
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Tooltip(
-                                message: 'Agregar nueva presentación',
-                                child: IconButton(
-                                  onPressed: () => agregarNuevaPresentacion(
-                                    context,
-                                    setState,
-                                  ),
-                                  icon: const Icon(Icons.add_circle),
-                                  color: isDarkMode
-                                      ? Colors.green[300]
-                                      : Colors.green[700],
-                                  iconSize: 32,
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: isDarkMode
-                                        ? Colors.green.withOpacity(0.2)
-                                        : Colors.green.withOpacity(0.1),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          // Cantidad y Unidad de Medida en una fila
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Campo de cantidad
-                              Expanded(
-                                flex: 2,
-                                child: TextField(
-                                  controller: cantidadController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Cantidad *',
-                                    border: OutlineInputBorder(),
-                                    hintText: 'Ej: 500, 1, 2.5',
-                                  ),
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                        signed: false,
-                                      ),
-                                  onChanged: (_) => setState(() {}),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              // Dropdown de unidad de medida
-                              Expanded(
-                                flex: 3,
-                                child: DropdownButtonFormField<int>(
-                                  value: unidadMedidaSeleccionada,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Unidad *',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  items: listaUnidadesMedida
-                                      .map<DropdownMenuItem<int>>((u) {
-                                        return DropdownMenuItem<int>(
-                                          value: u['id'] as int,
-                                          child: Text(
-                                            '${u['nombre']} (${u['abreviatura']})',
-                                          ),
-                                        );
-                                      })
-                                      .toList(),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      unidadMedidaSeleccionada = value;
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              // Botón para agregar unidad de medida
-                              Tooltip(
-                                message: 'Agregar unidad de medida',
-                                child: IconButton(
-                                  onPressed: () => agregarNuevaUnidadMedida(
-                                    context,
-                                    setState,
-                                  ),
-                                  icon: const Icon(Icons.add_circle),
-                                  color: isDarkMode
-                                      ? Colors.blue[300]
-                                      : Colors.blue[700],
-                                  iconSize: 32,
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: isDarkMode
-                                        ? Colors.blue.withOpacity(0.2)
-                                        : Colors.blue.withOpacity(0.1),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          // Checkbox para omitir fecha de vencimiento
-                          CheckboxListTile(
-                            title: const Text(
-                              'Sin fecha de vencimiento',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                            subtitle: const Text(
-                              'Marcar si el producto no tiene fecha de caducidad',
-                              style: TextStyle(fontSize: 11),
-                            ),
-                            value: sinFechaVencimiento,
-                            onChanged: (value) {
-                              setState(() {
-                                sinFechaVencimiento = value ?? false;
-                                if (sinFechaVencimiento) {
-                                  fechaVencimientoController.clear();
-                                }
-                              });
-                            },
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          if (!sinFechaVencimiento) ...[
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: fechaVencimientoController,
-                              decoration: const InputDecoration(
-                                labelText: 'Fecha de vencimiento *',
-                                border: OutlineInputBorder(),
-                                hintText: 'YYYY-MM-DD',
-                                suffixIcon: Icon(Icons.calendar_today),
-                              ),
-                              readOnly: true,
-                              onTap: () async {
-                                final fechaSeleccionada = await showDatePicker(
-                                  context: context,
-                                  initialDate: DateTime.now().add(
-                                    const Duration(days: 365),
-                                  ),
-                                  firstDate: DateTime.now(),
-                                  lastDate: DateTime.now().add(
-                                    const Duration(days: 3650),
-                                  ),
-                                );
-
-                                if (fechaSeleccionada != null) {
-                                  fechaVencimientoController.text =
-                                      fechaSeleccionada
-                                          .toIso8601String()
-                                          .split('T')
-                                          .first;
-                                }
-                              },
-                            ),
-                          ],
-                          const SizedBox(height: 10),
-                          // Precios (opcionales)
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: precioCompraController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Precio compra',
-                                    border: OutlineInputBorder(),
-                                    hintText: 'Opcional',
-                                    prefixText: 'C\$ ',
-                                  ),
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: TextField(
-                                  controller: precioVentaController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Precio venta',
-                                    border: OutlineInputBorder(),
-                                    hintText: 'Opcional',
-                                    prefixText: 'C\$ ',
-                                  ),
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          // Fecha de agregado (opcional)
-                          CheckboxListTile(
-                            title: const Text(
-                              'Establecer fecha de agregado personalizada',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                            subtitle: const Text(
-                              'Por defecto se usa la fecha y hora actual',
-                              style: TextStyle(fontSize: 11),
-                            ),
-                            value: usarFechaPersonalizada,
-                            onChanged: (value) {
-                              setState(() {
-                                usarFechaPersonalizada = value ?? false;
-                                if (!usarFechaPersonalizada) {
-                                  fechaAgregadoController.clear();
-                                }
-                              });
-                            },
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          if (usarFechaPersonalizada) ...[
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: fechaAgregadoController,
-                              decoration: const InputDecoration(
-                                labelText: 'Fecha de agregado',
-                                border: OutlineInputBorder(),
-                                hintText: 'YYYY-MM-DD HH:MM',
-                                suffixIcon: Icon(Icons.calendar_today),
-                              ),
-                              readOnly: true,
-                              onTap: () async {
-                                final fechaSeleccionada = await showDatePicker(
-                                  context: context,
-                                  initialDate: DateTime.now(),
-                                  firstDate: DateTime(2000),
-                                  lastDate: DateTime.now(),
-                                );
-
-                                if (fechaSeleccionada != null) {
-                                  // Mostrar selector de hora
-                                  final horaSeleccionada = await showTimePicker(
-                                    context: context,
-                                    initialTime: TimeOfDay.now(),
-                                  );
-
-                                  if (horaSeleccionada != null) {
-                                    final fechaCompleta = DateTime(
-                                      fechaSeleccionada.year,
-                                      fechaSeleccionada.month,
-                                      fechaSeleccionada.day,
-                                      horaSeleccionada.hour,
-                                      horaSeleccionada.minute,
-                                    );
-                                    fechaAgregadoController.text = fechaCompleta
-                                        .toIso8601String();
-                                  }
-                                }
-                              },
-                            ),
-                          ],
-                          const SizedBox(height: 10),
-                          const Divider(),
-                          const SizedBox(height: 10),
-                          // Cantidad a agregar
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Colors.green.withOpacity(0.3),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.inventory_2_outlined,
-                                      color: Colors.green[700],
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Text(
-                                      'Cantidad a agregar',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.remove_circle_outline,
-                                      ),
-                                      onPressed: stock > 1
-                                          ? () {
-                                              setState(() {
-                                                stock--;
-                                                stockController.text = stock
-                                                    .toString();
-                                              });
-                                            }
-                                          : null,
-                                      iconSize: 28,
-                                      color: Colors.green,
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(
-                                        minWidth: 40,
-                                        minHeight: 40,
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: 80,
-                                      child: TextField(
-                                        controller: stockController,
-                                        decoration: const InputDecoration(
-                                          border: OutlineInputBorder(),
-                                          contentPadding: EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 8,
-                                          ),
-                                          isDense: true,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        keyboardType: TextInputType.number,
-                                        onChanged: (value) {
-                                          final nuevoStock =
-                                              int.tryParse(value) ?? 1;
-                                          setState(() {
-                                            stock = nuevoStock.clamp(1, 9999);
-                                            stockController.text = stock
-                                                .toString();
-                                            stockController.selection =
-                                                TextSelection.fromPosition(
-                                                  TextPosition(
-                                                    offset: stockController
-                                                        .text
-                                                        .length,
-                                                  ),
-                                                );
-                                          });
-                                        },
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.add_circle_outline,
-                                      ),
-                                      onPressed: stock < 9999
-                                          ? () {
-                                              setState(() {
-                                                stock++;
-                                                stockController.text = stock
-                                                    .toString();
-                                              });
-                                            }
-                                          : null,
-                                      iconSize: 28,
-                                      color: Colors.green,
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(
-                                        minWidth: 40,
-                                        minHeight: 40,
-                                      ),
-                                    ),
-                                  ],
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 10),
-                          // Vista previa del código generado
-                          if (generarCodigo().isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: Colors.grey.withOpacity(0.3),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Código generado:',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    generarCodigo(),
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Footer con botones
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        top: BorderSide(color: Colors.grey.shade300),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Cancelar'),
                         ),
-                        const SizedBox(width: 12),
-                        ElevatedButton(
-                          onPressed: () async {
-                            final nombre = nombreController.text.trim();
-                            final cantidad = cantidadController.text.trim();
-                            final fechaVencimiento = fechaVencimientoController
-                                .text
-                                .trim();
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      body: PageView(
+        controller: pageController,
+        physics: const NeverScrollableScrollPhysics(), // Deshabilitar swipe
+        onPageChanged: (index) => setState(() => currentStep = index),
+        children: [
+          _buildStep1(colorScheme),
+          _buildStep2(colorScheme),
+          _buildStep3(colorScheme),
+        ],
+      ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
+        ),
+        child: SafeArea(
+          child: Row(
+            children: [
+              if (currentStep > 0)
+                TextButton.icon(
+                  onPressed: () => irAPaso(currentStep - 1),
+                  icon: const Icon(Icons.arrow_back, size: 18),
+                  label: const Text('Anterior'),
+                )
+              else
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+              const Spacer(),
+              if (currentStep < totalSteps - 1)
+                FilledButton.icon(
+                  onPressed: validarPaso(currentStep)
+                      ? () => irAPaso(currentStep + 1)
+                      : null,
+                  icon: const Icon(Icons.arrow_forward, size: 18),
+                  label: const Text('Siguiente'),
+                )
+              else
+                FilledButton.icon(
+                  onPressed: validarPaso(currentStep) ? _guardarProducto : null,
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('Agregar'),
+                  style: FilledButton.styleFrom(backgroundColor: Colors.green),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-                            // Validaciones
-                            if (nombre.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'El nombre del producto es obligatorio',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
+  Widget _buildStep1(ColorScheme colorScheme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.lightbulb_outline,
+                  color: colorScheme.primary,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'El código del producto se generará automáticamente',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
 
-                            if (presentacionSeleccionada == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Debe seleccionar una presentación',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
+          Text(
+            'Nombre del producto *',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: nombreController,
+            decoration: InputDecoration(
+              hintText: 'Ej: Arroz, Frijoles, Aceite',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              prefixIcon: const Icon(Icons.shopping_bag_outlined),
+              filled: true,
+            ),
+            textCapitalization: TextCapitalization.words,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 28),
 
-                            if (cantidad.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('La cantidad es obligatoria'),
-                                ),
-                              );
-                              return;
-                            }
+          Text(
+            'Categoría (opcional)',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Autocomplete<String>(
+            optionsBuilder: (textEditingValue) {
+              if (textEditingValue.text.isEmpty) return widget.listaCategorias;
+              return widget.listaCategorias.where(
+                (cat) => cat.toLowerCase().contains(
+                  textEditingValue.text.toLowerCase(),
+                ),
+              );
+            },
+            onSelected: (selection) =>
+                setState(() => categoriaSeleccionada = selection),
+            fieldViewBuilder:
+                (context, controller, focusNode, onFieldSubmitted) {
+                  return TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    decoration: InputDecoration(
+                      hintText: 'Ej: Granos, Bebidas, Lácteos',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.category_outlined),
+                      filled: true,
+                    ),
+                    onChanged: (value) => setState(() {
+                      categoriaSeleccionada = value.isNotEmpty ? value : null;
+                    }),
+                  );
+                },
+          ),
+        ],
+      ),
+    );
+  }
 
-                            if (unidadMedidaSeleccionada == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Debe seleccionar una unidad de medida',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
+  Widget _buildStep2(ColorScheme colorScheme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Tipo de presentación *',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  value: presentacionSeleccionada,
+                  decoration: InputDecoration(
+                    hintText: 'Seleccionar presentación',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                  ),
+                  items: listaPresentaciones.map<DropdownMenuItem<int>>((p) {
+                    return DropdownMenuItem<int>(
+                      value: p['id_presentacion'] as int,
+                      child: Text(p['descripcion']?.toString() ?? ''),
+                    );
+                  }).toList(),
+                  onChanged: (value) =>
+                      setState(() => presentacionSeleccionada = value),
+                ),
+              ),
+              const SizedBox(width: 12),
+              IconButton.filled(
+                onPressed: _agregarNuevaPresentacion,
+                icon: const Icon(Icons.add),
+                tooltip: 'Nueva presentación',
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.green.withValues(alpha: 0.15),
+                  foregroundColor: Colors.green[700],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
 
-                            if (!sinFechaVencimiento &&
-                                fechaVencimiento.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'La fecha de vencimiento es obligatoria',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
+          Text(
+            'Cantidad y unidad de medida *',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: cantidadController,
+                  decoration: InputDecoration(
+                    hintText: 'Ej: 500',
+                    labelText: 'Cantidad',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<int>(
+                  value: unidadMedidaSeleccionada,
+                  decoration: InputDecoration(
+                    labelText: 'Unidad',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                  ),
+                  items: listaUnidadesMedida.map<DropdownMenuItem<int>>((u) {
+                    return DropdownMenuItem<int>(
+                      value: u['id'] as int,
+                      child: Text('${u['nombre']} (${u['abreviatura']})'),
+                    );
+                  }).toList(),
+                  onChanged: (value) =>
+                      setState(() => unidadMedidaSeleccionada = value),
+                ),
+              ),
+              const SizedBox(width: 12),
+              IconButton.filled(
+                onPressed: _agregarNuevaUnidadMedida,
+                icon: const Icon(Icons.add),
+                tooltip: 'Nueva unidad',
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.blue.withValues(alpha: 0.15),
+                  foregroundColor: Colors.blue[700],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
 
-                            try {
-                              final codigo = generarCodigo();
-
-                              // Preparar datos base
-                              final Map<String, dynamic> datosBase = {
-                                'nombre_producto': nombre,
-                                'codigo': codigo,
-                                'id_presentacion': presentacionSeleccionada,
-                                'id_unidad_medida': unidadMedidaSeleccionada,
-                                'cantidad': double.tryParse(cantidad),
-                              };
-
-                              // Agregar fecha_vencimiento solo si tiene valor
-                              if (fechaVencimiento.isNotEmpty) {
-                                datosBase['fecha_vencimiento'] =
-                                    fechaVencimiento;
-                              }
-
-                              // Agregar precios solo si tienen valor
-                              if (precioCompraController.text.isNotEmpty) {
-                                datosBase['precio_compra'] = double.tryParse(
-                                  precioCompraController.text,
-                                );
-                              }
-                              if (precioVentaController.text.isNotEmpty) {
-                                datosBase['precio_venta'] = double.tryParse(
-                                  precioVentaController.text,
-                                );
-                              }
-
-                              // Agregar fecha_agregado solo si se estableció
-                              if (usarFechaPersonalizada &&
-                                  fechaAgregadoController.text.isNotEmpty) {
-                                datosBase['fecha_agregado'] =
-                                    fechaAgregadoController.text;
-                              }
-
-                              // Agregar categoría si se seleccionó
-                              if (categoriaSeleccionada != null &&
-                                  categoriaSeleccionada!.isNotEmpty) {
-                                datosBase['categoria'] = categoriaSeleccionada;
-                              }
-
-                              // Insertar productos según el stock
-                              for (int i = 0; i < stock; i++) {
-                                await Supabase.instance.client
-                                    .from('producto')
-                                    .insert(datosBase);
-                              }
-
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '$stock producto(s) agregado(s) correctamente',
-                                  ),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-
-                              onSuccess();
-                            } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Error al agregar productos: $e',
-                                  ),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
+          if (generarCodigo().isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.qr_code, color: colorScheme.primary, size: 32),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Código generado',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: colorScheme.onSurfaceVariant,
                           ),
-                          child: const Text('Agregar productos'),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          generarCodigo(),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                          ),
                         ),
                       ],
                     ),
@@ -1051,9 +855,298 @@ Future<void> mostrarAgregarProducto(
                 ],
               ),
             ),
-          );
-        },
-      );
-    },
-  );
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep3(ColorScheme colorScheme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Fecha vencimiento
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.event, color: colorScheme.primary, size: 24),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Fecha de vencimiento',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                CheckboxListTile(
+                  title: const Text('Sin fecha de vencimiento'),
+                  subtitle: const Text('Marcar si el producto no caduca'),
+                  value: sinFechaVencimiento,
+                  onChanged: (value) {
+                    setState(() {
+                      sinFechaVencimiento = value ?? false;
+                      if (sinFechaVencimiento)
+                        fechaVencimientoController.clear();
+                    });
+                  },
+                  contentPadding: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                if (!sinFechaVencimiento) ...[
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: fechaVencimientoController,
+                    decoration: InputDecoration(
+                      labelText: 'Fecha de vencimiento *',
+                      hintText: 'Seleccionar fecha',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      suffixIcon: const Icon(Icons.calendar_today),
+                      filled: true,
+                    ),
+                    readOnly: true,
+                    onTap: () async {
+                      final fecha = await showDatePicker(
+                        context: context,
+                        initialDate: DateTime.now().add(
+                          const Duration(days: 365),
+                        ),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(
+                          const Duration(days: 3650),
+                        ),
+                      );
+                      if (fecha != null) {
+                        fechaVencimientoController.text = fecha
+                            .toIso8601String()
+                            .split('T')
+                            .first;
+                        setState(() {});
+                      }
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Precios
+          Text(
+            'Precios (opcional)',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: precioCompraController,
+                  decoration: InputDecoration(
+                    labelText: 'Precio compra',
+                    prefixText: 'C\$ ',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextField(
+                  controller: precioVentaController,
+                  decoration: InputDecoration(
+                    labelText: 'Precio venta',
+                    prefixText: 'C\$ ',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Stock
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.inventory_2, color: Colors.green[700], size: 24),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Unidades a agregar',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.green[800],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton.filled(
+                      onPressed: stock > 1
+                          ? () => setState(() {
+                              stock--;
+                              stockController.text = stock.toString();
+                            })
+                          : null,
+                      icon: const Icon(Icons.remove, size: 28),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.green.withValues(alpha: 0.2),
+                        foregroundColor: Colors.green[700],
+                        minimumSize: const Size(56, 56),
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    SizedBox(
+                      width: 120,
+                      child: TextField(
+                        controller: stockController,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                          ),
+                        ),
+                        keyboardType: TextInputType.number,
+                        onChanged: (value) => setState(() {
+                          stock = (int.tryParse(value) ?? 1).clamp(1, 9999);
+                        }),
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    IconButton.filled(
+                      onPressed: stock < 9999
+                          ? () => setState(() {
+                              stock++;
+                              stockController.text = stock.toString();
+                            })
+                          : null,
+                      icon: const Icon(Icons.add, size: 28),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.green.withValues(alpha: 0.2),
+                        foregroundColor: Colors.green[700],
+                        minimumSize: const Size(56, 56),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Opciones avanzadas
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: const Text(
+              'Opciones avanzadas',
+              style: TextStyle(fontSize: 15),
+            ),
+            leading: Icon(Icons.settings, color: colorScheme.onSurfaceVariant),
+            children: [
+              CheckboxListTile(
+                title: const Text('Fecha de agregado personalizada'),
+                subtitle: const Text('Por defecto se usa la fecha actual'),
+                value: usarFechaPersonalizada,
+                onChanged: (value) {
+                  setState(() {
+                    usarFechaPersonalizada = value ?? false;
+                    if (!usarFechaPersonalizada)
+                      fechaAgregadoController.clear();
+                  });
+                },
+                contentPadding: EdgeInsets.zero,
+              ),
+              if (usarFechaPersonalizada) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: fechaAgregadoController,
+                  decoration: InputDecoration(
+                    labelText: 'Fecha de agregado',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    suffixIcon: const Icon(Icons.calendar_today),
+                    filled: true,
+                  ),
+                  readOnly: true,
+                  onTap: () async {
+                    final fecha = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime.now(),
+                    );
+                    if (fecha != null) {
+                      final hora = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.now(),
+                      );
+                      if (hora != null) {
+                        fechaAgregadoController.text = DateTime(
+                          fecha.year,
+                          fecha.month,
+                          fecha.day,
+                          hora.hour,
+                          hora.minute,
+                        ).toIso8601String();
+                      }
+                    }
+                  },
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -229,7 +229,32 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 4),
-              Text(grupo.codigo, style: const TextStyle(fontSize: 14)),
+              // Mostrar presentación (cantidad + unidad + tipo)
+              if (grupo.presentacionFormateada.isNotEmpty)
+                Row(
+                  children: [
+                    Icon(
+                      Icons.inventory_2_outlined,
+                      size: 14,
+                      color: Colors.grey[600],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      grupo.presentacionFormateada,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              if (grupo.presentacionFormateada.isNotEmpty)
+                const SizedBox(height: 4),
+              Text(
+                grupo.codigo,
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              ),
               const SizedBox(height: 4),
               Row(
                 children: [
@@ -368,10 +393,32 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                     ),
                   ),
                   const SizedBox(height: 4),
+                  // Presentación (cantidad + unidad + tipo)
+                  if (grupo.presentacionFormateada.isNotEmpty)
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          size: 16,
+                          color: colorScheme.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          grupo.presentacionFormateada,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (grupo.presentacionFormateada.isNotEmpty)
+                    const SizedBox(height: 4),
                   Text(
                     grupo.codigo,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),

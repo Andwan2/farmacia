@@ -12,11 +12,15 @@ class ProductoService {
     }
 
     try {
+      // Hacer JOIN con presentacion y unidad_medida para obtener nombres
       final response = await _client
           .from('producto')
-          .select(
-            'id_producto, nombre_producto, id_presentacion, id_unidad_medida, fecha_vencimiento, codigo, cantidad, estado, precio_venta, precio_compra',
-          )
+          .select('''
+            id_producto, nombre_producto, id_presentacion, id_unidad_medida, 
+            fecha_vencimiento, codigo, cantidad, estado, precio_venta, precio_compra,
+            presentacion:id_presentacion(descripcion),
+            unidad_medida:id_unidad_medida(nombre, abreviatura)
+          ''')
           .eq('estado', 'Disponible')
           .or('nombre_producto.ilike.%$query%,codigo.ilike.%$query%')
           .order('nombre_producto', ascending: true);
@@ -42,6 +46,8 @@ class ProductoService {
           codigo: entry.key,
           nombreProducto: primero.nombreProducto,
           cantidad: primero.cantidad,
+          nombrePresentacion: primero.nombrePresentacion,
+          abreviaturaUnidad: primero.abreviaturaUnidad,
           precioVenta: primero.precioVenta,
           precioCompra: primero.precioCompra,
           stock: lista.length,
