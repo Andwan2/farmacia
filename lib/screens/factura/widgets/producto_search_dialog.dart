@@ -384,10 +384,32 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                     ),
                   ),
                   const SizedBox(height: 4),
+                  // Presentación (cantidad + unidad + tipo)
+                  if (grupo.presentacionFormateada.isNotEmpty)
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          size: 16,
+                          color: colorScheme.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          grupo.presentacionFormateada,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (grupo.presentacionFormateada.isNotEmpty)
+                    const SizedBox(height: 4),
                   Text(
                     grupo.codigo,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
