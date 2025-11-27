@@ -74,6 +74,19 @@ Future<void> mostrarEditarProducto(
   // Obtener la cantidad de productos en el grupo
   final stockGrupo = producto['_stock_grupo'] as int? ?? 1;
 
+  // Verificar si es producto a granel
+  final esGranel = producto['_es_granel'] as bool? ?? false;
+
+  // Obtener abreviatura de unidad de medida para productos a granel
+  String abreviaturaUnidad = '';
+  if (esGranel) {
+    final unidadActual = listaUnidadesMedida.firstWhere(
+      (u) => u['id'] == producto['id_unidad_medida'],
+      orElse: () => {'abreviatura': ''},
+    );
+    abreviaturaUnidad = unidadActual['abreviatura']?.toString() ?? '';
+  }
+
   // Determinar si el producto tiene fecha de vencimiento
   final bool tieneVencimientoOriginal =
       producto['fecha_vencimiento'] != null &&
@@ -168,7 +181,9 @@ Future<void> mostrarEditarProducto(
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
-                                        'Stock disponible: $stockGrupo unidades',
+                                        esGranel
+                                            ? 'Stock disponible: $stockGrupo $abreviaturaUnidad (A granel)'
+                                            : 'Stock disponible: $stockGrupo unidades',
                                         style: TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.bold,
@@ -181,39 +196,71 @@ Future<void> mostrarEditarProducto(
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                RadioListTile<bool>(
-                                  title: const Text(
-                                    'Editar todos los productos del grupo',
-                                    style: TextStyle(fontSize: 13),
+                                // Para productos a granel, no mostrar opciones de editar por cantidad
+                                if (esGranel)
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isDarkMode
+                                          ? Colors.orange.withOpacity(0.1)
+                                          : Colors.orange.withOpacity(0.05),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.info_outline,
+                                          size: 16,
+                                          color: Colors.orange[700],
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Para productos a granel, modifica el stock cambiando el campo "Cantidad"',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.orange[800],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  value: true,
-                                  groupValue: editarTodos,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      editarTodos = value!;
-                                    });
-                                  },
-                                  contentPadding: EdgeInsets.zero,
-                                  dense: true,
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                RadioListTile<bool>(
-                                  title: const Text(
-                                    'Editar cantidad específica',
-                                    style: TextStyle(fontSize: 13),
+                                if (!esGranel)
+                                  RadioListTile<bool>(
+                                    title: const Text(
+                                      'Editar todos los productos del grupo',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                    value: true,
+                                    groupValue: editarTodos,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        editarTodos = value!;
+                                      });
+                                    },
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                    visualDensity: VisualDensity.compact,
                                   ),
-                                  value: false,
-                                  groupValue: editarTodos,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      editarTodos = value!;
-                                    });
-                                  },
-                                  contentPadding: EdgeInsets.zero,
-                                  dense: true,
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                if (!editarTodos) ...[
+                                if (!esGranel)
+                                  RadioListTile<bool>(
+                                    title: const Text(
+                                      'Editar cantidad específica',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                    value: false,
+                                    groupValue: editarTodos,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        editarTodos = value!;
+                                      });
+                                    },
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                if (!esGranel && !editarTodos) ...[
                                   const SizedBox(height: 6),
                                   Text(
                                     'Cantidad a editar (Máx: $stockGrupo)',
@@ -629,141 +676,145 @@ Future<void> mostrarEditarProducto(
                             ],
                           ),
                           const SizedBox(height: 10),
-                          // Stock
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: isDarkMode
-                                  ? Colors.orange.withOpacity(0.1)
-                                  : Colors.orange.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
+                          // Stock - Solo mostrar para productos NO a granel
+                          if (!esGranel)
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
                                 color: isDarkMode
-                                    ? Colors.orange.withOpacity(0.3)
-                                    : Colors.orange.withOpacity(0.2),
+                                    ? Colors.orange.withOpacity(0.1)
+                                    : Colors.orange.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isDarkMode
+                                      ? Colors.orange.withOpacity(0.3)
+                                      : Colors.orange.withOpacity(0.2),
+                                ),
                               ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.inventory_2_outlined,
-                                      color: isDarkMode
-                                          ? Colors.orange[300]
-                                          : Colors.orange[700],
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Modificar Stock',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.inventory_2_outlined,
                                         color: isDarkMode
                                             ? Colors.orange[300]
-                                            : Colors.orange[800],
+                                            : Colors.orange[700],
+                                        size: 20,
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Stock actual: $stockGrupo → Nuevo: $nuevoStock',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isDarkMode
-                                        ? Colors.grey[400]
-                                        : Colors.grey[600],
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.remove_circle_outline,
-                                      ),
-                                      onPressed: nuevoStock > 0
-                                          ? () {
-                                              setState(() {
-                                                nuevoStock--;
-                                                stockController.text =
-                                                    nuevoStock.toString();
-                                              });
-                                            }
-                                          : null,
-                                      iconSize: 28,
-                                      color: isDarkMode
-                                          ? Colors.orange[300]
-                                          : Colors.orange[700],
-                                    ),
-                                    SizedBox(
-                                      width: 80,
-                                      child: TextField(
-                                        controller: stockController,
-                                        decoration: const InputDecoration(
-                                          border: OutlineInputBorder(),
-                                          contentPadding: EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 8,
-                                          ),
-                                          isDense: true,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          fontSize: 16,
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Modificar Stock',
+                                        style: TextStyle(
+                                          fontSize: 14,
                                           fontWeight: FontWeight.bold,
+                                          color: isDarkMode
+                                              ? Colors.orange[300]
+                                              : Colors.orange[800],
                                         ),
-                                        keyboardType: TextInputType.number,
-                                        onChanged: (value) {
-                                          final stock =
-                                              int.tryParse(value) ?? 0;
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Stock actual: $stockGrupo → Nuevo: $nuevoStock',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isDarkMode
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.remove_circle_outline,
+                                        ),
+                                        onPressed: nuevoStock > 0
+                                            ? () {
+                                                setState(() {
+                                                  nuevoStock--;
+                                                  stockController.text =
+                                                      nuevoStock.toString();
+                                                });
+                                              }
+                                            : null,
+                                        iconSize: 28,
+                                        color: isDarkMode
+                                            ? Colors.orange[300]
+                                            : Colors.orange[700],
+                                      ),
+                                      SizedBox(
+                                        width: 80,
+                                        child: TextField(
+                                          controller: stockController,
+                                          decoration: const InputDecoration(
+                                            border: OutlineInputBorder(),
+                                            contentPadding:
+                                                EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 8,
+                                                ),
+                                            isDense: true,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          keyboardType: TextInputType.number,
+                                          onChanged: (value) {
+                                            final stock =
+                                                int.tryParse(value) ?? 0;
+                                            setState(() {
+                                              nuevoStock = stock < 0
+                                                  ? 0
+                                                  : stock;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.add_circle_outline,
+                                        ),
+                                        onPressed: () {
                                           setState(() {
-                                            nuevoStock = stock < 0 ? 0 : stock;
+                                            nuevoStock++;
+                                            stockController.text = nuevoStock
+                                                .toString();
                                           });
                                         },
+                                        iconSize: 28,
+                                        color: isDarkMode
+                                            ? Colors.orange[300]
+                                            : Colors.orange[700],
                                       ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.add_circle_outline,
-                                      ),
-                                      onPressed: () {
-                                        setState(() {
-                                          nuevoStock++;
-                                          stockController.text = nuevoStock
-                                              .toString();
-                                        });
-                                      },
-                                      iconSize: 28,
-                                      color: isDarkMode
-                                          ? Colors.orange[300]
-                                          : Colors.orange[700],
-                                    ),
-                                  ],
-                                ),
-                                if (nuevoStock != stockGrupo)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 8),
-                                    child: Text(
-                                      nuevoStock > stockGrupo
-                                          ? 'Se agregarán ${nuevoStock - stockGrupo} unidades'
-                                          : 'Se eliminarán ${stockGrupo - nuevoStock} unidades',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        color: nuevoStock > stockGrupo
-                                            ? Colors.green[600]
-                                            : Colors.red[600],
-                                      ),
-                                    ),
+                                    ],
                                   ),
-                              ],
+                                  if (nuevoStock != stockGrupo)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 8),
+                                      child: Text(
+                                        nuevoStock > stockGrupo
+                                            ? 'Se agregarán ${nuevoStock - stockGrupo} unidades'
+                                            : 'Se eliminarán ${stockGrupo - nuevoStock} unidades',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: nuevoStock > stockGrupo
+                                              ? Colors.green[600]
+                                              : Colors.red[600],
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),

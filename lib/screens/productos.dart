@@ -475,12 +475,18 @@ class _InventarioPageState extends State<ProductosScreen> {
     final fechaStr = producto['fecha_vencimiento']?.toString();
     final fecha = fechaStr != null ? DateTime.tryParse(fechaStr) : null;
     final stockGrupo = producto['_stock_grupo'] as int? ?? 1;
+    final esGranel = producto['_es_granel'] as bool? ?? false;
     final codigoOriginal = producto['codigo']?.toString() ?? 'Sin código';
     final fechaVencimientoOriginal = producto['fecha_vencimiento']
         ?.toString()
         .split('T')
         .first;
     final estadoOriginal = producto['estado'] as String? ?? 'Disponible';
+
+    // Texto del stock con unidad de medida si es a granel
+    final stockTexto = esGranel
+        ? '$stockGrupo $abreviatura'
+        : '$stockGrupo unidades';
 
     bool eliminarTodos = true;
     int cantidadEliminar = 1;
@@ -512,7 +518,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                     _buildInfoRow('Código:', codigo),
                     _buildInfoRow('Presentación:', presentacion),
                     _buildInfoRow('Cantidad:', '$cantidad $abreviatura'),
-                    _buildInfoRow('Stock:', '$stockGrupo unidades'),
+                    _buildInfoRow('Stock:', stockTexto),
                     _buildInfoRow(
                       'Fecha de vencimiento:',
                       fecha?.toIso8601String().split('T').first ?? 'Sin fecha',
@@ -559,39 +565,169 @@ class _InventarioPageState extends State<ProductosScreen> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          RadioListTile<bool>(
-                            title: const Text(
-                              'Eliminar todos los productos del grupo',
-                              style: TextStyle(fontSize: 13),
+                          // Para productos a granel, mostrar mensaje informativo
+                          if (esGranel)
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isDarkMode
+                                    ? Colors.blue.withOpacity(0.1)
+                                    : Colors.blue.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: 16,
+                                    color: Colors.blue[700],
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Para productos a granel, se reducirá la cantidad del producto.',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.blue[800],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            value: true,
-                            groupValue: eliminarTodos,
-                            onChanged: (value) {
-                              setState(() {
-                                eliminarTodos = value!;
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          RadioListTile<bool>(
-                            title: const Text(
-                              'Eliminar cantidad específica',
-                              style: TextStyle(fontSize: 13),
+                          if (!esGranel)
+                            RadioListTile<bool>(
+                              title: const Text(
+                                'Eliminar todos los productos del grupo',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                              value: true,
+                              groupValue: eliminarTodos,
+                              onChanged: (value) {
+                                setState(() {
+                                  eliminarTodos = value!;
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              visualDensity: VisualDensity.compact,
                             ),
-                            value: false,
-                            groupValue: eliminarTodos,
-                            onChanged: (value) {
-                              setState(() {
-                                eliminarTodos = value!;
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          if (!eliminarTodos) ...[
+                          if (!esGranel)
+                            RadioListTile<bool>(
+                              title: const Text(
+                                'Eliminar cantidad específica',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                              value: false,
+                              groupValue: eliminarTodos,
+                              onChanged: (value) {
+                                setState(() {
+                                  eliminarTodos = value!;
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          // Para productos a granel, mostrar campo de cantidad a reducir
+                          if (esGranel) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Cantidad a reducir (Máx: $stockGrupo $abreviatura)',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  onPressed: cantidadEliminar > 1
+                                      ? () {
+                                          setState(() {
+                                            cantidadEliminar--;
+                                            cantidadController.text =
+                                                cantidadEliminar.toString();
+                                          });
+                                        }
+                                      : null,
+                                  iconSize: 28,
+                                  color: isDarkMode
+                                      ? Colors.orange[300]
+                                      : Colors.orange,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    minHeight: 40,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 80,
+                                  child: TextField(
+                                    controller: cantidadController,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 8,
+                                      ),
+                                      isDense: true,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (value) {
+                                      final cantidad = int.tryParse(value) ?? 1;
+                                      setState(() {
+                                        cantidadEliminar = cantidad.clamp(
+                                          1,
+                                          stockGrupo,
+                                        );
+                                        cantidadController.text =
+                                            cantidadEliminar.toString();
+                                        cantidadController.selection =
+                                            TextSelection.fromPosition(
+                                              TextPosition(
+                                                offset: cantidadController
+                                                    .text
+                                                    .length,
+                                              ),
+                                            );
+                                      });
+                                    },
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.add_circle_outline),
+                                  onPressed: cantidadEliminar < stockGrupo
+                                      ? () {
+                                          setState(() {
+                                            cantidadEliminar++;
+                                            cantidadController.text =
+                                                cantidadEliminar.toString();
+                                          });
+                                        }
+                                      : null,
+                                  iconSize: 28,
+                                  color: isDarkMode
+                                      ? Colors.orange[300]
+                                      : Colors.orange,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    minHeight: 40,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (!esGranel && !eliminarTodos) ...[
                             const SizedBox(height: 6),
                             Text(
                               'Cantidad a eliminar (Máx: $stockGrupo)',
@@ -798,6 +934,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                       'eliminarTodos': eliminarTodos,
                       'cantidad': cantidadEliminar,
                       'estado': estadoSeleccionado,
+                      'esGranel': esGranel,
                     });
                   },
                   style: ElevatedButton.styleFrom(
@@ -815,9 +952,60 @@ class _InventarioPageState extends State<ProductosScreen> {
 
     if (resultado != null && resultado['confirmar'] == true) {
       final estadoFinal = resultado['estado'] as String;
+      final esProductoGranel = resultado['esGranel'] as bool? ?? false;
 
       try {
-        if (resultado['eliminarTodos'] == true) {
+        // Lógica especial para productos a granel
+        if (esProductoGranel) {
+          final cantidadReducir = resultado['cantidad'] as int;
+          final cantidadActual = producto['cantidad'] as num? ?? 0;
+          final nuevaCantidad = cantidadActual - cantidadReducir;
+
+          if (nuevaCantidad <= 0) {
+            // Si la cantidad llega a 0 o menos, marcar como eliminado
+            var query = Supabase.instance.client
+                .from('producto')
+                .update({'estado': estadoFinal})
+                .eq('codigo', codigoOriginal);
+
+            if (fechaVencimientoOriginal != null) {
+              query = query.eq('fecha_vencimiento', fechaVencimientoOriginal);
+            } else {
+              query = query.isFilter('fecha_vencimiento', null);
+            }
+
+            await query.eq('estado', estadoOriginal);
+          } else {
+            // Reducir la cantidad del producto
+            var query = Supabase.instance.client
+                .from('producto')
+                .update({'cantidad': nuevaCantidad})
+                .eq('codigo', codigoOriginal);
+
+            if (fechaVencimientoOriginal != null) {
+              query = query.eq('fecha_vencimiento', fechaVencimientoOriginal);
+            } else {
+              query = query.isFilter('fecha_vencimiento', null);
+            }
+
+            await query.eq('estado', estadoOriginal);
+          }
+
+          await cargarDatos();
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  nuevaCantidad <= 0
+                      ? 'Producto eliminado correctamente'
+                      : 'Se redujo $cantidadReducir $abreviatura del stock',
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else if (resultado['eliminarTodos'] == true) {
           // Eliminar todos los productos del grupo con el mismo estado
           // estadoOriginal ya garantiza que son productos disponibles
           var query = Supabase.instance.client
@@ -1038,7 +1226,27 @@ class _InventarioPageState extends State<ProductosScreen> {
       // Crear un representante para cada grupo
       for (final grupo in rangosPorVencimiento) {
         final representante = Map<String, dynamic>.from(grupo[0]);
-        representante['_stock_grupo'] = grupo.length;
+
+        // Verificar si es producto a granel
+        final idPresentacion = representante['id_presentacion'] as int?;
+        final descripcionPresentacion = idPresentacion != null
+            ? (presentaciones[idPresentacion]?['descripcion']
+                      ?.toString()
+                      .toLowerCase() ??
+                  '')
+            : '';
+        final esAGranel = descripcionPresentacion == 'a granel';
+
+        if (esAGranel) {
+          // Para productos a granel: stock = cantidad del producto (como double)
+          final cantidad = representante['cantidad'] as num? ?? 0;
+          representante['_stock_grupo'] = cantidad.toDouble();
+          representante['_es_granel'] = true;
+        } else {
+          // Para otros productos: stock = cantidad de registros en el grupo
+          representante['_stock_grupo'] = grupo.length.toDouble();
+          representante['_es_granel'] = false;
+        }
         final fechasValidas = grupo
             .map((p) {
               final fStr = p['fecha_vencimiento']?.toString();
@@ -1410,10 +1618,30 @@ class _InventarioPageState extends State<ProductosScreen> {
     final diasRestantes = fecha != null
         ? fecha.difference(DateTime.now()).inDays
         : 0;
-    final stockGrupo = p['_stock_grupo'] as int? ?? 1;
+    final stockGrupoRaw = p['_stock_grupo'] as num? ?? 1;
+    final esGranel = p['_es_granel'] as bool? ?? false;
     final estado = p['estado'] as String?;
     final precioCompra = p['precio_compra'] as num?;
     final precioVenta = p['precio_venta'] as num?;
+
+    // Formatear stock: redondear a .5 o entero, mostrar decimal solo si no es .0
+    String formatearStock(num valor) {
+      // Redondear a .5 más cercano
+      final redondeado = (valor * 2).round() / 2;
+      if (redondeado == redondeado.toInt()) {
+        return redondeado.toInt().toString();
+      } else {
+        return redondeado.toStringAsFixed(1);
+      }
+    }
+
+    final stockFormateado = formatearStock(stockGrupoRaw);
+    final stockGrupo = stockGrupoRaw.toDouble();
+
+    // Texto del stock con unidad de medida si es a granel
+    final stockTexto = esGranel
+        ? '$stockFormateado $abreviatura'
+        : stockFormateado;
 
     // Construir descripción de presentación compacta
     final presentacionCompleta = [
@@ -1474,7 +1702,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                       style: TextStyle(fontSize: 9, color: Colors.white70),
                     ),
                     Text(
-                      '$stockGrupo',
+                      stockTexto,
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
@@ -1499,7 +1727,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                   child: Column(
                     children: [
                       Text(
-                        'Precio',
+                        esGranel ? 'x $abreviatura' : 'x unidad',
                         style: TextStyle(fontSize: 9, color: Colors.green[100]),
                       ),
                       Text(

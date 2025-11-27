@@ -116,7 +116,6 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
 
   String generarCodigo() {
     if (nombreController.text.isEmpty ||
-        cantidadController.text.isEmpty ||
         presentacionSeleccionada == null ||
         unidadMedidaSeleccionada == null) {
       return '';
@@ -129,18 +128,35 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
       (p) => p['id_presentacion'] == presentacionSeleccionada,
       orElse: () => {'descripcion': ''},
     );
-    final abreviatura = unidad['abreviatura'] ?? '';
-    final descripcionPres = presentacion['descripcion'] ?? '';
-    final cantidadNum = double.tryParse(cantidadController.text.trim());
-    String cantidadFormateada = cantidadController.text.trim();
-    if (cantidadNum != null) {
-      cantidadFormateada = cantidadNum == cantidadNum.toInt()
-          ? cantidadNum.toInt().toString()
-          : cantidadNum.toString();
-    }
+    final abreviatura = (unidad['abreviatura'] ?? '').toString().replaceAll(
+      ' ',
+      '',
+    );
+    final descripcionPres = (presentacion['descripcion'] ?? '')
+        .toString()
+        .replaceAll(' ', '');
+    final esAGranel = descripcionPres.toLowerCase() == 'agranel';
     final nombre = nombreController.text.trim().replaceAll(' ', '');
-    return '$nombre$cantidadFormateada$abreviatura$descripcionPres'
-        .toUpperCase();
+
+    if (esAGranel) {
+      // Para productos a granel: nombre + unidad de medida (sin cantidad)
+      return '$nombre$abreviatura$descripcionPres'.toUpperCase();
+    } else {
+      // Para otros productos: nombre + cantidad + unidad + presentación
+      if (cantidadController.text.isEmpty) return '';
+      final cantidadNum = double.tryParse(cantidadController.text.trim());
+      String cantidadFormateada = cantidadController.text.trim().replaceAll(
+        ' ',
+        '',
+      );
+      if (cantidadNum != null) {
+        cantidadFormateada = cantidadNum == cantidadNum.toInt()
+            ? cantidadNum.toInt().toString()
+            : cantidadNum.toString();
+      }
+      return '$nombre$cantidadFormateada$abreviatura$descripcionPres'
+          .toUpperCase();
+    }
   }
 
   bool validarPaso(int paso) {
