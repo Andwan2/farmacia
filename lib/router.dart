@@ -1,5 +1,5 @@
 import 'package:abari/screens/empleados.dart';
-import 'package:abari/screens/factura/factura_screen.dart';
+import 'package:abari/screens/factura/pages/factura_screen.dart';
 import 'package:abari/screens/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';

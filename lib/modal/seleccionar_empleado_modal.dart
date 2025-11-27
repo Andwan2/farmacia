@@ -101,17 +101,20 @@ class _EmpleadoBottomSheet extends StatelessWidget {
                       return _buildEmpty();
                     }
 
-                    return ListView.builder(
-                      controller: scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: empleados.length,
-                      itemBuilder: (context, index) {
-                        return _buildEmpleadoTile(
-                          context,
-                          empleados[index],
-                          onEmpleadoSeleccionado,
-                        );
-                      },
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 12.0),
+                      child: ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: empleados.length,
+                        itemBuilder: (context, index) {
+                          return _buildEmpleadoTile(
+                            context,
+                            empleados[index],
+                            onEmpleadoSeleccionado,
+                          );
+                        },
+                      ),
                     );
                   },
                 ),
