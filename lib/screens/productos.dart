@@ -474,7 +474,7 @@ class _InventarioPageState extends State<ProductosScreen> {
         : '';
     final fechaStr = producto['fecha_vencimiento']?.toString();
     final fecha = fechaStr != null ? DateTime.tryParse(fechaStr) : null;
-    final stockGrupo = producto['_stock_grupo'] as int? ?? 1;
+    final stockGrupo = (producto['_stock_grupo'] as num?)?.toInt() ?? 1;
     final esGranel = producto['_es_granel'] as bool? ?? false;
     final codigoOriginal = producto['codigo']?.toString() ?? 'Sin código';
     final fechaVencimientoOriginal = producto['fecha_vencimiento']
@@ -963,32 +963,38 @@ class _InventarioPageState extends State<ProductosScreen> {
 
           if (nuevaCantidad <= 0) {
             // Si la cantidad llega a 0 o menos, marcar como eliminado
-            var query = Supabase.instance.client
-                .from('producto')
-                .update({'estado': estadoFinal})
-                .eq('codigo', codigoOriginal);
-
             if (fechaVencimientoOriginal != null) {
-              query = query.eq('fecha_vencimiento', fechaVencimientoOriginal);
+              await Supabase.instance.client
+                  .from('producto')
+                  .update({'estado': estadoFinal})
+                  .eq('codigo', codigoOriginal)
+                  .eq('fecha_vencimiento', fechaVencimientoOriginal)
+                  .eq('estado', estadoOriginal);
             } else {
-              query = query.isFilter('fecha_vencimiento', null);
+              await Supabase.instance.client
+                  .from('producto')
+                  .update({'estado': estadoFinal})
+                  .eq('codigo', codigoOriginal)
+                  .isFilter('fecha_vencimiento', null)
+                  .eq('estado', estadoOriginal);
             }
-
-            await query.eq('estado', estadoOriginal);
           } else {
             // Reducir la cantidad del producto
-            var query = Supabase.instance.client
-                .from('producto')
-                .update({'cantidad': nuevaCantidad})
-                .eq('codigo', codigoOriginal);
-
             if (fechaVencimientoOriginal != null) {
-              query = query.eq('fecha_vencimiento', fechaVencimientoOriginal);
+              await Supabase.instance.client
+                  .from('producto')
+                  .update({'cantidad': nuevaCantidad})
+                  .eq('codigo', codigoOriginal)
+                  .eq('fecha_vencimiento', fechaVencimientoOriginal)
+                  .eq('estado', estadoOriginal);
             } else {
-              query = query.isFilter('fecha_vencimiento', null);
+              await Supabase.instance.client
+                  .from('producto')
+                  .update({'cantidad': nuevaCantidad})
+                  .eq('codigo', codigoOriginal)
+                  .isFilter('fecha_vencimiento', null)
+                  .eq('estado', estadoOriginal);
             }
-
-            await query.eq('estado', estadoOriginal);
           }
 
           await cargarDatos();
@@ -1008,19 +1014,21 @@ class _InventarioPageState extends State<ProductosScreen> {
         } else if (resultado['eliminarTodos'] == true) {
           // Eliminar todos los productos del grupo con el mismo estado
           // estadoOriginal ya garantiza que son productos disponibles
-          var query = Supabase.instance.client
-              .from('producto')
-              .update({'estado': estadoFinal})
-              .eq('codigo', codigoOriginal);
-
-          // Manejar fecha_vencimiento null correctamente
           if (fechaVencimientoOriginal != null) {
-            query = query.eq('fecha_vencimiento', fechaVencimientoOriginal);
+            await Supabase.instance.client
+                .from('producto')
+                .update({'estado': estadoFinal})
+                .eq('codigo', codigoOriginal)
+                .eq('fecha_vencimiento', fechaVencimientoOriginal)
+                .eq('estado', estadoOriginal);
           } else {
-            query = query.isFilter('fecha_vencimiento', null);
+            await Supabase.instance.client
+                .from('producto')
+                .update({'estado': estadoFinal})
+                .eq('codigo', codigoOriginal)
+                .isFilter('fecha_vencimiento', null)
+                .eq('estado', estadoOriginal);
           }
-
-          await query.eq('estado', estadoOriginal);
 
           await cargarDatos();
 
@@ -1321,8 +1329,8 @@ class _InventarioPageState extends State<ProductosScreen> {
           if (fechaB == null) return -1;
           return fechaA.compareTo(fechaB);
         case 'stock':
-          final stockA = a['_stock_grupo'] as int? ?? 1;
-          final stockB = b['_stock_grupo'] as int? ?? 1;
+          final stockA = (a['_stock_grupo'] as num?)?.toInt() ?? 1;
+          final stockB = (b['_stock_grupo'] as num?)?.toInt() ?? 1;
           return stockB.compareTo(stockA); // Descendente
         case 'agregado_reciente':
           final fechaAgregadoA = a['fecha_agregado']?.toString();

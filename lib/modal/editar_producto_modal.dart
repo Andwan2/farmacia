@@ -72,7 +72,7 @@ Future<void> mostrarEditarProducto(
   final estadoOriginal = producto['estado'] as String? ?? 'Disponible';
 
   // Obtener la cantidad de productos en el grupo
-  final stockGrupo = producto['_stock_grupo'] as int? ?? 1;
+  final stockGrupo = (producto['_stock_grupo'] as num?)?.toInt() ?? 1;
 
   // Verificar si es producto a granel
   final esGranel = producto['_es_granel'] as bool? ?? false;
@@ -920,57 +920,56 @@ Future<void> mostrarEditarProducto(
                             try {
                               if (editarTodos) {
                                 // Actualizar todos los productos con el mismo tipo y fecha de vencimiento original
-                                var query = Supabase.instance.client
-                                    .from('producto')
-                                    .update({
-                                      'nombre_producto': nombre,
-                                      'codigo': codigo,
-                                      'id_presentacion':
-                                          presentacionSeleccionada,
-                                      'id_unidad_medida':
-                                          unidadMedidaSeleccionada,
-                                      'cantidad': cantidad.isEmpty
-                                          ? null
-                                          : double.tryParse(cantidad),
-                                      'fecha_vencimiento': sinFechaVencimiento
-                                          ? null
-                                          : fechaVencimiento.isEmpty
-                                          ? null
-                                          : fechaVencimiento,
-                                      'fecha_agregado':
-                                          fechaAgregadoController
-                                              .text
-                                              .isNotEmpty
-                                          ? fechaAgregadoController.text
-                                          : null,
-                                      'precio_compra':
-                                          precioCompraController.text.isNotEmpty
-                                          ? double.tryParse(
-                                              precioCompraController.text,
-                                            )
-                                          : null,
-                                      'precio_venta':
-                                          precioVentaController.text.isNotEmpty
-                                          ? double.tryParse(
-                                              precioVentaController.text,
-                                            )
-                                          : null,
-                                      'categoria': categoriaSeleccionada,
-                                    })
-                                    .eq('codigo', codigoOriginal)
-                                    .eq('estado', estadoOriginal);
+                                final updateData = {
+                                  'nombre_producto': nombre,
+                                  'codigo': codigo,
+                                  'id_presentacion': presentacionSeleccionada,
+                                  'id_unidad_medida': unidadMedidaSeleccionada,
+                                  'cantidad': cantidad.isEmpty
+                                      ? null
+                                      : double.tryParse(cantidad),
+                                  'fecha_vencimiento': sinFechaVencimiento
+                                      ? null
+                                      : fechaVencimiento.isEmpty
+                                      ? null
+                                      : fechaVencimiento,
+                                  'fecha_agregado':
+                                      fechaAgregadoController.text.isNotEmpty
+                                      ? fechaAgregadoController.text
+                                      : null,
+                                  'precio_compra':
+                                      precioCompraController.text.isNotEmpty
+                                      ? double.tryParse(
+                                          precioCompraController.text,
+                                        )
+                                      : null,
+                                  'precio_venta':
+                                      precioVentaController.text.isNotEmpty
+                                      ? double.tryParse(
+                                          precioVentaController.text,
+                                        )
+                                      : null,
+                                  'categoria': categoriaSeleccionada,
+                                };
 
-                                // Filtrar por fecha de vencimiento original
+                                // Ejecutar update con filtros apropiados
                                 if (fechaVencimientoOriginal.isEmpty) {
-                                  await query.isFilter(
-                                    'fecha_vencimiento',
-                                    null,
-                                  );
+                                  await Supabase.instance.client
+                                      .from('producto')
+                                      .update(updateData)
+                                      .eq('codigo', codigoOriginal)
+                                      .eq('estado', estadoOriginal)
+                                      .isFilter('fecha_vencimiento', null);
                                 } else {
-                                  await query.eq(
-                                    'fecha_vencimiento',
-                                    fechaVencimientoOriginal,
-                                  );
+                                  await Supabase.instance.client
+                                      .from('producto')
+                                      .update(updateData)
+                                      .eq('codigo', codigoOriginal)
+                                      .eq('estado', estadoOriginal)
+                                      .eq(
+                                        'fecha_vencimiento',
+                                        fechaVencimientoOriginal,
+                                      );
                                 }
 
                                 // Manejar cambios de stock

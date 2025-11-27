@@ -72,9 +72,13 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
     }
 
     for (var c in comprasBase) {
+      if (!mounted) return; // Salir si el widget fue eliminado
+
       final detalle = await Supabase.instance.client
           .from('producto_a_comprar')
-          .select('producto(precio_compra,precio_venta,nombre_producto,tipo)')
+          .select(
+            'producto(precio_compra,precio_venta,nombre_producto,codigo,cantidad,id_presentacion,id_unidad_medida)',
+          )
           .eq('id_compra', c['id_compras']);
 
       final listaProductos = List<Map<String, dynamic>>.from(detalle);
@@ -104,9 +108,11 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
       }
     }
 
-    setState(() {
-      compras = comprasBase;
-    });
+    if (mounted) {
+      setState(() {
+        compras = comprasBase;
+      });
+    }
   }
 
   int _contarProductos(Map<String, dynamic> compra) {
@@ -374,7 +380,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (fecha != null) {
+    if (fecha != null && mounted) {
       setState(() => fechaInicio = fecha);
       cargarCompras(); // Recarga automática
     }
@@ -387,7 +393,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (fecha != null) {
+    if (fecha != null && mounted) {
       setState(() => fechaFin = fecha);
       cargarCompras(); // Recarga automática
     }

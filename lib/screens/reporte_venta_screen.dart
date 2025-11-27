@@ -59,12 +59,14 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     final response = await query;
     final ventasBase = List<Map<String, dynamic>>.from(response);
 
-    // 🔎 Calcular total dinámico por cada venta y ganancias
+    // Calcular total dinámico por cada venta y ganancias
     for (var v in ventasBase) {
+      if (!mounted) return; // Salir si el widget fue eliminado
+
       final producto = await Supabase.instance.client
           .from('producto_en_venta')
           .select(
-            'producto(nombre_producto, precio_venta, precio_compra, tipo)',
+            'producto(nombre_producto, codigo, precio_venta, precio_compra, cantidad, id_presentacion, id_unidad_medida)',
           )
           .eq('id_venta', v['id_venta']);
 
@@ -88,9 +90,11 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
       v['ganancia_total'] = totalVenta - totalCosto;
     }
 
-    setState(() {
-      ventas = ventasBase;
-    });
+    if (mounted) {
+      setState(() {
+        ventas = ventasBase;
+      });
+    }
   }
 
   int _contarProductos(Map<String, dynamic> venta) {
@@ -353,7 +357,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (fecha != null) {
+    if (fecha != null && mounted) {
       setState(() => fechaInicio = fecha);
       cargarVentas(); // Recargar automáticamente
     }
@@ -366,7 +370,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (fecha != null) {
+    if (fecha != null && mounted) {
       setState(() => fechaFin = fecha);
       cargarVentas(); // Recargar automáticamente
     }
@@ -851,10 +855,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
                   ),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [
-                        Colors.red.shade600,
-                        Colors.red.shade800,
-                      ],
+                      colors: [Colors.red.shade600, Colors.red.shade800],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
