@@ -67,9 +67,8 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        width: 600,
         height: 500,
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -161,180 +160,171 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
 
     return ListView.separated(
       itemCount: _resultados.length,
-      separatorBuilder: (context, index) => const Divider(),
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final grupo = _resultados[index];
-        // Calcular stock disponible (total - ya en carrito)
         final enCarrito = widget.cantidadesEnCarrito[grupo.codigo] ?? 0;
         final stockDisponible = grupo.stock - enCarrito;
+        final colorScheme = Theme.of(context).colorScheme;
+        final sinStock = stockDisponible <= 0;
 
-        // Si no hay stock disponible, mostrar deshabilitado
-        if (stockDisponible <= 0) {
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.grey[200],
-              child: Icon(Icons.medication, color: Colors.grey[400]),
-            ),
-            title: Text(
-              grupo.nombreProducto,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[500],
-              ),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                Text(
-                  grupo.codigo,
-                  style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: Text(
-                    'En carrito: $enCarrito (sin stock adicional)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: Colors.blue[100],
-            child: Icon(Icons.medication, color: Colors.blue[700]),
-          ),
-          title: Text(
-            grupo.nombreProducto,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 4),
-              // Mostrar presentación (cantidad + unidad + tipo)
-              if (grupo.presentacionFormateada.isNotEmpty)
-                Row(
-                  children: [
-                    Icon(
-                      Icons.inventory_2_outlined,
-                      size: 14,
-                      color: Colors.grey[600],
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      grupo.presentacionFormateada,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[700],
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              if (grupo.presentacionFormateada.isNotEmpty)
-                const SizedBox(height: 4),
-              Text(
-                grupo.codigo,
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
-              const SizedBox(height: 4),
-              Row(
+        return Material(
+          color: sinStock
+              ? colorScheme.surfaceContainerLow
+              : colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: sinStock
+                ? null
+                : () => _mostrarSelectorCantidad(context, grupo, stockDisponible),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: stockDisponible > 5
-                          ? Colors.green[50]
-                          : const Color.fromARGB(255, 250, 249, 249),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(
-                        color: stockDisponible > 5
-                            ? Colors.green[300]!
-                            : const Color.fromARGB(255, 237, 146, 20)!,
-                      ),
-                    ),
-                    child: Text(
-                      'Disponible: $stockDisponible',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: stockDisponible > 5
-                            ? Colors.green[700]
-                            : const Color.fromARGB(255, 245, 0, 0),
-                      ),
-                    ),
-                  ),
-                  if (enCarrito > 0) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.blue[300]!),
-                      ),
-                      child: Text(
-                        'En carrito: $enCarrito',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blue[700],
+                  // Fila superior: Nombre y precio
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Nombre del producto (expandido)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              grupo.nombreProducto,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: sinStock
+                                    ? colorScheme.onSurface.withValues(alpha: 0.5)
+                                    : colorScheme.onSurface,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              grupo.codigo,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      // Precio
+                      if (grupo.precioVenta != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: sinStock
+                                ? Colors.grey[300]
+                                : colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'C\$${grupo.precioVenta!.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: sinStock
+                                  ? Colors.grey[600]
+                                  : colorScheme.onPrimaryContainer,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Fila inferior: Badges de stock
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      // Badge de stock disponible
+                      _buildBadge(
+                        text: sinStock
+                            ? 'Sin stock'
+                            : 'Disponible: $stockDisponible',
+                        backgroundColor: sinStock
+                            ? Colors.red.withValues(alpha: 0.1)
+                            : stockDisponible > 5
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : Colors.orange.withValues(alpha: 0.1),
+                        textColor: sinStock
+                            ? Colors.red[700]!
+                            : stockDisponible > 5
+                                ? Colors.green[700]!
+                                : Colors.orange[700]!,
+                        borderColor: sinStock
+                            ? Colors.red[300]!
+                            : stockDisponible > 5
+                                ? Colors.green[300]!
+                                : Colors.orange[300]!,
+                        icon: sinStock
+                            ? Icons.remove_shopping_cart_outlined
+                            : Icons.inventory_2_outlined,
+                      ),
+                      // Badge de en carrito
+                      if (enCarrito > 0)
+                        _buildBadge(
+                          text: 'En carrito: $enCarrito',
+                          backgroundColor: Colors.blue.withValues(alpha: 0.1),
+                          textColor: Colors.blue[700]!,
+                          borderColor: Colors.blue[300]!,
+                          icon: Icons.shopping_cart_outlined,
+                        ),
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
-          trailing: grupo.precioVenta != null
-              ? Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.green[100],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'C\$${grupo.precioVenta!.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.green[800],
-                    ),
-                  ),
-                )
-              : null,
-          onTap: () =>
-              _mostrarSelectorCantidad(context, grupo, stockDisponible),
         );
       },
+    );
+  }
+
+  Widget _buildBadge({
+    required String text,
+    required Color backgroundColor,
+    required Color textColor,
+    required Color borderColor,
+    IconData? icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: textColor),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: textColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -434,18 +424,13 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                         ),
                         decoration: BoxDecoration(
                           color: stockDisponible > 5
-                              ? Colors.green.withOpacity(0.1)
-                              : const Color.fromARGB(
-                                  255,
-                                  255,
-                                  251,
-                                  0,
-                                ).withOpacity(0.1),
+                              ? Colors.green.withValues(alpha: 0.1)
+                              : Colors.orange.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: stockDisponible > 5
                                 ? Colors.green
-                                : const Color.fromARGB(255, 255, 0, 0),
+                                : Colors.orange,
                           ),
                         ),
                         child: Text(
@@ -454,7 +439,7 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                             fontWeight: FontWeight.w600,
                             color: stockDisponible > 5
                                 ? Colors.green[700]
-                                : const Color.fromARGB(255, 249, 6, 6),
+                                : Colors.orange[700],
                           ),
                         ),
                       ),
