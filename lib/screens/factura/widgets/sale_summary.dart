@@ -20,7 +20,7 @@ class SaleSummary extends StatelessWidget {
       builder: (context, provider, child) {
         final subtotal = provider.total / 1.16;
         final cantidadProductos = provider.productos.length;
-        final cantidadTotal = provider.productos.fold<int>(
+        final cantidadTotal = provider.productos.fold<double>(
           0,
           (sum, producto) => sum + producto.cantidad,
         );
@@ -182,9 +182,7 @@ class SaleSummary extends StatelessWidget {
                                 style: textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: isValid
-                                      ? Theme.of(
-                                          context,
-                                        ).colorScheme.onPrimary
+                                      ? Theme.of(context).colorScheme.onPrimary
                                       : Theme.of(
                                           context,
                                         ).colorScheme.onSurfaceVariant,

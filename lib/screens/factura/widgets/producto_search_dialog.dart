@@ -6,13 +6,15 @@ import 'package:abari/core/utils/debouncer.dart';
 /// Resultado del diálogo: producto seleccionado, cantidad y stock total
 class ProductoSeleccionado {
   final ProductoDB producto;
-  final int cantidad;
-  final int stockTotal;
+  final double cantidad; // Puede ser decimal para productos a granel
+  final double stockTotal;
+  final bool esGranel;
 
   ProductoSeleccionado({
     required this.producto,
     required this.cantidad,
     required this.stockTotal,
+    this.esGranel = false,
   });
 }
 
@@ -163,7 +165,8 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final grupo = _resultados[index];
-        final enCarrito = widget.cantidadesEnCarrito[grupo.codigo] ?? 0;
+        final enCarritoNum = widget.cantidadesEnCarrito[grupo.codigo] ?? 0;
+        final enCarrito = enCarritoNum.toDouble();
         final stockDisponible = grupo.stock - enCarrito;
         final colorScheme = Theme.of(context).colorScheme;
         final sinStock = stockDisponible <= 0;
@@ -176,7 +179,8 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
           child: InkWell(
             onTap: sinStock
                 ? null
-                : () => _mostrarSelectorCantidad(context, grupo, stockDisponible),
+                : () =>
+                      _mostrarSelectorCantidad(context, grupo, stockDisponible),
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -198,7 +202,9 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: sinStock
-                                    ? colorScheme.onSurface.withValues(alpha: 0.5)
+                                    ? colorScheme.onSurface.withValues(
+                                        alpha: 0.5,
+                                      )
                                     : colorScheme.onSurface,
                               ),
                               maxLines: 2,
@@ -254,22 +260,22 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                       _buildBadge(
                         text: sinStock
                             ? 'Sin stock'
-                            : 'Disponible: $stockDisponible',
+                            : 'Disponible: ${grupo.esGranel ? stockDisponible.toStringAsFixed(1) : stockDisponible.toInt()} ${grupo.unidadStock}',
                         backgroundColor: sinStock
                             ? Colors.red.withValues(alpha: 0.1)
                             : stockDisponible > 5
-                                ? Colors.green.withValues(alpha: 0.1)
-                                : Colors.orange.withValues(alpha: 0.1),
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.orange.withValues(alpha: 0.1),
                         textColor: sinStock
                             ? Colors.red[700]!
                             : stockDisponible > 5
-                                ? Colors.green[700]!
-                                : Colors.orange[700]!,
+                            ? Colors.green[700]!
+                            : Colors.orange[700]!,
                         borderColor: sinStock
                             ? Colors.red[300]!
                             : stockDisponible > 5
-                                ? Colors.green[300]!
-                                : Colors.orange[300]!,
+                            ? Colors.green[300]!
+                            : Colors.orange[300]!,
                         icon: sinStock
                             ? Icons.remove_shopping_cart_outlined
                             : Icons.inventory_2_outlined,
@@ -277,7 +283,8 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                       // Badge de en carrito
                       if (enCarrito > 0)
                         _buildBadge(
-                          text: 'En carrito: $enCarrito',
+                          text:
+                              'En carrito: ${grupo.esGranel ? enCarrito.toStringAsFixed(1) : enCarrito.toInt()} ${grupo.unidadStock}',
                           backgroundColor: Colors.blue.withValues(alpha: 0.1),
                           textColor: Colors.blue[700]!,
                           borderColor: Colors.blue[300]!,
@@ -331,10 +338,17 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
   void _mostrarSelectorCantidad(
     BuildContext context,
     ProductoAgrupado grupo,
-    int stockDisponible,
+    double stockDisponible,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
-    int cantidadSeleccionada = 1;
+    // Para productos a granel usar double, para otros usar int
+    double cantidadSeleccionada = grupo.esGranel ? 0.5 : 1.0;
+    final incremento = grupo.esGranel ? 0.5 : 1.0;
+    final cantidadController = TextEditingController(
+      text: grupo.esGranel
+          ? cantidadSeleccionada.toStringAsFixed(1)
+          : cantidadSeleccionada.toInt().toString(),
+    );
 
     showModalBottomSheet(
       context: context,
@@ -343,6 +357,14 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
       builder: (bottomContext) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            // Formatear cantidad para mostrar
+            String formatearCantidad(double cantidad) {
+              if (grupo.esGranel) {
+                return cantidad.toStringAsFixed(1);
+              }
+              return cantidad.toInt().toString();
+            }
+
             return Container(
               decoration: BoxDecoration(
                 color: colorScheme.surface,
@@ -434,7 +456,7 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                           ),
                         ),
                         child: Text(
-                          'Disponible: $stockDisponible unidades',
+                          'Disponible: ${formatearCantidad(stockDisponible)} ${grupo.unidadStock}',
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: stockDisponible > 5
@@ -446,7 +468,9 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                       const Spacer(),
                       if (grupo.precioVenta != null)
                         Text(
-                          'C\$${grupo.precioVenta!.toStringAsFixed(2)} c/u',
+                          grupo.esGranel
+                              ? 'C\$${grupo.precioVenta!.toStringAsFixed(2)} / ${grupo.abreviaturaUnidad ?? 'unidad'}'
+                              : 'C\$${grupo.precioVenta!.toStringAsFixed(2)} c/u',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -459,7 +483,9 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
 
                   // Selector de cantidad
                   Text(
-                    'Cantidad a agregar',
+                    grupo.esGranel
+                        ? 'Cantidad a agregar (${grupo.abreviaturaUnidad ?? 'unidades'})'
+                        : 'Cantidad a agregar',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -471,8 +497,13 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                     children: [
                       // Botón decrementar
                       IconButton.filled(
-                        onPressed: cantidadSeleccionada > 1
-                            ? () => setModalState(() => cantidadSeleccionada--)
+                        onPressed: cantidadSeleccionada > incremento
+                            ? () => setModalState(() {
+                                cantidadSeleccionada -= incremento;
+                                cantidadController.text = formatearCantidad(
+                                  cantidadSeleccionada,
+                                );
+                              })
                             : null,
                         icon: const Icon(Icons.remove),
                         style: IconButton.styleFrom(
@@ -483,30 +514,72 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                         ),
                       ),
                       const SizedBox(width: 16),
-                      // Campo de cantidad
+                      // Campo de cantidad (editable para productos a granel)
                       Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: colorScheme.outline),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '$cantidadSeleccionada',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: colorScheme.onSurface,
-                            ),
-                          ),
-                        ),
+                        child: grupo.esGranel
+                            ? TextField(
+                                controller: cantidadController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.onSurface,
+                                ),
+                                decoration: InputDecoration(
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                ),
+                                onChanged: (value) {
+                                  final parsed = double.tryParse(value);
+                                  if (parsed != null &&
+                                      parsed > 0 &&
+                                      parsed <= stockDisponible) {
+                                    setModalState(() {
+                                      cantidadSeleccionada = parsed;
+                                    });
+                                  }
+                                },
+                              )
+                            : Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: colorScheme.outline,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  formatearCantidad(cantidadSeleccionada),
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: colorScheme.onSurface,
+                                  ),
+                                ),
+                              ),
                       ),
                       const SizedBox(width: 16),
                       // Botón incrementar
                       IconButton.filled(
-                        onPressed: cantidadSeleccionada < stockDisponible
-                            ? () => setModalState(() => cantidadSeleccionada++)
+                        onPressed:
+                            cantidadSeleccionada + incremento <= stockDisponible
+                            ? () => setModalState(() {
+                                cantidadSeleccionada += incremento;
+                                cantidadController.text = formatearCantidad(
+                                  cantidadSeleccionada,
+                                );
+                              })
                             : null,
                         icon: const Icon(Icons.add),
                         style: IconButton.styleFrom(
@@ -539,7 +612,10 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: grupo.primerProducto != null
+                      onPressed:
+                          grupo.primerProducto != null &&
+                              cantidadSeleccionada > 0 &&
+                              cantidadSeleccionada <= stockDisponible
                           ? () {
                               Navigator.pop(
                                 bottomContext,
@@ -550,13 +626,14 @@ class _ProductoSearchDialogState extends State<ProductoSearchDialog> {
                                   producto: grupo.primerProducto!,
                                   cantidad: cantidadSeleccionada,
                                   stockTotal: grupo.stock,
+                                  esGranel: grupo.esGranel,
                                 ),
                               );
                             }
                           : null,
                       icon: const Icon(Icons.add_shopping_cart),
                       label: Text(
-                        'Agregar $cantidadSeleccionada ${cantidadSeleccionada == 1 ? 'unidad' : 'unidades'}',
+                        'Agregar ${formatearCantidad(cantidadSeleccionada)} ${grupo.unidadStock}',
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: colorScheme.primary,

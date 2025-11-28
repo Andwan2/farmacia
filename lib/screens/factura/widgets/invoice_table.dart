@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 
 class ProductoFactura {
   final int idProducto;
-  final int cantidad;
+  final double cantidad; // Puede ser decimal para productos a granel
   final String nombre;
   final String presentacion;
   final String medida;
   final String fechaVencimiento;
   final double precio;
-  final int stockMaximo; // Stock total disponible en BD
+  final double stockMaximo; // Stock total disponible en BD
+  final bool esGranel; // Si es producto a granel
+  final String? unidadMedida; // Abreviatura de la unidad (ej: "Lb")
 
   ProductoFactura({
     required this.idProducto,
@@ -19,12 +21,26 @@ class ProductoFactura {
     required this.fechaVencimiento,
     required this.precio,
     this.stockMaximo = 0,
+    this.esGranel = false,
+    this.unidadMedida,
   });
+
+  /// Obtiene la cantidad formateada según el tipo de producto
+  String get cantidadFormateada {
+    if (esGranel) {
+      return cantidad.toStringAsFixed(1);
+    }
+    return cantidad.toInt().toString();
+  }
+
+  /// Obtiene el texto de la unidad
+  String get unidadTexto =>
+      esGranel ? (unidadMedida ?? 'unidades') : 'unidades';
 }
 
 class InvoiceTable extends StatelessWidget {
   final List<ProductoFactura> productos;
-  final Function(int index, int nuevaCantidad)? onCantidadChanged;
+  final Function(int index, double nuevaCantidad)? onCantidadChanged;
 
   const InvoiceTable({
     super.key,
@@ -80,7 +96,7 @@ class InvoiceTable extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${producto.cantidad} x C\$${producto.precio.toStringAsFixed(2)}',
+                        '${producto.cantidadFormateada} ${producto.esGranel ? producto.unidadMedida ?? '' : ''} x C\$${producto.precio.toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 14,
                           color: colorScheme.primary,
@@ -89,7 +105,7 @@ class InvoiceTable extends StatelessWidget {
                       ),
                       if (producto.stockMaximo > 0)
                         Text(
-                          'Stock: ${producto.stockMaximo}',
+                          'Stock: ${producto.esGranel ? producto.stockMaximo.toStringAsFixed(1) : producto.stockMaximo.toInt()} ${producto.unidadTexto}',
                           style: TextStyle(
                             fontSize: 12,
                             color: colorScheme.onSurfaceVariant,
@@ -122,14 +138,17 @@ class InvoiceTable extends StatelessWidget {
         IconButton(
           icon: Icon(
             Icons.remove_circle_outline,
-            color: producto.cantidad > 1
+            color: producto.cantidad > (producto.esGranel ? 0.5 : 1)
                 ? colorScheme.error
                 : colorScheme.outline,
           ),
-          onPressed: producto.cantidad > 1
-              ? () => onCantidadChanged?.call(index, producto.cantidad - 1)
+          onPressed: producto.cantidad > (producto.esGranel ? 0.5 : 1)
+              ? () => onCantidadChanged?.call(
+                  index,
+                  producto.cantidad - (producto.esGranel ? 0.5 : 1),
+                )
               : null,
-          tooltip: producto.cantidad > 1
+          tooltip: producto.cantidad > (producto.esGranel ? 0.5 : 1)
               ? 'Reducir cantidad'
               : 'Cantidad mínima',
           iconSize: 28,
@@ -142,7 +161,7 @@ class InvoiceTable extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
-            '${producto.cantidad}',
+            '${producto.cantidadFormateada} ${producto.esGranel ? producto.unidadMedida ?? '' : ''}',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -159,7 +178,10 @@ class InvoiceTable extends StatelessWidget {
                 : colorScheme.outline,
           ),
           onPressed: producto.cantidad < producto.stockMaximo
-              ? () => onCantidadChanged?.call(index, producto.cantidad + 1)
+              ? () => onCantidadChanged?.call(
+                  index,
+                  producto.cantidad + (producto.esGranel ? 0.5 : 1),
+                )
               : null,
           tooltip: producto.cantidad < producto.stockMaximo
               ? 'Aumentar cantidad'
@@ -480,15 +502,18 @@ class InvoiceTable extends StatelessWidget {
             IconButton(
               icon: Icon(
                 Icons.remove_circle_outline,
-                color: producto.cantidad > 1
+                color: producto.cantidad > (producto.esGranel ? 0.5 : 1)
                     ? colorScheme.error
                     : colorScheme.outline,
                 size: 22,
               ),
-              onPressed: producto.cantidad > 1
-                  ? () => onCantidadChanged?.call(index, producto.cantidad - 1)
+              onPressed: producto.cantidad > (producto.esGranel ? 0.5 : 1)
+                  ? () => onCantidadChanged?.call(
+                      index,
+                      producto.cantidad - (producto.esGranel ? 0.5 : 1),
+                    )
                   : null,
-              tooltip: producto.cantidad > 1
+              tooltip: producto.cantidad > (producto.esGranel ? 0.5 : 1)
                   ? 'Reducir cantidad'
                   : 'Cantidad mínima',
               padding: const EdgeInsets.all(4),
@@ -498,7 +523,7 @@ class InvoiceTable extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
-                '${producto.cantidad}',
+                '${producto.cantidadFormateada} ${producto.esGranel ? producto.unidadMedida ?? '' : ''}',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -516,7 +541,10 @@ class InvoiceTable extends StatelessWidget {
                 size: 22,
               ),
               onPressed: producto.cantidad < producto.stockMaximo
-                  ? () => onCantidadChanged?.call(index, producto.cantidad + 1)
+                  ? () => onCantidadChanged?.call(
+                      index,
+                      producto.cantidad + (producto.esGranel ? 0.5 : 1),
+                    )
                   : null,
               tooltip: producto.cantidad < producto.stockMaximo
                   ? 'Aumentar cantidad'

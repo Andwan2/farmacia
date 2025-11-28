@@ -19,6 +19,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
   DateTime? fechaFin;
   List<int> comprasSeleccionadas = [];
   late TabController _tabController;
+  bool _isLoading = true; // Estado de carga
 
   // Filtros para reporte detallado
   String busquedaProveedor = '';
@@ -111,6 +112,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
     if (mounted) {
       setState(() {
         compras = comprasBase;
+        _isLoading = false;
       });
     }
   }
@@ -818,6 +820,30 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // Mostrar pantalla de carga mientras se cargan los datos
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Reportes de Compras')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: colorScheme.primary),
+              const SizedBox(height: 24),
+              Text(
+                'Cargando reportes...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(

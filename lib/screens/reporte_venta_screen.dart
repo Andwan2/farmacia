@@ -19,6 +19,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
   DateTime? fechaFin;
   List<int> ventasSeleccionadas = []; // IDs de ventas para reporte detallado
   late TabController _tabController;
+  bool _isLoading = true; // Estado de carga
 
   // Filtros para reporte detallado
   String busquedaCliente = '';
@@ -93,6 +94,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     if (mounted) {
       setState(() {
         ventas = ventasBase;
+        _isLoading = false;
       });
     }
   }
@@ -830,6 +832,30 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // Mostrar pantalla de carga mientras se cargan los datos
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Reportes de Ventas')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: colorScheme.primary),
+              const SizedBox(height: 24),
+              Text(
+                'Cargando reportes...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(

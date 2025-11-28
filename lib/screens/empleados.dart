@@ -70,12 +70,12 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
               builder: (context, constraints) {
                 // Mobile: 2 cards por fila, Tablet+: 4 cards por fila
                 final crossAxisCount = constraints.maxWidth < 600 ? 2 : 4;
-                
+
                 return GridView.builder(
                   padding: const EdgeInsets.all(12),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: crossAxisCount,
-                    childAspectRatio: 3 / 2,
+                    childAspectRatio: 1.4,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
                   ),
@@ -89,8 +89,11 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                         empleado['telefono'] ?? 'Teléfono no disponible',
                         'Cargo: ${empleado['cargo_empleado']?['cargo'] ?? 'No definido'}',
                       ],
-                      onEdit: () =>
-                          mostrarEditarEmpleado(context, empleado, cargarEmpleados),
+                      onEdit: () => mostrarEditarEmpleado(
+                        context,
+                        empleado,
+                        cargarEmpleados,
+                      ),
                     );
                   },
                 );
@@ -109,4 +112,3 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     );
   }
 }
-

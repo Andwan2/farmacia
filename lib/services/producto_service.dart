@@ -42,6 +42,21 @@ class ProductoService {
       return agrupados.entries.map((entry) {
         final lista = entry.value;
         final primero = lista.first;
+
+        // Determinar si es producto a granel
+        final esGranel =
+            primero.nombrePresentacion?.toLowerCase() == 'a granel';
+
+        // Para productos a granel: stock = campo cantidad del producto
+        // Para otros productos: stock = cantidad de registros en el grupo
+        final double stockCalculado;
+        if (esGranel) {
+          // Sumar la cantidad de todos los productos a granel con el mismo código
+          stockCalculado = lista.fold(0.0, (sum, p) => sum + p.cantidad);
+        } else {
+          stockCalculado = lista.length.toDouble();
+        }
+
         return ProductoAgrupado(
           codigo: entry.key,
           nombreProducto: primero.nombreProducto,
@@ -50,8 +65,9 @@ class ProductoService {
           abreviaturaUnidad: primero.abreviaturaUnidad,
           precioVenta: primero.precioVenta,
           precioCompra: primero.precioCompra,
-          stock: lista.length,
+          stock: stockCalculado,
           productos: lista,
+          esGranel: esGranel,
         );
       }).toList();
     } catch (e) {

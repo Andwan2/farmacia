@@ -109,8 +109,9 @@ class ProductoAgrupado {
   final String? abreviaturaUnidad;
   final double? precioVenta;
   final double? precioCompra;
-  final int stock; // Cantidad de unidades disponibles
+  final double stock; // Cantidad disponible (unidades o cantidad a granel)
   final List<ProductoDB> productos; // Lista de productos individuales
+  final bool esGranel; // Si es producto a granel
 
   ProductoAgrupado({
     required this.codigo,
@@ -122,7 +123,15 @@ class ProductoAgrupado {
     this.precioCompra,
     required this.stock,
     required this.productos,
+    this.esGranel = false,
   });
+
+  /// Obtiene el stock como entero (para productos no a granel)
+  int get stockEntero => stock.toInt();
+
+  /// Obtiene el texto de la unidad de stock
+  String get unidadStock =>
+      esGranel ? (abreviaturaUnidad ?? 'unidades') : 'unidades';
 
   /// Obtiene el primer producto disponible del grupo
   ProductoDB? get primerProducto =>

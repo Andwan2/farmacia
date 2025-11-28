@@ -3,7 +3,12 @@ import 'package:abari/models/producto_db.dart';
 import 'producto_search_dialog.dart';
 
 class AddProductButton extends StatelessWidget {
-  final void Function(ProductoDB producto, int cantidad, int stockTotal)?
+  final void Function(
+    ProductoDB producto,
+    double cantidad,
+    double stockTotal,
+    bool esGranel,
+  )?
   onProductSelected;
   final Map<String, int> cantidadesEnCarrito;
 
@@ -25,6 +30,7 @@ class AddProductButton extends StatelessWidget {
         resultado.producto,
         resultado.cantidad,
         resultado.stockTotal,
+        resultado.esGranel,
       );
     }
   }

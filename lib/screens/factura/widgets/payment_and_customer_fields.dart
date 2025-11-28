@@ -59,13 +59,19 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
   void _setClienteGeneralPorDefecto(FacturaProvider provider) {
     Future.delayed(const Duration(milliseconds: 500), () {
       if (provider.clientesCargados && provider.cliente.isEmpty) {
-        final clienteGeneral = provider.clientes.firstWhere(
-          (c) => c.nombreCliente.toLowerCase().contains('general'),
-          orElse: () => provider.clientes.isNotEmpty
-              ? provider.clientes.first
-              : throw Exception('No hay clientes'),
-        );
-        provider.setCliente(clienteGeneral.nombreCliente);
+        // Buscar específicamente "Publico general"
+        try {
+          final clienteGeneral = provider.clientes.firstWhere(
+            (c) => c.nombreCliente.toLowerCase() == 'publico general',
+          );
+          provider.setCliente(
+            clienteGeneral.nombreCliente,
+            clienteId: clienteGeneral.idCliente,
+          );
+        } catch (_) {
+          // Si no existe "Publico general", no seleccionar ninguno
+          // El usuario deberá seleccionar o crear un cliente
+        }
       }
     });
   }
@@ -208,11 +214,19 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
             });
 
             if (_tipoCliente == 'general') {
-              final clienteGeneral = provider.clientes.firstWhere(
-                (c) => c.nombreCliente.toLowerCase().contains('general'),
-                orElse: () => provider.clientes.first,
-              );
-              provider.setCliente(clienteGeneral.nombreCliente);
+              // Buscar específicamente "Publico general"
+              try {
+                final clienteGeneral = provider.clientes.firstWhere(
+                  (c) => c.nombreCliente.toLowerCase() == 'publico general',
+                );
+                provider.setCliente(
+                  clienteGeneral.nombreCliente,
+                  clienteId: clienteGeneral.idCliente,
+                );
+              } catch (_) {
+                // Si no existe, dejar vacío
+                provider.setCliente('');
+              }
             } else {
               provider.setCliente('');
             }

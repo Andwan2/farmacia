@@ -320,28 +320,22 @@ class _HomeScreenState extends State<HomeScreen> {
             // Sección de Ventas
             _buildSeccionTitulo('Ventas', Icons.point_of_sale),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildCardEstadistica(
-                    'Ventas Hoy',
-                    'C\$${ventasHoy.toStringAsFixed(2)}',
-                    Icons.today,
-                    Colors.green,
-                    isDark,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildCardEstadistica(
-                    'Ventas del Mes',
-                    'C\$${ventasMes.toStringAsFixed(2)}',
-                    Icons.calendar_month,
-                    Colors.teal,
-                    isDark,
-                  ),
-                ),
-              ],
+            _buildCardEstadistica(
+              'Ventas Hoy',
+              'C\$${ventasHoy.toStringAsFixed(2)}',
+              Icons.today,
+              Colors.green,
+              isDark,
+              fullWidth: true,
+            ),
+            const SizedBox(height: 12),
+            _buildCardEstadistica(
+              'Ventas del Mes',
+              'C\$${ventasMes.toStringAsFixed(2)}',
+              Icons.calendar_month,
+              Colors.teal,
+              isDark,
+              fullWidth: true,
             ),
 
             const SizedBox(height: 24),
@@ -386,13 +380,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-
-            const SizedBox(height: 24),
-
-            // Sección de Análisis de Ventas (Bar Chart)
-            _buildSeccionTitulo('Análisis de Ventas', Icons.bar_chart),
-            const SizedBox(height: 12),
-            _buildBarChart(isDark),
 
             const SizedBox(height: 24),
 
@@ -496,159 +483,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildBarChart(bool isDark) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Selector de período
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                const Text(
-                  'Frecuencia de Ventas',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'semana', label: Text('Semana')),
-                    ButtonSegment(value: 'mes', label: Text('Mes')),
-                  ],
-                  selected: {periodoSeleccionado},
-                  onSelectionChanged: (Set<String> newSelection) {
-                    setState(() {
-                      periodoSeleccionado = newSelection.first;
-                    });
-                    cargarDatosGraficas();
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 250,
-              child: ventasPorPeriodo.isEmpty
-                  ? const Center(child: Text('No hay datos disponibles'))
-                  : BarChart(
-                      BarChartData(
-                        alignment: BarChartAlignment.spaceAround,
-                        maxY:
-                            (ventasPorPeriodo.values.reduce(
-                                      (a, b) => a > b ? a : b,
-                                    ) +
-                                    5)
-                                .toDouble(),
-                        barTouchData: BarTouchData(
-                          enabled: true,
-                          touchTooltipData: BarTouchTooltipData(
-                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                              final label = ventasPorPeriodo.keys.elementAt(
-                                groupIndex,
-                              );
-                              return BarTooltipItem(
-                                '$label\n${rod.toY.toInt()} ventas',
-                                const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        titlesData: FlTitlesData(
-                          show: true,
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              getTitlesWidget: (value, meta) {
-                                if (value.toInt() >= 0 &&
-                                    value.toInt() < ventasPorPeriodo.length) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 8),
-                                    child: Text(
-                                      ventasPorPeriodo.keys.elementAt(
-                                        value.toInt(),
-                                      ),
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  );
-                                }
-                                return const Text('');
-                              },
-                            ),
-                          ),
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 40,
-                              getTitlesWidget: (value, meta) {
-                                return Text(
-                                  value.toInt().toString(),
-                                  style: const TextStyle(fontSize: 12),
-                                );
-                              },
-                            ),
-                          ),
-                          topTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          rightTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                        ),
-                        gridData: FlGridData(
-                          show: true,
-                          drawVerticalLine: false,
-                          horizontalInterval: 1,
-                          getDrawingHorizontalLine: (value) {
-                            return FlLine(
-                              color: Colors.grey.withOpacity(0.2),
-                              strokeWidth: 1,
-                            );
-                          },
-                        ),
-                        borderData: FlBorderData(show: false),
-                        barGroups: ventasPorPeriodo.entries.map((entry) {
-                          final index = ventasPorPeriodo.keys.toList().indexOf(
-                            entry.key,
-                          );
-                          return BarChartGroupData(
-                            x: index,
-                            barRods: [
-                              BarChartRodData(
-                                toY: entry.value.toDouble(),
-                                color: Colors.blue,
-                                width: 20,
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(6),
-                                  topRight: Radius.circular(6),
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                    ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              periodoSeleccionado == 'semana'
-                  ? 'Muestra las ventas de los últimos 7 días'
-                  : 'Muestra las ventas por semana del mes actual',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildPieChart(bool isDark) {
     final total = totalGanancias + totalGastos;
     final porcentajeGanancias = total > 0
@@ -660,35 +494,102 @@ class _HomeScreenState extends State<HomeScreen> {
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Distribución de Ganancias vs Gastos',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 250,
-              child: total == 0
-                  ? const Center(child: Text('No hay datos disponibles'))
-                  : Row(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isMobile = constraints.maxWidth < 350;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ganancias vs Gastos',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                if (total == 0)
+                  const SizedBox(
+                    height: 200,
+                    child: Center(child: Text('No hay datos disponibles')),
+                  )
+                else if (isMobile) ...[
+                  // Layout vertical para mobile
+                  SizedBox(
+                    height: 180,
+                    child: PieChart(
+                      PieChartData(
+                        sectionsSpace: 2,
+                        centerSpaceRadius: 40,
+                        sections: [
+                          PieChartSectionData(
+                            value: totalGanancias,
+                            title: '${porcentajeGanancias.toStringAsFixed(0)}%',
+                            color: Colors.green,
+                            radius: 50,
+                            titleStyle: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          PieChartSectionData(
+                            value: totalGastos,
+                            title: '${porcentajeGastos.toStringAsFixed(0)}%',
+                            color: Colors.red,
+                            radius: 50,
+                            titleStyle: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Leyenda compacta
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildLeyendaCompacta(
+                        'Ganancias',
+                        Colors.green,
+                        totalGanancias,
+                      ),
+                      _buildLeyendaCompacta('Gastos', Colors.red, totalGastos),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                      'Total: C\$${total.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  // Layout horizontal para tablet/desktop
+                  SizedBox(
+                    height: 200,
+                    child: Row(
                       children: [
                         Expanded(
                           flex: 2,
                           child: PieChart(
                             PieChartData(
                               sectionsSpace: 2,
-                              centerSpaceRadius: 60,
+                              centerSpaceRadius: 40,
                               sections: [
                                 PieChartSectionData(
                                   value: totalGanancias,
                                   title:
                                       '${porcentajeGanancias.toStringAsFixed(1)}%',
                                   color: Colors.green,
-                                  radius: 80,
+                                  radius: 60,
                                   titleStyle: const TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
@@ -698,9 +599,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   title:
                                       '${porcentajeGastos.toStringAsFixed(1)}%',
                                   color: Colors.red,
-                                  radius: 80,
+                                  radius: 60,
                                   titleStyle: const TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
@@ -719,19 +620,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Colors.green,
                                 totalGanancias,
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 8),
                               _buildLeyendaItem(
                                 'Gastos',
                                 Colors.red,
                                 totalGastos,
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 12),
                               const Divider(),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 4),
                               Text(
                                 'Total: C\$${total.toStringAsFixed(2)}',
                                 style: const TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -740,23 +641,47 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ],
                     ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              totalGanancias > totalGastos
-                  ? '✅ El negocio es rentable este mes'
-                  : '⚠️ Los gastos superan las ganancias este mes',
-              style: TextStyle(
-                fontSize: 12,
-                color: totalGanancias > totalGastos
-                    ? Colors.green
-                    : Colors.orange,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Text(
+                  totalGanancias > totalGastos
+                      ? '✅ El negocio es rentable este mes'
+                      : '⚠️ Los gastos superan las ganancias este mes',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: totalGanancias > totalGastos
+                        ? Colors.green
+                        : Colors.orange,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
+    );
+  }
+
+  Widget _buildLeyendaCompacta(String label, Color color, double valor) {
+    return Column(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+        ),
+        Text(
+          'C\$${valor.toStringAsFixed(0)}',
+          style: const TextStyle(fontSize: 9, color: Colors.grey),
+        ),
+      ],
     );
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:abari/providers/factura_provider.dart';
+import 'package:abari/providers/session_provider.dart';
 import 'package:intl/intl.dart';
 import '../widgets/add_product_button.dart';
 import '../widgets/payment_and_customer_fields.dart';
@@ -35,7 +36,7 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
   static const int _totalSteps = 3;
 
   final List<String> _stepTitles = [
-    'Productos',
+    'Seleccion de productos',
     'Datos de Pago',
     'Confirmación',
   ];
@@ -44,6 +45,21 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
   void initState() {
     super.initState();
     _pageController = PageController();
+    // Cargar sesión guardada del empleado
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSavedSession();
+    });
+  }
+
+  void _loadSavedSession() {
+    final sessionProvider = context.read<SessionProvider>();
+    if (sessionProvider.hasSession) {
+      final facturaProvider = context.read<FacturaProvider>();
+      facturaProvider.setEmpleado(
+        sessionProvider.empleadoNombre,
+        empleadoId: sessionProvider.empleadoId,
+      );
+    }
   }
 
   @override
@@ -55,29 +71,65 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
   Future<bool> _onWillPop() async {
     if (_currentStep > 0) {
       // Si está en un paso mayor a 0, preguntar si quiere retroceder
-      final shouldGoBack = await _showExitConfirmationDialog();
+      final shouldGoBack = await _showBackConfirmationDialog();
       if (shouldGoBack == true) {
         _goToPreviousStep();
       }
       return false;
     } else {
-      // Si está en el primer paso, preguntar si quiere salir
-      final shouldExit = await _showExitConfirmationDialog(isExiting: true);
-      return shouldExit ?? false;
+      // Si está en el primer paso, preguntar si quiere cancelar
+      await _handleCancelSale();
+      return false; // Nunca hacer pop, solo limpiar
     }
   }
 
-  Future<bool?> _showExitConfirmationDialog({bool isExiting = false}) {
+  Future<void> _handleCancelSale() async {
+    final shouldCancel = await _showCancelConfirmationDialog();
+    if (shouldCancel == true && mounted) {
+      final provider = context.read<FacturaProvider>();
+      provider.limpiarFactura();
+      // Volver al paso 1
+      _pageController.jumpToPage(0);
+      setState(() {
+        _currentStep = 0;
+      });
+    }
+  }
+
+  Future<bool?> _showCancelConfirmationDialog() {
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(isExiting ? '¿Salir de la venta?' : '¿Volver al paso anterior?'),
-        content: Text(
-          isExiting
-              ? 'Si sales ahora, perderás todos los datos ingresados.'
-              : '¿Estás seguro de que deseas volver al paso anterior?',
-          style: const TextStyle(fontSize: 16),
+        title: const Text('¿Cancelar venta?'),
+        content: const Text(
+          'Se borrarán todos los productos y datos ingresados.',
+          style: TextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Sí, cancelar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool?> _showBackConfirmationDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('¿Volver al paso anterior?'),
+        content: const Text(
+          '¿Estás seguro de que deseas volver al paso anterior?',
+          style: TextStyle(fontSize: 16),
         ),
         actions: [
           TextButton(
@@ -86,10 +138,7 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: isExiting ? Colors.red : null,
-            ),
-            child: Text(isExiting ? 'Salir' : 'Volver'),
+            child: const Text('Volver'),
           ),
         ],
       ),
@@ -126,13 +175,11 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
     final isMobile = screenWidth < 800;
 
     return PopScope(
-      canPop: false,
+      canPop: false, // Nunca permitir pop del sistema
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        final shouldPop = await _onWillPop();
-        if (shouldPop && context.mounted) {
-          Navigator.of(context).pop();
-        }
+        // Manejar retroceso internamente
+        await _onWillPop();
       },
       child: Scaffold(
         body: SafeArea(
@@ -209,17 +256,20 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
             ),
           ),
           const SizedBox(width: 16),
-          // Botón de cerrar
-          IconButton(
-            onPressed: () async {
-              final shouldExit =
-                  await _showExitConfirmationDialog(isExiting: true);
-              if (shouldExit == true && context.mounted) {
-                Navigator.of(context).pop();
+          // Botón de cancelar venta (solo visible si hay productos)
+          Consumer<FacturaProvider>(
+            builder: (context, provider, child) {
+              if (provider.productos.isEmpty) {
+                return const SizedBox(
+                  width: 48,
+                ); // Espacio vacío para mantener layout
               }
+              return IconButton(
+                onPressed: () => _handleCancelSale(),
+                icon: const Icon(Icons.close, size: 28),
+                tooltip: 'Cancelar venta',
+              );
             },
-            icon: const Icon(Icons.close, size: 28),
-            tooltip: 'Cerrar',
           ),
         ],
       ),
@@ -248,6 +298,20 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
                     letterSpacing: -0.64,
                   ),
                 ),
+
+                const SizedBox(height: 24),
+
+                // Selector de empleado
+                Text(
+                  'vendedor',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                _buildEmpleadoSelector(context),
+                const SizedBox(height: 24),
                 const SizedBox(height: 8),
                 Text(
                   'Agrega los productos que deseas vender',
@@ -257,8 +321,6 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
                     color: Colors.grey[600],
                   ),
                 ),
-                const SizedBox(height: 24),
-
                 // Tabla de productos
                 _buildProductosTable(context),
                 const SizedBox(height: 24),
@@ -268,13 +330,15 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
                   builder: (context, provider, child) {
                     return AddProductButton(
                       cantidadesEnCarrito: provider.cantidadesPorCodigo,
-                      onProductSelected: (producto, cantidad, stockTotal) {
-                        provider.agregarProducto(
-                          producto,
-                          cantidad: cantidad,
-                          stockMaximo: stockTotal,
-                        );
-                      },
+                      onProductSelected:
+                          (producto, cantidad, stockTotal, esGranel) {
+                            provider.agregarProducto(
+                              producto,
+                              cantidad: cantidad,
+                              stockMaximo: stockTotal,
+                              esGranel: esGranel,
+                            );
+                          },
                     );
                   },
                 ),
@@ -289,6 +353,25 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
           showBack: false,
           onNext: () {
             final provider = context.read<FacturaProvider>();
+            if (provider.empleado.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Row(
+                    children: [
+                      Icon(Icons.warning_amber, color: Colors.white),
+                      SizedBox(width: 12),
+                      Text('Selecciona un vendedor'),
+                    ],
+                  ),
+                  backgroundColor: Colors.orange[700],
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              );
+              return;
+            }
             if (provider.productos.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -362,7 +445,7 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
           isMobile: isMobile,
           showBack: true,
           onBack: () async {
-            final shouldGoBack = await _showExitConfirmationDialog();
+            final shouldGoBack = await _showBackConfirmationDialog();
             if (shouldGoBack == true) {
               _goToPreviousStep();
             }
@@ -421,7 +504,7 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
           isMobile: isMobile,
           showBack: true,
           onBack: () async {
-            final shouldGoBack = await _showExitConfirmationDialog();
+            final shouldGoBack = await _showBackConfirmationDialog();
             if (shouldGoBack == true) {
               _goToPreviousStep();
             }
@@ -465,8 +548,10 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
                 icon: const Icon(Icons.arrow_back),
                 label: const Text('Anterior'),
                 style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -559,7 +644,6 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
                 );
               }
             } else {
-              provider.limpiarFactura();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -578,7 +662,12 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
                     margin: const EdgeInsets.all(16),
                   ),
                 );
-                Navigator.of(context).pop();
+                // Limpiar y volver al paso 1 para nueva venta
+                provider.limpiarFactura();
+                _pageController.jumpToPage(0);
+                setState(() {
+                  _currentStep = 0;
+                });
               }
             }
           },
@@ -674,7 +763,7 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
     return Consumer<FacturaProvider>(
       builder: (context, provider, child) {
         final subtotal = provider.total;
-        final cantidadTotal = provider.productos.fold<int>(
+        final cantidadTotal = provider.productos.fold<double>(
           0,
           (sum, producto) => sum + producto.cantidad,
         );
@@ -733,7 +822,7 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
                     const SizedBox(height: 8),
                     _buildSummaryRow(
                       context,
-                      'Empleado:',
+                      'Vendedor:',
                       provider.empleado.isEmpty
                           ? 'No especificado'
                           : provider.empleado,
@@ -778,10 +867,7 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
       children: [
         Text(
           label,
-          style: textTheme.bodyLarge?.copyWith(
-            color: color,
-            fontSize: 14,
-          ),
+          style: textTheme.bodyLarge?.copyWith(color: color, fontSize: 14),
         ),
         Text(
           value,
@@ -791,6 +877,72 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildEmpleadoSelector(BuildContext context) {
+    return Consumer<FacturaProvider>(
+      builder: (context, provider, child) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: provider.empleado.isEmpty
+                  ? Colors.orange.withValues(alpha: 0.5)
+                  : Colors.grey[300]!,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.badge,
+                color: provider.empleado.isEmpty
+                    ? Colors.orange
+                    : Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: provider.empleado.isEmpty
+                    ? Text(
+                        'Selecciona un vendedor',
+                        style: TextStyle(
+                          color: Colors.orange[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      )
+                    : Text(
+                        provider.empleado,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 16,
+                        ),
+                      ),
+              ),
+              FilledButton.tonal(
+                onPressed: () {
+                  mostrarSeleccionarEmpleado(context, (empleado) {
+                    // Guardar en FacturaProvider
+                    provider.setEmpleado(
+                      empleado.nombreEmpleado,
+                      empleadoId: empleado.idEmpleado,
+                    );
+                    // Guardar sesión persistente
+                    context.read<SessionProvider>().setEmpleado(
+                      empleado.idEmpleado,
+                      empleado.nombreEmpleado,
+                    );
+                  });
+                },
+                child: Text(
+                  provider.empleado.isEmpty ? 'Seleccionar' : 'Cambiar',
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

@@ -12,10 +12,47 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('ABARI')),
-      drawer: const AppDrawer(),
-      body: child,
+    final currentLocation = GoRouterState.of(context).uri.toString();
+    final isHome = currentLocation == '/home';
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        if (isHome) {
+          // En home, preguntar si quiere salir
+          final shouldExit = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('¿Salir de la aplicación?'),
+              content: const Text('¿Estás seguro de que deseas salir?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Salir'),
+                ),
+              ],
+            ),
+          );
+          if (shouldExit == true && context.mounted) {
+            // Cerrar la app
+            Navigator.of(context).pop();
+          }
+        } else {
+          // En otras pantallas, volver al home
+          context.go('/home');
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('ABARI')),
+        drawer: const AppDrawer(),
+        body: child,
+      ),
     );
   }
 }
