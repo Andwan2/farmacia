@@ -14,14 +14,18 @@ class ProductosScreen extends StatefulWidget {
 class _InventarioPageState extends State<ProductosScreen> {
   List<dynamic> productos = [];
   Map<int, Map<String, dynamic>> presentaciones =
-      {}; // id_presentacion -> {descripcion, unidad_medida}
+      {}; // id_presentacion -> {descripcion}
+  Map<int, Map<String, dynamic>> unidadesMedida =
+      {}; // id -> {nombre, abreviatura}
   Map<String, int> stockPorTipo = {};
+  List<String> categorias = []; // Lista de categorías únicas
   String busqueda = '';
   bool cargando = true;
   bool mostrarEliminados = false;
 
   // Filtros
   List<String> filtrosPresentacion = []; // Múltiples presentaciones
+  List<String> filtrosCategorias = []; // Múltiples categorías
   String ordenarPor =
       'nombre'; // nombre, precio_venta, precio_compra, vencimiento
 
@@ -29,6 +33,7 @@ class _InventarioPageState extends State<ProductosScreen> {
   int get filtrosActivos {
     int count = 0;
     count += filtrosPresentacion.length;
+    count += filtrosCategorias.length;
     if (ordenarPor != 'nombre') count++;
     return count;
   }
@@ -55,6 +60,7 @@ class _InventarioPageState extends State<ProductosScreen> {
   void _mostrarFiltros(BuildContext context) {
     // Variables temporales para los filtros
     List<String> tempFiltrosPresentacion = List.from(filtrosPresentacion);
+    List<String> tempFiltrosCategorias = List.from(filtrosCategorias);
     String tempOrdenarPor = ordenarPor;
 
     showModalBottomSheet(
@@ -103,6 +109,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                         onPressed: () {
                           setModalState(() {
                             tempFiltrosPresentacion.clear();
+                            tempFiltrosCategorias.clear();
                             tempOrdenarPor = 'nombre';
                           });
                         },
@@ -119,6 +126,47 @@ class _InventarioPageState extends State<ProductosScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Filtro por Categoría (múltiple)
+                        if (categorias.isNotEmpty) ...[
+                          const Text(
+                            'Categoría',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: categorias.map((cat) {
+                              final isSelected = tempFiltrosCategorias.contains(
+                                cat,
+                              );
+                              return FilterChip(
+                                label: Text(cat),
+                                selected: isSelected,
+                                onSelected: (selected) {
+                                  setModalState(() {
+                                    if (selected) {
+                                      tempFiltrosCategorias.add(cat);
+                                    } else {
+                                      tempFiltrosCategorias.remove(cat);
+                                    }
+                                  });
+                                },
+                                selectedColor: Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
+                                checkmarkColor: Theme.of(
+                                  context,
+                                ).colorScheme.secondary,
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+
                         // Filtro por Presentación (múltiple)
                         const Text(
                           'Presentación',
@@ -268,6 +316,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                                   setState(() {
                                     filtrosPresentacion =
                                         tempFiltrosPresentacion;
+                                    filtrosCategorias = tempFiltrosCategorias;
                                     ordenarPor = tempOrdenarPor;
                                   });
                                   Navigator.pop(context);
@@ -314,74 +363,132 @@ class _InventarioPageState extends State<ProductosScreen> {
     setState(() => cargando = true);
     final client = Supabase.instance.client;
 
-    // 1) Productos
-    // Filtrar por estado: disponibles (Comprado) o eliminados (Vendido/Removido)
-    var query = client
-        .from('producto')
-        .select(
-          'id_producto,nombre_producto,id_presentacion,fecha_vencimiento,tipo,medida,estado,fecha_agregado,precio_compra,precio_venta',
+    try {
+      // ✅ OPTIMIZACIÓN: Ejecutar todas las consultas en paralelo
+      final results = await Future.wait([
+        // 0: Productos
+        client
+            .from('producto')
+            .select()
+            .order('nombre_producto', ascending: true),
+        // 1: Presentaciones
+        client.from('presentacion').select('id_presentacion,descripcion'),
+        // 2: Unidades de medida
+        client.from('unidad_medida').select('id,nombre,abreviatura'),
+      ]);
+
+      // Procesar productos
+      List<dynamic> dataProd = (results[0] is List)
+          ? results[0] as List
+          : <dynamic>[];
+
+      // Filtrar en memoria por estado
+      if (mostrarEliminados) {
+        dataProd = dataProd
+            .where((p) => p['estado'] == 'Vendido' || p['estado'] == 'Removido')
+            .toList();
+      } else {
+        dataProd = dataProd
+            .where((p) => p['estado'] == null || p['estado'] == 'Disponible')
+            .toList();
+      }
+
+      // Procesar presentaciones
+      final dataPres = (results[1] is List) ? results[1] as List : <dynamic>[];
+      final Map<int, Map<String, dynamic>> presMap = {};
+      for (final p in dataPres) {
+        final id = p['id_presentacion'] as int?;
+        if (id != null) {
+          presMap[id] = {'descripcion': p['descripcion']};
+        }
+      }
+
+      // Procesar unidades de medida
+      final dataUnidades = (results[2] is List)
+          ? results[2] as List
+          : <dynamic>[];
+      final Map<int, Map<String, dynamic>> unidadesMap = {};
+      for (final u in dataUnidades) {
+        final id = u['id'] as int?;
+        if (id != null) {
+          unidadesMap[id] = {
+            'nombre': u['nombre'],
+            'abreviatura': u['abreviatura'],
+          };
+        }
+      }
+
+      // Stock por código (conteo en memoria)
+      final Map<String, int> stock = {};
+      for (final item in dataProd) {
+        final codigo = item['codigo']?.toString() ?? 'Sin código';
+        stock[codigo] = (stock[codigo] ?? 0) + 1;
+      }
+
+      // Extraer categorías únicas
+      final Set<String> categoriasSet = {};
+      for (final item in dataProd) {
+        final cat = item['categoria']?.toString();
+        if (cat != null && cat.isNotEmpty) {
+          categoriasSet.add(cat);
+        }
+      }
+      final categoriasLista = categoriasSet.toList()..sort();
+
+      if (mounted) {
+        setState(() {
+          productos = dataProd;
+          presentaciones = presMap;
+          unidadesMedida = unidadesMap;
+          stockPorTipo = stock;
+          categorias = categoriasLista;
+          cargando = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al cargar datos: $e');
+      if (mounted) {
+        setState(() => cargando = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar productos: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
-
-    if (mostrarEliminados) {
-      // Mostrar solo productos eliminados (Vendido o Removido)
-      query = query.inFilter('estado', ['Vendido', 'Removido']);
-    } else {
-      // Mostrar solo productos disponibles
-      query = query.eq('estado', 'Disponible');
+      }
     }
-
-    final resProd = await query.order('nombre_producto', ascending: true);
-
-    final dataProd = (resProd is List) ? resProd : <dynamic>[];
-
-    // 2) Presentaciones para mapear id_presentacion -> descripcion/unidad_medida
-    final resPres = await client
-        .from('presentacion')
-        .select('id_presentacion,descripcion,unidad_medida')
-        .order('id_presentacion', ascending: true);
-
-    final dataPres = (resPres is List) ? resPres : <dynamic>[];
-    final Map<int, Map<String, dynamic>> presMap = {};
-    for (final p in dataPres) {
-      final id = p['id_presentacion'] as int;
-      presMap[id] = {
-        'descripcion': p['descripcion'],
-        'unidad_medida': p['unidad_medida'],
-      };
-    }
-
-    // 3) Stock por tipo (conteo)
-    final Map<String, int> stock = {};
-    for (final item in dataProd) {
-      final tipo = item['tipo'] as String;
-      stock[tipo] = (stock[tipo] ?? 0) + 1;
-    }
-
-    setState(() {
-      productos = dataProd;
-      presentaciones = presMap;
-      stockPorTipo = stock;
-      cargando = false;
-    });
   }
 
   Future<void> eliminarProducto(
     BuildContext context,
     Map<String, dynamic> producto,
   ) async {
-    final nombre = producto['nombre_producto'] as String;
-    final tipo = producto['tipo'] as String;
-    final medida = producto['medida']?.toString() ?? '';
-    final idPres = producto['id_presentacion'] as int;
-    final presentacion = presentaciones[idPres]?['descripcion'] ?? '—';
-    final unidad = presentaciones[idPres]?['unidad_medida'] ?? '';
-    final fechaStr = producto['fecha_vencimiento'] as String;
-    final fecha = DateTime.parse(fechaStr);
-    final stockGrupo = producto['_stock_grupo'] as int? ?? 1;
-    final tipoOriginal = producto['tipo'] as String;
-    final fechaVencimientoOriginal =
-        producto['fecha_vencimiento']?.toString().split('T').first ?? '';
+    final nombre = producto['nombre_producto']?.toString() ?? 'Sin nombre';
+    final codigo = producto['codigo']?.toString() ?? 'Sin código';
+    final cantidad = producto['cantidad']?.toString() ?? '';
+    final idPres = producto['id_presentacion'] as int?;
+    final idUnidad = producto['id_unidad_medida'] as int?;
+    final presentacion = idPres != null
+        ? (presentaciones[idPres]?['descripcion'] ?? '—')
+        : '—';
+    final abreviatura = idUnidad != null
+        ? (unidadesMedida[idUnidad]?['abreviatura'] ?? '')
+        : '';
+    final fechaStr = producto['fecha_vencimiento']?.toString();
+    final fecha = fechaStr != null ? DateTime.tryParse(fechaStr) : null;
+    final stockGrupo = (producto['_stock_grupo'] as num?)?.toInt() ?? 1;
+    final esGranel = producto['_es_granel'] as bool? ?? false;
+    final codigoOriginal = producto['codigo']?.toString() ?? 'Sin código';
+    final fechaVencimientoOriginal = producto['fecha_vencimiento']
+        ?.toString()
+        .split('T')
+        .first;
     final estadoOriginal = producto['estado'] as String? ?? 'Disponible';
+
+    // Texto del stock con unidad de medida si es a granel
+    final stockTexto = esGranel
+        ? '$stockGrupo $abreviatura'
+        : '$stockGrupo unidades';
 
     bool eliminarTodos = true;
     int cantidadEliminar = 1;
@@ -410,13 +517,13 @@ class _InventarioPageState extends State<ProductosScreen> {
                     const Divider(),
                     const SizedBox(height: 8),
                     _buildInfoRow('Nombre:', nombre),
-                    _buildInfoRow('Tipo:', tipo),
-                    _buildInfoRow('Presentación:', '$presentacion ($unidad)'),
-                    _buildInfoRow('Medida:', '$medida $unidad'),
-                    _buildInfoRow('Stock:', '$stockGrupo unidades'),
+                    _buildInfoRow('Código:', codigo),
+                    _buildInfoRow('Presentación:', presentacion),
+                    _buildInfoRow('Cantidad:', '$cantidad $abreviatura'),
+                    _buildInfoRow('Stock:', stockTexto),
                     _buildInfoRow(
                       'Fecha de vencimiento:',
-                      fecha.toIso8601String().split('T').first,
+                      fecha?.toIso8601String().split('T').first ?? 'Sin fecha',
                     ),
                     const SizedBox(height: 12),
                     const Divider(),
@@ -460,39 +567,169 @@ class _InventarioPageState extends State<ProductosScreen> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          RadioListTile<bool>(
-                            title: const Text(
-                              'Eliminar todos los productos del grupo',
-                              style: TextStyle(fontSize: 13),
+                          // Para productos a granel, mostrar mensaje informativo
+                          if (esGranel)
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isDarkMode
+                                    ? Colors.blue.withOpacity(0.1)
+                                    : Colors.blue.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: 16,
+                                    color: Colors.blue[700],
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Para productos a granel, se reducirá la cantidad del producto.',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.blue[800],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            value: true,
-                            groupValue: eliminarTodos,
-                            onChanged: (value) {
-                              setState(() {
-                                eliminarTodos = value!;
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          RadioListTile<bool>(
-                            title: const Text(
-                              'Eliminar cantidad específica',
-                              style: TextStyle(fontSize: 13),
+                          if (!esGranel)
+                            RadioListTile<bool>(
+                              title: const Text(
+                                'Eliminar todos los productos del grupo',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                              value: true,
+                              groupValue: eliminarTodos,
+                              onChanged: (value) {
+                                setState(() {
+                                  eliminarTodos = value!;
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              visualDensity: VisualDensity.compact,
                             ),
-                            value: false,
-                            groupValue: eliminarTodos,
-                            onChanged: (value) {
-                              setState(() {
-                                eliminarTodos = value!;
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          if (!eliminarTodos) ...[
+                          if (!esGranel)
+                            RadioListTile<bool>(
+                              title: const Text(
+                                'Eliminar cantidad específica',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                              value: false,
+                              groupValue: eliminarTodos,
+                              onChanged: (value) {
+                                setState(() {
+                                  eliminarTodos = value!;
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          // Para productos a granel, mostrar campo de cantidad a reducir
+                          if (esGranel) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Cantidad a reducir (Máx: $stockGrupo $abreviatura)',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  onPressed: cantidadEliminar > 1
+                                      ? () {
+                                          setState(() {
+                                            cantidadEliminar--;
+                                            cantidadController.text =
+                                                cantidadEliminar.toString();
+                                          });
+                                        }
+                                      : null,
+                                  iconSize: 28,
+                                  color: isDarkMode
+                                      ? Colors.orange[300]
+                                      : Colors.orange,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    minHeight: 40,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 80,
+                                  child: TextField(
+                                    controller: cantidadController,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 8,
+                                      ),
+                                      isDense: true,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (value) {
+                                      final cantidad = int.tryParse(value) ?? 1;
+                                      setState(() {
+                                        cantidadEliminar = cantidad.clamp(
+                                          1,
+                                          stockGrupo,
+                                        );
+                                        cantidadController.text =
+                                            cantidadEliminar.toString();
+                                        cantidadController.selection =
+                                            TextSelection.fromPosition(
+                                              TextPosition(
+                                                offset: cantidadController
+                                                    .text
+                                                    .length,
+                                              ),
+                                            );
+                                      });
+                                    },
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.add_circle_outline),
+                                  onPressed: cantidadEliminar < stockGrupo
+                                      ? () {
+                                          setState(() {
+                                            cantidadEliminar++;
+                                            cantidadController.text =
+                                                cantidadEliminar.toString();
+                                          });
+                                        }
+                                      : null,
+                                  iconSize: 28,
+                                  color: isDarkMode
+                                      ? Colors.orange[300]
+                                      : Colors.orange,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    minHeight: 40,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (!esGranel && !eliminarTodos) ...[
                             const SizedBox(height: 6),
                             Text(
                               'Cantidad a eliminar (Máx: $stockGrupo)',
@@ -699,6 +936,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                       'eliminarTodos': eliminarTodos,
                       'cantidad': cantidadEliminar,
                       'estado': estadoSeleccionado,
+                      'esGranel': esGranel,
                     });
                   },
                   style: ElevatedButton.styleFrom(
@@ -716,17 +954,83 @@ class _InventarioPageState extends State<ProductosScreen> {
 
     if (resultado != null && resultado['confirmar'] == true) {
       final estadoFinal = resultado['estado'] as String;
+      final esProductoGranel = resultado['esGranel'] as bool? ?? false;
 
       try {
-        if (resultado['eliminarTodos'] == true) {
+        // Lógica especial para productos a granel
+        if (esProductoGranel) {
+          final cantidadReducir = resultado['cantidad'] as int;
+          final cantidadActual = producto['cantidad'] as num? ?? 0;
+          final nuevaCantidad = cantidadActual - cantidadReducir;
+
+          if (nuevaCantidad <= 0) {
+            // Si la cantidad llega a 0 o menos, marcar como eliminado
+            if (fechaVencimientoOriginal != null) {
+              await Supabase.instance.client
+                  .from('producto')
+                  .update({'estado': estadoFinal})
+                  .eq('codigo', codigoOriginal)
+                  .eq('fecha_vencimiento', fechaVencimientoOriginal)
+                  .eq('estado', estadoOriginal);
+            } else {
+              await Supabase.instance.client
+                  .from('producto')
+                  .update({'estado': estadoFinal})
+                  .eq('codigo', codigoOriginal)
+                  .isFilter('fecha_vencimiento', null)
+                  .eq('estado', estadoOriginal);
+            }
+          } else {
+            // Reducir la cantidad del producto
+            if (fechaVencimientoOriginal != null) {
+              await Supabase.instance.client
+                  .from('producto')
+                  .update({'cantidad': nuevaCantidad})
+                  .eq('codigo', codigoOriginal)
+                  .eq('fecha_vencimiento', fechaVencimientoOriginal)
+                  .eq('estado', estadoOriginal);
+            } else {
+              await Supabase.instance.client
+                  .from('producto')
+                  .update({'cantidad': nuevaCantidad})
+                  .eq('codigo', codigoOriginal)
+                  .isFilter('fecha_vencimiento', null)
+                  .eq('estado', estadoOriginal);
+            }
+          }
+
+          await cargarDatos();
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  nuevaCantidad <= 0
+                      ? 'Producto eliminado correctamente'
+                      : 'Se redujo $cantidadReducir $abreviatura del stock',
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else if (resultado['eliminarTodos'] == true) {
           // Eliminar todos los productos del grupo con el mismo estado
           // estadoOriginal ya garantiza que son productos disponibles
-          await Supabase.instance.client
-              .from('producto')
-              .update({'estado': estadoFinal})
-              .eq('tipo', tipoOriginal)
-              .eq('fecha_vencimiento', fechaVencimientoOriginal)
-              .eq('estado', estadoOriginal);
+          if (fechaVencimientoOriginal != null) {
+            await Supabase.instance.client
+                .from('producto')
+                .update({'estado': estadoFinal})
+                .eq('codigo', codigoOriginal)
+                .eq('fecha_vencimiento', fechaVencimientoOriginal)
+                .eq('estado', estadoOriginal);
+          } else {
+            await Supabase.instance.client
+                .from('producto')
+                .update({'estado': estadoFinal})
+                .eq('codigo', codigoOriginal)
+                .isFilter('fecha_vencimiento', null)
+                .eq('estado', estadoOriginal);
+          }
 
           await cargarDatos();
 
@@ -746,11 +1050,22 @@ class _InventarioPageState extends State<ProductosScreen> {
 
           // Obtener los IDs de los productos a eliminar con el mismo estado
           // estadoOriginal ya garantiza que son productos disponibles
-          final productosGrupo = await Supabase.instance.client
+          var selectQuery = Supabase.instance.client
               .from('producto')
               .select('id_producto')
-              .eq('tipo', tipoOriginal)
-              .eq('fecha_vencimiento', fechaVencimientoOriginal)
+              .eq('codigo', codigoOriginal);
+
+          // Manejar fecha_vencimiento null correctamente
+          if (fechaVencimientoOriginal != null) {
+            selectQuery = selectQuery.eq(
+              'fecha_vencimiento',
+              fechaVencimientoOriginal,
+            );
+          } else {
+            selectQuery = selectQuery.isFilter('fecha_vencimiento', null);
+          }
+
+          final productosGrupo = await selectQuery
               .eq('estado', estadoOriginal)
               .limit(cantidad);
 
@@ -822,48 +1137,89 @@ class _InventarioPageState extends State<ProductosScreen> {
     );
   }
 
+  Widget _buildBadge({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDark ? 0.2 : 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Agrupar productos por tipo y rango de vencimiento
-    final Map<String, List<dynamic>> gruposPorTipo = {};
+    final Map<String, List<dynamic>> gruposPorCodigo = {};
 
-    // Primero agrupar todos los productos por tipo y estado
+    // Primero agrupar todos los productos por código y estado
     for (final p in productos) {
-      final tipo = p['tipo'] as String;
+      final codigo = p['codigo']?.toString() ?? 'Sin código';
       final estado = p['estado'] as String? ?? 'Disponible';
-      final clave = '${tipo}_$estado'; // Agrupar por tipo Y estado
-      if (!gruposPorTipo.containsKey(clave)) {
-        gruposPorTipo[clave] = [];
+      final clave = '${codigo}_$estado'; // Agrupar por código Y estado
+      if (!gruposPorCodigo.containsKey(clave)) {
+        gruposPorCodigo[clave] = [];
       }
-      gruposPorTipo[clave]!.add(p);
+      gruposPorCodigo[clave]!.add(p);
     }
 
     // Ahora separar por rangos de vencimiento si hay diferencias > 60 días
     final List<Map<String, dynamic>> productosAgrupados = [];
 
-    for (final tipo in gruposPorTipo.keys) {
-      final productosDelTipo = gruposPorTipo[tipo]!;
+    for (final codigoKey in gruposPorCodigo.keys) {
+      final productosDelCodigo = gruposPorCodigo[codigoKey]!;
 
       // Ordenar por fecha de vencimiento
-      productosDelTipo.sort((a, b) {
-        final fechaA = DateTime.parse(a['fecha_vencimiento'] as String);
-        final fechaB = DateTime.parse(b['fecha_vencimiento'] as String);
+      productosDelCodigo.sort((a, b) {
+        final fechaStrA = a['fecha_vencimiento']?.toString();
+        final fechaStrB = b['fecha_vencimiento']?.toString();
+        final fechaA = fechaStrA != null ? DateTime.tryParse(fechaStrA) : null;
+        final fechaB = fechaStrB != null ? DateTime.tryParse(fechaStrB) : null;
+        if (fechaA == null && fechaB == null) return 0;
+        if (fechaA == null) return 1;
+        if (fechaB == null) return -1;
         return fechaA.compareTo(fechaB);
       });
 
       // Crear grupos por rango de vencimiento
       final List<List<dynamic>> rangosPorVencimiento = [];
-      List<dynamic> grupoActual = [productosDelTipo[0]];
-      DateTime fechaBaseGrupo = DateTime.parse(
-        productosDelTipo[0]['fecha_vencimiento'] as String,
-      );
+      List<dynamic> grupoActual = [productosDelCodigo[0]];
+      final fechaBaseStr = productosDelCodigo[0]['fecha_vencimiento']
+          ?.toString();
+      DateTime? fechaBaseGrupo = fechaBaseStr != null
+          ? DateTime.tryParse(fechaBaseStr)
+          : null;
 
-      for (int i = 1; i < productosDelTipo.length; i++) {
-        final producto = productosDelTipo[i];
-        final fechaProducto = DateTime.parse(
-          producto['fecha_vencimiento'] as String,
-        );
-        final diferenciaDias = fechaProducto.difference(fechaBaseGrupo).inDays;
+      for (int i = 1; i < productosDelCodigo.length; i++) {
+        final producto = productosDelCodigo[i];
+        final fechaProductoStr = producto['fecha_vencimiento']?.toString();
+        final fechaProducto = fechaProductoStr != null
+            ? DateTime.tryParse(fechaProductoStr)
+            : null;
+        final diferenciaDias = (fechaProducto != null && fechaBaseGrupo != null)
+            ? fechaProducto.difference(fechaBaseGrupo).inDays
+            : 0;
 
         if (diferenciaDias <= 60) {
           // Mismo grupo
@@ -880,30 +1236,62 @@ class _InventarioPageState extends State<ProductosScreen> {
       // Crear un representante para cada grupo
       for (final grupo in rangosPorVencimiento) {
         final representante = Map<String, dynamic>.from(grupo[0]);
-        representante['_stock_grupo'] = grupo.length;
-        representante['_fecha_min'] = grupo
-            .map((p) => DateTime.parse(p['fecha_vencimiento'] as String))
-            .reduce((a, b) => a.isBefore(b) ? a : b);
-        representante['_fecha_max'] = grupo
-            .map((p) => DateTime.parse(p['fecha_vencimiento'] as String))
-            .reduce((a, b) => a.isAfter(b) ? a : b);
+
+        // Verificar si es producto a granel
+        final idPresentacion = representante['id_presentacion'] as int?;
+        final descripcionPresentacion = idPresentacion != null
+            ? (presentaciones[idPresentacion]?['descripcion']
+                      ?.toString()
+                      .toLowerCase() ??
+                  '')
+            : '';
+        final esAGranel = descripcionPresentacion == 'a granel';
+
+        if (esAGranel) {
+          // Para productos a granel: stock = cantidad del producto (como double)
+          final cantidad = representante['cantidad'] as num? ?? 0;
+          representante['_stock_grupo'] = cantidad.toDouble();
+          representante['_es_granel'] = true;
+        } else {
+          // Para otros productos: stock = cantidad de registros en el grupo
+          representante['_stock_grupo'] = grupo.length.toDouble();
+          representante['_es_granel'] = false;
+        }
+        final fechasValidas = grupo
+            .map((p) {
+              final fStr = p['fecha_vencimiento']?.toString();
+              return fStr != null ? DateTime.tryParse(fStr) : null;
+            })
+            .whereType<DateTime>()
+            .toList();
+        if (fechasValidas.isNotEmpty) {
+          representante['_fecha_min'] = fechasValidas.reduce(
+            (a, b) => a.isBefore(b) ? a : b,
+          );
+          representante['_fecha_max'] = fechasValidas.reduce(
+            (a, b) => a.isAfter(b) ? a : b,
+          );
+        }
         productosAgrupados.add(representante);
       }
     }
 
     // Crear mapa para compatibilidad con filtros
-    final Map<String, dynamic> productosPorTipo = {};
+    final Map<String, dynamic> productosPorCodigo = {};
     for (final p in productosAgrupados) {
       final estado = p['estado'] as String? ?? 'Disponible';
-      final key = '${p['tipo']}_${p['fecha_vencimiento']}_$estado';
-      productosPorTipo[key] = p;
+      final key = '${p['codigo']}_${p['fecha_vencimiento']}_$estado';
+      productosPorCodigo[key] = p;
     }
 
-    // Filtrar por búsqueda, presentación
-    var listaFiltrada = productosPorTipo.values.where((p) {
+    // Filtrar por búsqueda, presentación y categoría
+    var listaFiltrada = productosPorCodigo.values.where((p) {
       final nombre = p['nombre_producto']?.toString() ?? '';
-      final idPres = p['id_presentacion'] as int;
-      final presentacion = presentaciones[idPres]?['descripcion'] ?? '';
+      final idPres = p['id_presentacion'] as int?;
+      final presentacion = idPres != null
+          ? (presentaciones[idPres]?['descripcion'] ?? '')
+          : '';
+      final categoria = p['categoria']?.toString() ?? '';
 
       // Filtro de búsqueda
       final cumpleBusqueda = nombre.toLowerCase().contains(
@@ -915,38 +1303,55 @@ class _InventarioPageState extends State<ProductosScreen> {
           filtrosPresentacion.isEmpty ||
           filtrosPresentacion.contains(presentacion);
 
-      return cumpleBusqueda && cumplePresentacion;
+      // Filtro de categoría
+      final cumpleCategoria =
+          filtrosCategorias.isEmpty || filtrosCategorias.contains(categoria);
+
+      return cumpleBusqueda && cumplePresentacion && cumpleCategoria;
     }).toList();
 
     // Ordenar
     listaFiltrada.sort((a, b) {
       switch (ordenarPor) {
         case 'nombre':
-          return (a['nombre_producto'] as String).compareTo(
-            b['nombre_producto'] as String,
-          );
+          final nombreA = a['nombre_producto']?.toString() ?? '';
+          final nombreB = b['nombre_producto']?.toString() ?? '';
+          return nombreA.compareTo(nombreB);
         case 'vencimiento':
-          final fechaA = DateTime.parse(a['fecha_vencimiento'] as String);
-          final fechaB = DateTime.parse(b['fecha_vencimiento'] as String);
+          final fechaStrA = a['fecha_vencimiento']?.toString();
+          final fechaStrB = b['fecha_vencimiento']?.toString();
+          final fechaA = fechaStrA != null
+              ? DateTime.tryParse(fechaStrA)
+              : null;
+          final fechaB = fechaStrB != null
+              ? DateTime.tryParse(fechaStrB)
+              : null;
+          if (fechaA == null && fechaB == null) return 0;
+          if (fechaA == null) return 1;
+          if (fechaB == null) return -1;
           return fechaA.compareTo(fechaB);
         case 'stock':
-          final stockA = a['_stock_grupo'] as int? ?? 1;
-          final stockB = b['_stock_grupo'] as int? ?? 1;
+          final stockA = (a['_stock_grupo'] as num?)?.toInt() ?? 1;
+          final stockB = (b['_stock_grupo'] as num?)?.toInt() ?? 1;
           return stockB.compareTo(stockA); // Descendente
         case 'agregado_reciente':
-          final fechaA = a['fecha_agregado'] != null
-              ? DateTime.parse(a['fecha_agregado'] as String)
+          final fechaAgregadoA = a['fecha_agregado']?.toString();
+          final fechaAgregadoB = b['fecha_agregado']?.toString();
+          final fechaA = fechaAgregadoA != null
+              ? (DateTime.tryParse(fechaAgregadoA) ?? DateTime(1970))
               : DateTime(1970);
-          final fechaB = b['fecha_agregado'] != null
-              ? DateTime.parse(b['fecha_agregado'] as String)
+          final fechaB = fechaAgregadoB != null
+              ? (DateTime.tryParse(fechaAgregadoB) ?? DateTime(1970))
               : DateTime(1970);
           return fechaB.compareTo(fechaA); // Descendente (más reciente primero)
         case 'agregado_antiguo':
-          final fechaA = a['fecha_agregado'] != null
-              ? DateTime.parse(a['fecha_agregado'] as String)
+          final fechaAgregadoA2 = a['fecha_agregado']?.toString();
+          final fechaAgregadoB2 = b['fecha_agregado']?.toString();
+          final fechaA = fechaAgregadoA2 != null
+              ? (DateTime.tryParse(fechaAgregadoA2) ?? DateTime(1970))
               : DateTime(1970);
-          final fechaB = b['fecha_agregado'] != null
-              ? DateTime.parse(b['fecha_agregado'] as String)
+          final fechaB = fechaAgregadoB2 != null
+              ? (DateTime.tryParse(fechaAgregadoB2) ?? DateTime(1970))
               : DateTime(1970);
           return fechaA.compareTo(fechaB); // Ascendente (más antiguo primero)
         default:
@@ -955,324 +1360,598 @@ class _InventarioPageState extends State<ProductosScreen> {
     });
 
     return Scaffold(
-      body: Column(
-        children: [
-          // Barra de búsqueda y filtros
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Barra de búsqueda con botón de filtros
-                Row(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(
+            children: [
+              // Barra de búsqueda y filtros
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        decoration: const InputDecoration(
-                          hintText: 'Buscar producto',
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                        ),
-                        onChanged: (value) => setState(() => busqueda = value),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Botón de filtros con badge
-                    Stack(
+                    // Barra de búsqueda con botón de filtros
+                    Row(
                       children: [
-                        IconButton(
-                          onPressed: () => _mostrarFiltros(context),
-                          icon: const Icon(Icons.filter_list),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).colorScheme.primaryContainer,
-                            padding: const EdgeInsets.all(16),
-                          ),
-                        ),
-                        if (filtrosActivos > 0)
-                          Positioned(
-                            right: 4,
-                            top: 4,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 18,
-                                minHeight: 18,
-                              ),
-                              child: Text(
-                                '$filtrosActivos',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
+                        Expanded(
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              hintText: 'Buscar producto',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
                               ),
                             ),
+                            onChanged: (value) =>
+                                setState(() => busqueda = value),
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Botón de filtros con badge
+                        Stack(
+                          children: [
+                            IconButton(
+                              onPressed: () => _mostrarFiltros(context),
+                              icon: const Icon(Icons.filter_list),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.primaryContainer,
+                                padding: const EdgeInsets.all(16),
+                              ),
+                            ),
+                            if (filtrosActivos > 0)
+                              Positioned(
+                                right: 4,
+                                top: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 18,
+                                    minHeight: 18,
+                                  ),
+                                  child: Text(
+                                    '$filtrosActivos',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ],
+                    ),
+                    // Chips de filtros activos
+                    if (filtrosPresentacion.isNotEmpty ||
+                        filtrosCategorias.isNotEmpty ||
+                        ordenarPor != 'nombre') ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ...filtrosCategorias.map(
+                            (cat) => Chip(
+                              label: Text(cat),
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.secondaryContainer,
+                              onDeleted: () {
+                                setState(() {
+                                  filtrosCategorias.remove(cat);
+                                });
+                              },
+                              deleteIcon: const Icon(Icons.close, size: 18),
+                            ),
+                          ),
+                          ...filtrosPresentacion.map(
+                            (pres) => Chip(
+                              label: Text(pres),
+                              onDeleted: () {
+                                setState(() {
+                                  filtrosPresentacion.remove(pres);
+                                });
+                              },
+                              deleteIcon: const Icon(Icons.close, size: 18),
+                            ),
+                          ),
+                          if (ordenarPor != 'nombre')
+                            Chip(
+                              label: Text(
+                                'Orden: ${_getNombreOrden(ordenarPor)}',
+                              ),
+                              onDeleted: () =>
+                                  setState(() => ordenarPor = 'nombre'),
+                              deleteIcon: const Icon(Icons.close, size: 18),
+                            ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    // Botón de agregar producto
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        await mostrarAgregarProducto(context, cargarDatos);
+                      },
+                      icon: const Icon(Icons.add_circle_outline, size: 20),
+                      label: const Text('Agregar producto'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Switch
+                    SwitchListTile(
+                      title: Text(
+                        mostrarEliminados
+                            ? 'Mostrar solo productos inactivos'
+                            : 'Mostrar solo productos activos',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      value: mostrarEliminados,
+                      onChanged: (value) {
+                        setState(() {
+                          mostrarEliminados = value;
+                        });
+                        cargarDatos();
+                      },
+                      secondary: Icon(
+                        mostrarEliminados
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        size: 20,
+                      ),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
                     ),
                   ],
                 ),
-                // Chips de filtros activos
-                if (filtrosPresentacion.isNotEmpty ||
-                    ordenarPor != 'nombre') ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+              ),
+              // Lista de productos agrupados por categoría
+              Expanded(
+                child: cargando
+                    ? const Center(child: CircularProgressIndicator())
+                    : Consumer<ThemeProvider>(
+                        builder: (context, themeProvider, child) {
+                          final colorScheme = Theme.of(context).colorScheme;
+                          final isDark = themeProvider.isDarkMode;
+
+                          // Agrupar por categoría
+                          final Map<String, List<dynamic>> porCategoria = {};
+                          for (final p in listaFiltrada) {
+                            final cat =
+                                p['categoria']?.toString() ?? 'Sin categoría';
+                            porCategoria.putIfAbsent(cat, () => []).add(p);
+                          }
+                          final categoriasOrdenadas = porCategoria.keys.toList()
+                            ..sort();
+
+                          return ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            itemCount: categoriasOrdenadas.length,
+                            itemBuilder: (context, catIndex) {
+                              final categoria = categoriasOrdenadas[catIndex];
+                              final productosCategoria =
+                                  porCategoria[categoria]!;
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Separador de categoría
+                                  Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.fromLTRB(
+                                      12,
+                                      8,
+                                      12,
+                                      4,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.secondaryContainer
+                                          .withOpacity(0.5),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.category,
+                                          size: 18,
+                                          color: colorScheme.secondary,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          categoria,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: colorScheme.secondary,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          '${productosCategoria.length} items',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: colorScheme
+                                                .onSecondaryContainer,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Productos de esta categoría
+                                  ...productosCategoria.map(
+                                    (p) => _buildProductoCard(
+                                      context,
+                                      p,
+                                      colorScheme,
+                                      isDark,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductoCard(
+    BuildContext context,
+    dynamic p,
+    ColorScheme colorScheme,
+    bool isDark,
+  ) {
+    final nombre = p['nombre_producto']?.toString() ?? 'Sin nombre';
+    final idPres = p['id_presentacion'] as int?;
+    final codigo = p['codigo']?.toString() ?? 'Sin código';
+    final cantidad = p['cantidad']?.toString() ?? '';
+    final idUnidad = p['id_unidad_medida'] as int?;
+    final presentacion = idPres != null
+        ? (presentaciones[idPres]?['descripcion'] ?? '')
+        : '';
+    final abreviatura = idUnidad != null
+        ? (unidadesMedida[idUnidad]?['abreviatura'] ?? '')
+        : '';
+    final fechaStr = p['fecha_vencimiento']?.toString();
+    final fecha = fechaStr != null ? DateTime.tryParse(fechaStr) : null;
+    final diasRestantes = fecha != null
+        ? fecha.difference(DateTime.now()).inDays
+        : 0;
+    final stockGrupoRaw = p['_stock_grupo'] as num? ?? 1;
+    final esGranel = p['_es_granel'] as bool? ?? false;
+    final estado = p['estado'] as String?;
+    final precioCompra = p['precio_compra'] as num?;
+    final precioVenta = p['precio_venta'] as num?;
+
+    // Formatear stock: redondear a .5 o entero, mostrar decimal solo si no es .0
+    String formatearStock(num valor) {
+      // Redondear a .5 más cercano
+      final redondeado = (valor * 2).round() / 2;
+      if (redondeado == redondeado.toInt()) {
+        return redondeado.toInt().toString();
+      } else {
+        return redondeado.toStringAsFixed(1);
+      }
+    }
+
+    final stockFormateado = formatearStock(stockGrupoRaw);
+    final stockGrupo = stockGrupoRaw.toDouble();
+
+    // Texto del stock con unidad de medida si es a granel
+    final stockTexto = esGranel
+        ? '$stockFormateado $abreviatura'
+        : stockFormateado;
+
+    // Construir descripción de presentación compacta
+    final presentacionCompleta = [
+      if (presentacion.isNotEmpty) presentacion,
+      if (cantidad.isNotEmpty) cantidad,
+      if (abreviatura.isNotEmpty) abreviatura,
+    ].join(' ');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: (fecha != null && diasRestantes < 30)
+              ? Colors.red.withOpacity(0.5)
+              : (fecha != null && diasRestantes < 60)
+              ? Colors.orange.withOpacity(0.5)
+              : colorScheme.outlineVariant,
+          width: (fecha != null && diasRestantes < 60) ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Fila 1: Nombre + Precio
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  nombre,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Badge de Stock (estilo similar a Precio)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: stockGrupo > 5
+                      ? Colors.blue[600]
+                      : stockGrupo > 0
+                      ? Colors.orange[600]
+                      : Colors.red[600],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'Stock',
+                      style: TextStyle(fontSize: 9, color: Colors.white70),
+                    ),
+                    Text(
+                      stockTexto,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Badge de Precio
+              if (precioVenta != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green[600],
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Column(
                     children: [
-                      ...filtrosPresentacion.map(
-                        (pres) => Chip(
-                          label: Text(pres),
-                          onDeleted: () {
-                            setState(() {
-                              filtrosPresentacion.remove(pres);
-                            });
-                          },
-                          deleteIcon: const Icon(Icons.close, size: 18),
+                      Text(
+                        esGranel ? 'x $abreviatura' : 'x unidad',
+                        style: TextStyle(fontSize: 9, color: Colors.green[100]),
+                      ),
+                      Text(
+                        'C\$${precioVenta.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
-                      if (ordenarPor != 'nombre')
-                        Chip(
-                          label: Text('Orden: ${_getNombreOrden(ordenarPor)}'),
-                          onDeleted: () =>
-                              setState(() => ordenarPor = 'nombre'),
-                          deleteIcon: const Icon(Icons.close, size: 18),
-                        ),
                     ],
                   ),
-                ],
-                const SizedBox(height: 12),
-                // Botón de agregar producto
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    await mostrarAgregarProducto(context, cargarDatos);
-                  },
-                  icon: const Icon(Icons.add_circle_outline, size: 20),
-                  label: const Text('Agregar producto'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
-                    ),
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 48),
-                  ),
                 ),
-                const SizedBox(height: 8),
-                // Switch
-                SwitchListTile(
-                  title: Text(
-                    mostrarEliminados
-                        ? 'Mostrar solo productos inactivos'
-                        : 'Mostrar solo productos activos',
-                    style: const TextStyle(fontSize: 13),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // Fila 2: Presentación
+          if (presentacionCompleta.isNotEmpty)
+            Row(
+              children: [
+                Icon(
+                  Icons.inventory_2_outlined,
+                  size: 14,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    presentacionCompleta,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  value: mostrarEliminados,
-                  onChanged: (value) {
-                    setState(() {
-                      mostrarEliminados = value;
-                    });
-                    cargarDatos();
-                  },
-                  secondary: Icon(
-                    mostrarEliminados ? Icons.visibility_off : Icons.visibility,
-                    size: 20,
-                  ),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
                 ),
               ],
             ),
-          ),
-          // Lista de productos
-          Expanded(
-            child: cargando
-                ? const Center(child: CircularProgressIndicator())
-                : Consumer<ThemeProvider>(
-                    builder: (context, themeProvider, child) {
-                      return ListView.builder(
-                        itemCount: listaFiltrada.length,
-                        itemBuilder: (context, index) {
-                          final p = listaFiltrada[index];
-                          final nombre = p['nombre_producto'] as String;
-                          final idPres = p['id_presentacion'] as int;
-                          final tipo = p['tipo'] as String;
-                          final medida = p['medida']?.toString() ?? '';
-                          final presentacion =
-                              presentaciones[idPres]?['descripcion'] ?? '—';
-                          final unidad =
-                              presentaciones[idPres]?['unidad_medida'] ?? '';
-                          final fechaStr = p['fecha_vencimiento'] as String;
-                          final fecha = DateTime.parse(fechaStr);
-                          final diasRestantes = fecha
-                              .difference(DateTime.now())
-                              .inDays;
 
-                          // Usar el stock del grupo si existe, sino usar el stock por tipo
-                          final stockGrupo = p['_stock_grupo'] as int? ?? 1;
-                          final fechaMin = p['_fecha_min'] as DateTime?;
-                          final fechaMax = p['_fecha_max'] as DateTime?;
-                          final estado = p['estado'] as String?;
-                          final precioCompra = p['precio_compra'] as num?;
-                          final precioVenta = p['precio_venta'] as num?;
-
-                          return Card(
-                            color: diasRestantes < 60
-                                ? (themeProvider.isDarkMode
-                                      ? Colors.orange[900]?.withOpacity(0.4)
-                                      : Colors.orange[100])
-                                : null,
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            child: ListTile(
-                              title: Text(
-                                nombre,
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('$presentacion • $tipo'),
-                                  Text(
-                                    'Medida: $medida $unidad • Stock: $stockGrupo',
-                                  ),
-                                  Row(
-                                    children: [
-                                      if (precioCompra != null)
-                                        Text(
-                                          'Compra: C\$ ${precioCompra.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.blue[700],
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      if (precioCompra != null &&
-                                          precioVenta != null)
-                                        const Text(
-                                          ' • ',
-                                          style: TextStyle(fontSize: 12),
-                                        ),
-                                      if (precioVenta != null)
-                                        Text(
-                                          'Venta: C\$ ${precioVenta.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.green[700],
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  if (mostrarEliminados && estado != null)
-                                    Container(
-                                      margin: const EdgeInsets.only(top: 4),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: estado == 'Vendido'
-                                            ? Colors.green.withOpacity(0.2)
-                                            : Colors.red.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: estado == 'Vendido'
-                                              ? Colors.green
-                                              : Colors.red,
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'Estado: $estado',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: estado == 'Vendido'
-                                              ? Colors.green[800]
-                                              : Colors.red[800],
-                                        ),
-                                      ),
-                                    ),
-                                  if (fechaMin != null &&
-                                      fechaMax != null &&
-                                      fechaMin != fechaMax)
-                                    Text(
-                                      'Rango de vencimiento: ${fechaMin.toIso8601String().split('T').first} - ${fechaMax.toIso8601String().split('T').first}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        'Vence: ${fecha.toIso8601String().split('T').first}',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                      Text(
-                                        diasRestantes < 60
-                                            ? '⚠️ $diasRestantes días'
-                                            : '$diasRestantes días',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: diasRestantes < 30
-                                              ? Colors.red
-                                              : Colors.grey,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (!mostrarEliminados) ...[
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () async {
-                                        await mostrarEditarProducto(
-                                          context,
-                                          p,
-                                          cargarDatos,
-                                        );
-                                      },
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete),
-                                      onPressed: () =>
-                                          eliminarProducto(context, p),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
+          // Fila 2.5: Código del producto
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(
+                Icons.qr_code,
+                size: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  'Código: $codigo',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurfaceVariant,
+                    fontFamily: 'monospace',
                   ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+
+          // Fila 3: Precio compra (si existe) + Estado (si eliminado)
+          if (precioCompra != null ||
+              (mostrarEliminados && estado != null)) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (precioCompra != null) ...[
+                  Icon(
+                    Icons.shopping_cart_outlined,
+                    size: 12,
+                    color: Colors.blue[600],
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Costo: C\$${precioCompra.toStringAsFixed(2)}',
+                    style: TextStyle(fontSize: 11, color: Colors.blue[600]),
+                  ),
+                ],
+                const Spacer(),
+                if (mostrarEliminados && estado != null)
+                  _buildBadge(
+                    icon: estado == 'Vendido'
+                        ? Icons.sell
+                        : Icons.delete_outline,
+                    label: estado,
+                    color: estado == 'Vendido' ? Colors.green : Colors.red,
+                    isDark: isDark,
+                  ),
+              ],
+            ),
+          ],
+
+          // Fila 4 (Footer): Vencimiento + Acciones
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // Vencimiento
+              if (fecha != null)
+                Expanded(
+                  child: _buildVencimientoCompacto(
+                    fecha,
+                    diasRestantes,
+                    isDark,
+                  ),
+                )
+              else
+                const Expanded(child: SizedBox()),
+
+              // Acciones
+              if (!mostrarEliminados) ...[
+                InkWell(
+                  onTap: () async {
+                    await mostrarEditarProducto(context, p, cargarDatos);
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(
+                      Icons.edit_outlined,
+                      size: 20,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: () => eliminarProducto(context, p),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(
+                      Icons.delete_outline,
+                      size: 20,
+                      color: colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildVencimientoCompacto(
+    DateTime fecha,
+    int diasRestantes,
+    bool isDark,
+  ) {
+    Color color;
+    String texto;
+    IconData icon;
+
+    if (diasRestantes < 0) {
+      color = Colors.red;
+      icon = Icons.warning;
+      texto = 'Vencido hace ${-diasRestantes}d';
+    } else if (diasRestantes == 0) {
+      color = Colors.red;
+      icon = Icons.warning;
+      texto = 'Vence hoy';
+    } else if (diasRestantes <= 30) {
+      color = Colors.red;
+      icon = Icons.schedule;
+      texto = '${fecha.day}/${fecha.month}/${fecha.year} ($diasRestantes días)';
+    } else if (diasRestantes <= 60) {
+      color = Colors.orange;
+      icon = Icons.schedule;
+      texto = '${fecha.day}/${fecha.month}/${fecha.year} ($diasRestantes días)';
+    } else {
+      color = Colors.grey;
+      icon = Icons.event;
+      texto = '${fecha.day}/${fecha.month}/${fecha.year} ($diasRestantes días)';
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            texto,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -19,6 +19,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
   DateTime? fechaFin;
   List<int> comprasSeleccionadas = [];
   late TabController _tabController;
+  bool _isLoading = true; // Estado de carga
 
   // Filtros para reporte detallado
   String busquedaProveedor = '';
@@ -39,6 +40,108 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
   }
 
   Future<void> cargarCompras() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Construir filtros de fecha
+      String? fechaInicioStr;
+      String? fechaFinStr;
+
+      if (fechaInicio != null) {
+        fechaInicioStr = fechaInicio!.toIso8601String().substring(0, 10);
+      }
+      if (fechaFin != null) {
+        fechaFinStr = fechaFin!.toIso8601String().substring(0, 10);
+      }
+
+      // ✅ OPTIMIZACIÓN: Ejecutar TODAS las consultas en paralelo
+      final results = await Future.wait([
+        // Consulta 1: Compras con filtros
+        _buildComprasQuery(fechaInicioStr, fechaFinStr),
+        // Consulta 2: Catálogo de proveedores
+        Supabase.instance.client
+            .from('proveedor')
+            .select('id_proveedor, nombre_proveedor, ruc_proveedor'),
+        // Consulta 3: TODOS los productos a comprar de una vez
+        Supabase.instance.client
+            .from('producto_a_comprar')
+            .select(
+              'id_compra, producto(precio_compra, precio_venta, nombre_producto, codigo, cantidad, id_presentacion, id_unidad_medida)',
+            ),
+      ]);
+
+      final comprasBase = List<Map<String, dynamic>>.from(results[0]);
+      final proveedoresResponse = List<Map<String, dynamic>>.from(results[1]);
+      final todosProductos = List<Map<String, dynamic>>.from(results[2]);
+
+      // ✅ Indexar proveedores por id para acceso O(1)
+      final proveedores = <int, Map<String, dynamic>>{};
+      for (final p in proveedoresResponse) {
+        final id = p['id_proveedor'] as int?;
+        if (id != null) {
+          proveedores[id] = p;
+        }
+      }
+
+      // ✅ Indexar productos por id_compra para acceso O(1)
+      final productosPorCompra = <int, List<Map<String, dynamic>>>{};
+      for (var p in todosProductos) {
+        final idCompra = p['id_compra'] as int?;
+        if (idCompra != null) {
+          productosPorCompra.putIfAbsent(idCompra, () => []).add(p);
+        }
+      }
+
+      // Procesar compras SIN consultas adicionales
+      for (var c in comprasBase) {
+        final idCompra = c['id_compras'] as int;
+        final listaProductos = productosPorCompra[idCompra] ?? [];
+
+        double totalCosto = 0.0;
+        double totalVenta = 0.0;
+
+        for (var p in listaProductos) {
+          final producto = p['producto'] as Map<String, dynamic>?;
+          final precioCompra =
+              (producto?['precio_compra'] as num?)?.toDouble() ?? 0.0;
+          final precioVenta =
+              (producto?['precio_venta'] as num?)?.toDouble() ?? 0.0;
+          totalCosto += precioCompra;
+          totalVenta += precioVenta;
+        }
+
+        c['productos'] = listaProductos;
+        c['total_costo'] = totalCosto;
+        c['total_calculado'] = totalVenta;
+        c['ganancia_total'] = totalVenta - totalCosto;
+
+        // Asignar datos del proveedor
+        final provId = c['id_proveedor'] as int?;
+        if (provId != null && proveedores.containsKey(provId)) {
+          c['proveedor'] = proveedores[provId];
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          compras = comprasBase;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al cargar compras: $e')));
+      }
+    }
+  }
+
+  Future<List<dynamic>> _buildComprasQuery(
+    String? fechaInicio,
+    String? fechaFin,
+  ) async {
     var query = Supabase.instance.client
         .from('compra')
         .select(
@@ -46,67 +149,13 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
         );
 
     if (fechaInicio != null) {
-      final fechaInicioStr = fechaInicio!.toIso8601String().substring(0, 10);
-      query = query.gte('fecha', fechaInicioStr);
+      query = query.gte('fecha', fechaInicio);
     }
-
     if (fechaFin != null) {
-      final fechaFinStr = fechaFin!.toIso8601String().substring(0, 10);
-      query = query.lte('fecha', fechaFinStr);
+      query = query.lte('fecha', fechaFin);
     }
 
-    final response = await query;
-    final comprasBase = List<Map<String, dynamic>>.from(response);
-
-    // Obtener catálogo de proveedores
-    final proveedoresResponse = await Supabase.instance.client
-        .from('proveedor')
-        .select('id_proveedor, nombre_proveedor, ruc_proveedor');
-
-    final proveedores = <int, Map<String, dynamic>>{};
-    for (final p in proveedoresResponse) {
-      final id = p['id_proveedor'] as int?;
-      if (id != null) {
-        proveedores[id] = p;
-      }
-    }
-
-    for (var c in comprasBase) {
-      final detalle = await Supabase.instance.client
-          .from('producto_a_comprar')
-          .select('producto(precio_compra,precio_venta,nombre_producto,tipo)')
-          .eq('id_compra', c['id_compras']);
-
-      final listaProductos = List<Map<String, dynamic>>.from(detalle);
-
-      double totalCosto = 0.0;
-      double totalVenta = 0.0;
-
-      for (var p in listaProductos) {
-        final producto = p['producto'] as Map<String, dynamic>?;
-        final precioCompra =
-            (producto?['precio_compra'] as num?)?.toDouble() ?? 0.0;
-        final precioVenta =
-            (producto?['precio_venta'] as num?)?.toDouble() ?? 0.0;
-        totalCosto += precioCompra;
-        totalVenta += precioVenta;
-      }
-
-      c['productos'] = listaProductos;
-      c['total_costo'] = totalCosto;
-      c['total_calculado'] = totalVenta;
-      c['ganancia_total'] = totalVenta - totalCosto;
-
-      // Asignar datos del proveedor
-      final provId = c['id_proveedor'] as int?;
-      if (provId != null && proveedores.containsKey(provId)) {
-        c['proveedor'] = proveedores[provId];
-      }
-    }
-
-    setState(() {
-      compras = comprasBase;
-    });
+    return await query;
   }
 
   int _contarProductos(Map<String, dynamic> compra) {
@@ -248,15 +297,15 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
       for (final p in productos) {
         final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
         final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
-        final tipo = prod['tipo']?.toString() ?? 'N/A';
+        final codigo = prod['codigo']?.toString() ?? 'N/A';
         final precioCompra = (p['precio_compra'] as num?)?.toDouble();
 
-        final key = '$nombre|$tipo|$precioCompra';
+        final key = '$nombre|$codigo|$precioCompra';
 
         if (!productosAgrupados.containsKey(key)) {
           productosAgrupados[key] = {
             'nombre': nombre,
-            'tipo': tipo,
+            'codigo': codigo,
             'precio_compra': precioCompra,
             'cantidad': 1,
           };
@@ -294,7 +343,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
               pw.Table.fromTextArray(
                 headers: const [
                   'Producto',
-                  'Tipo',
+                  'Código',
                   'Cant.',
                   'P. Compra',
                   'Total',
@@ -306,7 +355,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
 
                   return [
                     p['nombre']?.toString() ?? 'N/A',
-                    p['tipo']?.toString() ?? 'N/A',
+                    p['codigo']?.toString() ?? 'N/A',
                     cantidad.toString(),
                     'C\$${precioCompra.toStringAsFixed(2)}',
                     'C\$${total.toStringAsFixed(2)}',
@@ -374,7 +423,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (fecha != null) {
+    if (fecha != null && mounted) {
       setState(() => fechaInicio = fecha);
       cargarCompras(); // Recarga automática
     }
@@ -387,7 +436,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (fecha != null) {
+    if (fecha != null && mounted) {
       setState(() => fechaFin = fecha);
       cargarCompras(); // Recarga automática
     }
@@ -677,16 +726,16 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
     for (final p in productos) {
       final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
       final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
-      final tipo = prod['tipo']?.toString() ?? 'N/A';
+      final codigo = prod['codigo']?.toString() ?? 'N/A';
       final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
       final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
 
-      final key = '$nombre|$tipo|$precioCompra|$precioVenta';
+      final key = '$nombre|$codigo|$precioCompra|$precioVenta';
 
       if (!productosAgrupados.containsKey(key)) {
         productosAgrupados[key] = {
           'nombre': nombre,
-          'tipo': tipo,
+          'codigo': codigo,
           'precio_compra': precioCompra,
           'precio_venta': precioVenta,
           'cantidad': 1,
@@ -756,7 +805,7 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${p['nombre']} (${p['tipo']}) - Cant: $cantidad',
+                            '${p['nombre']} (${p['codigo']}) - Cant: $cantidad',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
@@ -812,6 +861,30 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // Mostrar pantalla de carga mientras se cargan los datos
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Reportes de Compras')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: colorScheme.primary),
+              const SizedBox(height: 24),
+              Text(
+                'Cargando reportes...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(

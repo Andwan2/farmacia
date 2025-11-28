@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 class EntityCard extends StatelessWidget {
   /// Nombre principal de la entidad
   final String nombre;
-  
+
   /// Icono a mostrar en el avatar
   final IconData icon;
-  
+
   /// Lista de subtítulos opcionales (ej: teléfono, cargo, RUC)
   final List<String> subtitulos;
-  
+
   /// Callback cuando se presiona el botón de editar
   final VoidCallback onEdit;
 
@@ -29,32 +29,44 @@ class EntityCard extends StatelessWidget {
       child: Stack(
         children: [
           Positioned(
-            top: 4,
-            right: 4,
+            top: 2,
+            right: 2,
             child: IconButton(
-              icon: const Icon(Icons.edit, size: 20),
+              icon: const Icon(Icons.edit, size: 16),
               onPressed: onEdit,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             ),
           ),
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircleAvatar(child: Icon(icon)),
-                const SizedBox(height: 8),
-                Text(
-                  nombre,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                ),
-                ...subtitulos.map(
-                  (subtitulo) => Text(
-                    subtitulo,
-                    style: const TextStyle(fontSize: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(radius: 14, child: Icon(icon, size: 14)),
+                  const SizedBox(height: 2),
+                  Text(
+                    nombre,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
                     textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                  if (subtitulos.isNotEmpty)
+                    Text(
+                      subtitulos.first,
+                      style: const TextStyle(fontSize: 9),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
             ),
           ),
         ],

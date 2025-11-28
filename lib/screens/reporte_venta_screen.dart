@@ -19,6 +19,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
   DateTime? fechaFin;
   List<int> ventasSeleccionadas = []; // IDs de ventas para reporte detallado
   late TabController _tabController;
+  bool _isLoading = true; // Estado de carga
 
   // Filtros para reporte detallado
   String busquedaCliente = '';
@@ -39,58 +40,101 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
   }
 
   Future<void> cargarVentas() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Construir filtros de fecha
+      String? fechaInicioStr;
+      String? fechaFinStr;
+
+      if (fechaInicio != null) {
+        fechaInicioStr = fechaInicio!.toIso8601String().substring(0, 10);
+      }
+      if (fechaFin != null) {
+        fechaFinStr = fechaFin!.toIso8601String().substring(0, 10);
+      }
+
+      // ✅ OPTIMIZACIÓN: Ejecutar consultas en paralelo
+      final results = await Future.wait([
+        // Consulta 1: Ventas con filtros
+        _buildVentasQuery(fechaInicioStr, fechaFinStr),
+        // Consulta 2: TODOS los productos en venta de una vez
+        Supabase.instance.client
+            .from('producto_en_venta')
+            .select(
+              'id_venta, producto(nombre_producto, codigo, precio_venta, precio_compra, cantidad, id_presentacion, id_unidad_medida)',
+            ),
+      ]);
+
+      final ventasBase = List<Map<String, dynamic>>.from(results[0]);
+      final todosProductos = List<Map<String, dynamic>>.from(results[1]);
+
+      // ✅ Indexar productos por id_venta para acceso O(1)
+      final productosPorVenta = <int, List<Map<String, dynamic>>>{};
+      for (var p in todosProductos) {
+        final idVenta = p['id_venta'] as int?;
+        if (idVenta != null) {
+          productosPorVenta.putIfAbsent(idVenta, () => []).add(p);
+        }
+      }
+
+      // Procesar ventas SIN consultas adicionales
+      for (var v in ventasBase) {
+        final idVenta = v['id_venta'] as int;
+        final listaProductos = productosPorVenta[idVenta] ?? [];
+
+        double totalVenta = 0.0;
+        double totalCosto = 0.0;
+
+        for (var p in listaProductos) {
+          final precioVenta =
+              (p['producto']?['precio_venta'] as num?)?.toDouble() ?? 0.0;
+          final precioCompra =
+              (p['producto']?['precio_compra'] as num?)?.toDouble() ?? 0.0;
+          totalVenta += precioVenta;
+          totalCosto += precioCompra;
+        }
+
+        v['productos'] = listaProductos;
+        v['total_calculado'] = totalVenta;
+        v['total_costo'] = totalCosto;
+        v['ganancia_total'] = totalVenta - totalCosto;
+      }
+
+      if (mounted) {
+        setState(() {
+          ventas = ventasBase;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al cargar ventas: $e')));
+      }
+    }
+  }
+
+  Future<List<dynamic>> _buildVentasQuery(
+    String? fechaInicio,
+    String? fechaFin,
+  ) async {
     var query = Supabase.instance.client
         .from('venta')
         .select(
           'id_venta, fecha, cliente(nombre_cliente), empleado(nombre_empleado), payment_method:payment_method_id(name, provider)',
         );
 
-    // ✅ Filtros por rango de fechas si se seleccionaron
     if (fechaInicio != null) {
-      final fechaInicioStr = fechaInicio!.toIso8601String().substring(0, 10);
-      query = query.gte('fecha', fechaInicioStr);
+      query = query.gte('fecha', fechaInicio);
     }
-
     if (fechaFin != null) {
-      final fechaFinStr = fechaFin!.toIso8601String().substring(0, 10);
-      query = query.lte('fecha', fechaFinStr);
+      query = query.lte('fecha', fechaFin);
     }
 
-    final response = await query;
-    final ventasBase = List<Map<String, dynamic>>.from(response);
-
-    // 🔎 Calcular total dinámico por cada venta y ganancias
-    for (var v in ventasBase) {
-      final producto = await Supabase.instance.client
-          .from('producto_en_venta')
-          .select(
-            'producto(nombre_producto, precio_venta, precio_compra, tipo)',
-          )
-          .eq('id_venta', v['id_venta']);
-
-      final listaProductos = List<Map<String, dynamic>>.from(producto);
-
-      double totalVenta = 0.0;
-      double totalCosto = 0.0;
-
-      for (var p in listaProductos) {
-        final precioVenta =
-            (p['producto']?['precio_venta'] as num?)?.toDouble() ?? 0.0;
-        final precioCompra =
-            (p['producto']?['precio_compra'] as num?)?.toDouble() ?? 0.0;
-        totalVenta += precioVenta;
-        totalCosto += precioCompra;
-      }
-
-      v['productos'] = listaProductos;
-      v['total_calculado'] = totalVenta;
-      v['total_costo'] = totalCosto;
-      v['ganancia_total'] = totalVenta - totalCosto;
-    }
-
-    setState(() {
-      ventas = ventasBase;
-    });
+    return await query;
   }
 
   int _contarProductos(Map<String, dynamic> venta) {
@@ -200,16 +244,16 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
       for (final p in productos) {
         final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
         final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
-        final tipo = prod['tipo']?.toString() ?? 'N/A';
+        final codigo = prod['codigo']?.toString() ?? 'N/A';
         final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
         final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
 
-        final key = '$nombre|$tipo|$precioVenta|$precioCompra';
+        final key = '$nombre|$codigo|$precioVenta|$precioCompra';
 
         if (!productosAgrupados.containsKey(key)) {
           productosAgrupados[key] = {
             'nombre': nombre,
-            'tipo': tipo,
+            'codigo': codigo,
             'precio_venta': precioVenta,
             'precio_compra': precioCompra,
             'cantidad': 1,
@@ -255,7 +299,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
               pw.Table.fromTextArray(
                 headers: const [
                   'Producto',
-                  'Tipo',
+                  'Código',
                   'Cant.',
                   'P. Compra',
                   'P. Venta',
@@ -271,7 +315,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
 
                   return [
                     p['nombre']?.toString() ?? 'N/A',
-                    p['tipo']?.toString() ?? 'N/A',
+                    p['codigo']?.toString() ?? 'N/A',
                     cantidad.toString(),
                     'C\$${precioCompra.toStringAsFixed(2)}',
                     'C\$${precioVenta.toStringAsFixed(2)}',
@@ -353,7 +397,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (fecha != null) {
+    if (fecha != null && mounted) {
       setState(() => fechaInicio = fecha);
       cargarVentas(); // Recargar automáticamente
     }
@@ -366,7 +410,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (fecha != null) {
+    if (fecha != null && mounted) {
       setState(() => fechaFin = fecha);
       cargarVentas(); // Recargar automáticamente
     }
@@ -691,16 +735,16 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     for (final p in productos) {
       final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
       final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
-      final tipo = prod['tipo']?.toString() ?? 'N/A';
+      final codigo = prod['codigo']?.toString() ?? 'N/A';
       final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
       final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
 
-      final key = '$nombre|$tipo|$precioVenta|$precioCompra';
+      final key = '$nombre|$codigo|$precioVenta|$precioCompra';
 
       if (!productosAgrupados.containsKey(key)) {
         productosAgrupados[key] = {
           'nombre': nombre,
-          'tipo': tipo,
+          'codigo': codigo,
           'precio_venta': precioVenta,
           'precio_compra': precioCompra,
           'cantidad': 1,
@@ -770,7 +814,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${p['nombre']} (${p['tipo']}) - Cant: $cantidad',
+                            '${p['nombre']} (${p['codigo']}) - Cant: $cantidad',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
@@ -826,32 +870,97 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // Mostrar pantalla de carga mientras se cargan los datos
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Reportes de Ventas')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: colorScheme.primary),
+              const SizedBox(height: 24),
+              Text(
+                'Cargando reportes...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reportes de Ventas'),
         actions: [
           Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.picture_as_pdf, size: 24),
-              label: const Text('Exportar PDF', style: TextStyle(fontSize: 16)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
+            padding: const EdgeInsets.only(right: 12.0),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  if (_tabController.index == 0) {
+                    _exportarPdfGeneral();
+                  } else {
+                    _exportarPdfDetallado();
+                  }
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.red.shade600, Colors.red.shade800],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.red.shade900.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                          Icons.picture_as_pdf_rounded,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Exportar',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                elevation: 4,
               ),
-              onPressed: () {
-                if (_tabController.index == 0) {
-                  _exportarPdfGeneral();
-                } else {
-                  _exportarPdfDetallado();
-                }
-              },
             ),
           ),
         ],
@@ -863,67 +972,72 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
           ],
         ),
       ),
-      body: Column(
-        children: [
-          // Filtros de fecha
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.date_range),
-                    label: Text(
-                      fechaInicio != null
-                          ? 'Desde: ${fechaInicio!.day}/${fechaInicio!.month}/${fechaInicio!.year}'
-                          : 'Fecha inicio',
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(
+            children: [
+              // Filtros de fecha
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.date_range),
+                        label: Text(
+                          fechaInicio != null
+                              ? 'Desde: ${fechaInicio!.day}/${fechaInicio!.month}/${fechaInicio!.year}'
+                              : 'Fecha inicio',
+                        ),
+                        onPressed: seleccionarFechaInicio,
+                      ),
                     ),
-                    onPressed: seleccionarFechaInicio,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.date_range),
-                    label: Text(
-                      fechaFin != null
-                          ? 'Hasta: ${fechaFin!.day}/${fechaFin!.month}/${fechaFin!.year}'
-                          : 'Fecha fin',
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.date_range),
+                        label: Text(
+                          fechaFin != null
+                              ? 'Hasta: ${fechaFin!.day}/${fechaFin!.month}/${fechaFin!.year}'
+                              : 'Fecha fin',
+                        ),
+                        onPressed: seleccionarFechaFin,
+                      ),
                     ),
-                    onPressed: seleccionarFechaFin,
-                  ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.search),
+                      tooltip: 'Aplicar filtros',
+                      onPressed: cargarVentas,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.clear),
+                      tooltip: 'Limpiar filtros',
+                      onPressed: () {
+                        setState(() {
+                          fechaInicio = null;
+                          fechaFin = null;
+                        });
+                        cargarVentas();
+                      },
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: 'Aplicar filtros',
-                  onPressed: cargarVentas,
+              ),
+              // Contenido de tabs
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildReporteGeneral(isDark),
+                    _buildReporteDetallado(isDark),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.clear),
-                  tooltip: 'Limpiar filtros',
-                  onPressed: () {
-                    setState(() {
-                      fechaInicio = null;
-                      fechaFin = null;
-                    });
-                    cargarVentas();
-                  },
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          // Contenido de tabs
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildReporteGeneral(isDark),
-                _buildReporteDetallado(isDark),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -23,11 +23,13 @@ Future<void> mostrarAgregarProveedor(
             ),
             TextField(
               controller: rucController,
-              decoration: const InputDecoration(labelText: 'RUC'),
+              decoration: const InputDecoration(labelText: 'RUC (opcional)'),
             ),
             TextField(
               controller: telefonoController,
-              decoration: const InputDecoration(labelText: 'Número de teléfono'),
+              decoration: const InputDecoration(
+                labelText: 'Teléfono (opcional)',
+              ),
               keyboardType: TextInputType.phone,
             ),
           ],
@@ -43,17 +45,16 @@ Future<void> mostrarAgregarProveedor(
               final ruc = rucController.text.trim();
               final telefono = telefonoController.text.trim();
 
-              if (nombre.isEmpty || ruc.isEmpty) {
+              if (nombre.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Nombre y RUC son obligatorios')),
+                  const SnackBar(content: Text('El nombre es obligatorio')),
                 );
                 return;
               }
 
               await Supabase.instance.client.from('proveedor').insert({
-                // id_proveedor es BIGSERIAL, lo genera Postgres automáticamente
                 'nombre_proveedor': nombre,
-                'ruc_proveedor': ruc,
+                'ruc_proveedor': ruc.isEmpty ? null : ruc,
                 'numero_telefono': telefono.isEmpty ? null : telefono,
               });
 

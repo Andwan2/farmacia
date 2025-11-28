@@ -6,9 +6,13 @@ Future<void> mostrarEditarProveedor(
   Map<String, dynamic> proveedor,
   VoidCallback onSuccess,
 ) async {
-  final nombreController = TextEditingController(text: proveedor['nombre_proveedor']);
+  final nombreController = TextEditingController(
+    text: proveedor['nombre_proveedor'],
+  );
   final rucController = TextEditingController(text: proveedor['ruc_proveedor']);
-  final telefonoController = TextEditingController(text: proveedor['numero_telefono'] ?? '');
+  final telefonoController = TextEditingController(
+    text: proveedor['numero_telefono'] ?? '',
+  );
 
   showDialog(
     context: context,
@@ -24,11 +28,13 @@ Future<void> mostrarEditarProveedor(
             ),
             TextField(
               controller: rucController,
-              decoration: const InputDecoration(labelText: 'RUC'),
+              decoration: const InputDecoration(labelText: 'RUC (opcional)'),
             ),
             TextField(
               controller: telefonoController,
-              decoration: const InputDecoration(labelText: 'Número de teléfono'),
+              decoration: const InputDecoration(
+                labelText: 'Teléfono (opcional)',
+              ),
               keyboardType: TextInputType.phone,
             ),
           ],
@@ -44,9 +50,9 @@ Future<void> mostrarEditarProveedor(
               final ruc = rucController.text.trim();
               final telefono = telefonoController.text.trim();
 
-              if (nombre.isEmpty || ruc.isEmpty) {
+              if (nombre.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Nombre y RUC son obligatorios')),
+                  const SnackBar(content: Text('El nombre es obligatorio')),
                 );
                 return;
               }
@@ -55,7 +61,7 @@ Future<void> mostrarEditarProveedor(
                   .from('proveedor')
                   .update({
                     'nombre_proveedor': nombre,
-                    'ruc_proveedor': ruc,
+                    'ruc_proveedor': ruc.isEmpty ? null : ruc,
                     'numero_telefono': telefono.isEmpty ? null : telefono,
                   })
                   .eq('id_proveedor', proveedor['id_proveedor']);
