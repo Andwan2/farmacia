@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:abari/services/prediction_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,6 +26,15 @@ class _HomeScreenState extends State<HomeScreen> {
   // Para gráficas
   double totalGanancias = 0.0;
   double totalGastos = 0.0;
+
+  // Predicciones
+  bool cargandoPredicciones = false;
+  bool servidorConectado = false;
+  List<Map<String, dynamic>> datosHistoricos = [];
+  List<Map<String, dynamic>> datosParaProphet = [];
+  List<Map<String, dynamic>> topProductos = [];
+  PredictionResult? predicciones;
+  String? errorPrediccion;
 
   @override
   void initState() {
@@ -144,6 +154,45 @@ class _HomeScreenState extends State<HomeScreen> {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
+  /// Carga datos históricos de ventas y los prepara para Prophet
+  Future<void> cargarDatosPrediccion() async {
+    setState(() {
+      cargandoPredicciones = true;
+      errorPrediccion = null;
+    });
+
+    try {
+      // Verificar conexión con servidor
+      servidorConectado = await PredictionService.verificarConexion();
+
+      // Obtener datos históricos de ventas
+      datosHistoricos = await PredictionService.obtenerDatosHistoricos();
+
+      // Agrupar por fecha para Prophet
+      datosParaProphet = PredictionService.agruparPorFecha(datosHistoricos);
+
+      // Obtener top productos
+      topProductos = PredictionService.obtenerTopProductos(
+        datosHistoricos,
+        limite: 5,
+      );
+
+      // Si el servidor está conectado, obtener predicciones
+      if (servidorConectado && datosParaProphet.isNotEmpty) {
+        predicciones = await PredictionService.obtenerPredicciones(
+          datosAgrupados: datosParaProphet,
+          periodos: 30,
+        );
+      }
+    } catch (e) {
+      errorPrediccion = e.toString();
+    }
+
+    if (mounted) {
+      setState(() => cargandoPredicciones = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -172,12 +221,16 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            Center(
-              child: Text(
-                'Bienvenido al Dashboard',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+
+            Text(
+              'Bienvenido al Dashboard',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
+
+            const SizedBox(height: 24),
+
+            // Sección de Predicciones (arriba)
+            _buildSeccionPredicciones(isDark),
             const SizedBox(height: 24),
 
             // Sección de Inventario
@@ -427,7 +480,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final porcentajeGastos = total > 0 ? (totalGastos / total) * 100 : 0.0;
 
     return Card(
-      elevation: 2,
+      elevation: isDark ? 1 : 2,
+      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Colors.teal.withValues(alpha: isDark ? 0.4 : 0.3),
+          width: 1,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: LayoutBuilder(
@@ -649,6 +710,398 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// Sección de predicciones de demanda
+  Widget _buildSeccionPredicciones(bool isDark) {
+    return Card(
+      elevation: isDark ? 1 : 2,
+      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Colors.deepPurple.withValues(alpha: isDark ? 0.4 : 0.3),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header con título y botón actualizar
+            Row(
+              children: [
+                Icon(Icons.analytics, size: 24, color: Colors.deepPurple[700]),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Predicción de Demanda',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                // Indicador de conexión
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: servidorConectado
+                        ? Colors.green.withValues(alpha: 0.1)
+                        : Colors.grey.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        servidorConectado ? Icons.cloud_done : Icons.cloud_off,
+                        size: 14,
+                        color: servidorConectado ? Colors.green : Colors.grey,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        servidorConectado ? 'Conectado' : 'Sin conexión',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: servidorConectado ? Colors.green : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Botón de actualizar predicción
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: cargandoPredicciones ? null : cargarDatosPrediccion,
+                icon: cargandoPredicciones
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.deepPurple[400],
+                        ),
+                      )
+                    : Icon(
+                        Icons.refresh,
+                        size: 18,
+                        color: Colors.deepPurple[600],
+                      ),
+                label: Text(
+                  cargandoPredicciones
+                      ? 'Cargando datos...'
+                      : datosHistoricos.isEmpty
+                      ? 'Cargar datos de ventas'
+                      : 'Actualizar predicción',
+                  style: TextStyle(
+                    color: isDark
+                        ? Colors.deepPurple[300]
+                        : Colors.deepPurple[700],
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(
+                    color: Colors.deepPurple.withValues(
+                      alpha: isDark ? 0.5 : 0.4,
+                    ),
+                    width: 1.5,
+                  ),
+                  backgroundColor: Colors.deepPurple.withValues(
+                    alpha: isDark ? 0.15 : 0.05,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+
+            // Mostrar error si existe
+            if (errorPrediccion != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        errorPrediccion!,
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Mostrar datos cargados
+            if (datosHistoricos.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 12),
+
+              // Resumen de datos
+              _buildInfoRow(
+                'Registros de ventas',
+                '${datosHistoricos.length}',
+                Icons.receipt_long,
+                Colors.blue,
+              ),
+              const SizedBox(height: 8),
+              _buildInfoRow(
+                'Días con datos',
+                '${datosParaProphet.length}',
+                Icons.calendar_today,
+                Colors.teal,
+              ),
+
+              // Top productos
+              if (topProductos.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  'Top 5 productos más vendidos',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                ...topProductos.take(5).map((p) {
+                  final esGranel = p['es_granel'] == true;
+                  final nombre = p['nombre'] ?? 'Sin nombre';
+                  final presentacion = p['presentacion'] ?? '';
+                  final cantidad =
+                      (p['cantidad_producto'] as num?)?.toDouble() ?? 0;
+                  final unidad = p['unidad_abreviatura'] ?? '';
+                  final totalVendido = (p['total'] as double);
+
+                  // Construir descripción del producto
+                  String descripcion = nombre;
+                  if (presentacion.isNotEmpty) {
+                    if (esGranel) {
+                      descripcion = '$nombre ($presentacion)';
+                    } else {
+                      descripcion =
+                          '$nombre ${cantidad.toStringAsFixed(0)}$unidad ($presentacion)';
+                    }
+                  }
+
+                  // Unidad de medida para el total
+                  final unidadTotal = esGranel ? unidad : 'uds';
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          esGranel ? Icons.scale : Icons.inventory_2,
+                          size: 16,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            descripcion,
+                            style: const TextStyle(fontSize: 13),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: esGranel
+                                ? Colors.orange.withValues(alpha: 0.1)
+                                : Colors.blue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${totalVendido.toStringAsFixed(1)} $unidadTotal',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: esGranel
+                                  ? Colors.orange[700]
+                                  : Colors.blue[700],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+
+              // Predicciones si están disponibles
+              if (predicciones != null) ...[
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 12),
+                const Text(
+                  'Demanda predicha',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildPrediccionCard(
+                        'Próxima semana',
+                        predicciones!.demandaSemana.toStringAsFixed(0),
+                        Icons.date_range,
+                        Colors.orange,
+                        isDark,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildPrediccionCard(
+                        'Próximos 30 días',
+                        predicciones!.demanda30Dias.toStringAsFixed(0),
+                        Icons.calendar_month,
+                        Colors.deepPurple,
+                        isDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
+              // Datos listos para enviar (cuando no hay servidor)
+              if (!servidorConectado && datosParaProphet.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.amber.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: Colors.amber[700],
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Datos listos para Prophet',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Los datos están preparados en formato {ds, y}. '
+                        'Conecta el servidor Python para obtener predicciones.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, IconData icon, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 8),
+        Text(label, style: const TextStyle(fontSize: 13)),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPrediccionCard(
+    String titulo,
+    String valor,
+    IconData icono,
+    Color color,
+    bool isDark,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.2 : 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(icono, color: color, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            valor,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: isDark ? _getLighterColor(color) : _getDarkerColor(color),
+            ),
+          ),
+          Text(
+            'unidades',
+            style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            titulo,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }
