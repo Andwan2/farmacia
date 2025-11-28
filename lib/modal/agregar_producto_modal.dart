@@ -132,9 +132,16 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
       ' ',
       '',
     );
-    final descripcionPres = (presentacion['descripcion'] ?? '')
+
+    // Si la presentación tiene múltiples palabras, usar solo la última
+    final descripcionOriginal = (presentacion['descripcion'] ?? '')
         .toString()
-        .replaceAll(' ', '');
+        .trim();
+    final palabras = descripcionOriginal.split(' ');
+    final descripcionPres = palabras.length > 1
+        ? palabras.last
+        : descripcionOriginal.replaceAll(' ', '');
+
     final esAGranel = descripcionPres.toLowerCase() == 'agranel';
     final nombre = nombreController.text.trim().replaceAll(' ', '');
 
