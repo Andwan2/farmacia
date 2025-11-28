@@ -40,63 +40,101 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
   }
 
   Future<void> cargarVentas() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Construir filtros de fecha
+      String? fechaInicioStr;
+      String? fechaFinStr;
+
+      if (fechaInicio != null) {
+        fechaInicioStr = fechaInicio!.toIso8601String().substring(0, 10);
+      }
+      if (fechaFin != null) {
+        fechaFinStr = fechaFin!.toIso8601String().substring(0, 10);
+      }
+
+      // ✅ OPTIMIZACIÓN: Ejecutar consultas en paralelo
+      final results = await Future.wait([
+        // Consulta 1: Ventas con filtros
+        _buildVentasQuery(fechaInicioStr, fechaFinStr),
+        // Consulta 2: TODOS los productos en venta de una vez
+        Supabase.instance.client
+            .from('producto_en_venta')
+            .select(
+              'id_venta, producto(nombre_producto, codigo, precio_venta, precio_compra, cantidad, id_presentacion, id_unidad_medida)',
+            ),
+      ]);
+
+      final ventasBase = List<Map<String, dynamic>>.from(results[0]);
+      final todosProductos = List<Map<String, dynamic>>.from(results[1]);
+
+      // ✅ Indexar productos por id_venta para acceso O(1)
+      final productosPorVenta = <int, List<Map<String, dynamic>>>{};
+      for (var p in todosProductos) {
+        final idVenta = p['id_venta'] as int?;
+        if (idVenta != null) {
+          productosPorVenta.putIfAbsent(idVenta, () => []).add(p);
+        }
+      }
+
+      // Procesar ventas SIN consultas adicionales
+      for (var v in ventasBase) {
+        final idVenta = v['id_venta'] as int;
+        final listaProductos = productosPorVenta[idVenta] ?? [];
+
+        double totalVenta = 0.0;
+        double totalCosto = 0.0;
+
+        for (var p in listaProductos) {
+          final precioVenta =
+              (p['producto']?['precio_venta'] as num?)?.toDouble() ?? 0.0;
+          final precioCompra =
+              (p['producto']?['precio_compra'] as num?)?.toDouble() ?? 0.0;
+          totalVenta += precioVenta;
+          totalCosto += precioCompra;
+        }
+
+        v['productos'] = listaProductos;
+        v['total_calculado'] = totalVenta;
+        v['total_costo'] = totalCosto;
+        v['ganancia_total'] = totalVenta - totalCosto;
+      }
+
+      if (mounted) {
+        setState(() {
+          ventas = ventasBase;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al cargar ventas: $e')));
+      }
+    }
+  }
+
+  Future<List<dynamic>> _buildVentasQuery(
+    String? fechaInicio,
+    String? fechaFin,
+  ) async {
     var query = Supabase.instance.client
         .from('venta')
         .select(
           'id_venta, fecha, cliente(nombre_cliente), empleado(nombre_empleado), payment_method:payment_method_id(name, provider)',
         );
 
-    // ✅ Filtros por rango de fechas si se seleccionaron
     if (fechaInicio != null) {
-      final fechaInicioStr = fechaInicio!.toIso8601String().substring(0, 10);
-      query = query.gte('fecha', fechaInicioStr);
+      query = query.gte('fecha', fechaInicio);
     }
-
     if (fechaFin != null) {
-      final fechaFinStr = fechaFin!.toIso8601String().substring(0, 10);
-      query = query.lte('fecha', fechaFinStr);
+      query = query.lte('fecha', fechaFin);
     }
 
-    final response = await query;
-    final ventasBase = List<Map<String, dynamic>>.from(response);
-
-    // Calcular total dinámico por cada venta y ganancias
-    for (var v in ventasBase) {
-      if (!mounted) return; // Salir si el widget fue eliminado
-
-      final producto = await Supabase.instance.client
-          .from('producto_en_venta')
-          .select(
-            'producto(nombre_producto, codigo, precio_venta, precio_compra, cantidad, id_presentacion, id_unidad_medida)',
-          )
-          .eq('id_venta', v['id_venta']);
-
-      final listaProductos = List<Map<String, dynamic>>.from(producto);
-
-      double totalVenta = 0.0;
-      double totalCosto = 0.0;
-
-      for (var p in listaProductos) {
-        final precioVenta =
-            (p['producto']?['precio_venta'] as num?)?.toDouble() ?? 0.0;
-        final precioCompra =
-            (p['producto']?['precio_compra'] as num?)?.toDouble() ?? 0.0;
-        totalVenta += precioVenta;
-        totalCosto += precioCompra;
-      }
-
-      v['productos'] = listaProductos;
-      v['total_calculado'] = totalVenta;
-      v['total_costo'] = totalCosto;
-      v['ganancia_total'] = totalVenta - totalCosto;
-    }
-
-    if (mounted) {
-      setState(() {
-        ventas = ventasBase;
-        _isLoading = false;
-      });
-    }
+    return await query;
   }
 
   int _contarProductos(Map<String, dynamic> venta) {

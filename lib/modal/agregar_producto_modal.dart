@@ -159,6 +159,27 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
     }
   }
 
+  bool _esAGranel() {
+    if (presentacionSeleccionada == null) return false;
+    final presentacion = listaPresentaciones.firstWhere(
+      (p) => p['id_presentacion'] == presentacionSeleccionada,
+      orElse: () => {'descripcion': ''},
+    );
+    final descripcion = (presentacion['descripcion'] ?? '')
+        .toString()
+        .toLowerCase();
+    return descripcion == 'agranel' || descripcion == 'a granel';
+  }
+
+  String _getUnidadAbreviatura() {
+    if (unidadMedidaSeleccionada == null) return '';
+    final unidad = listaUnidadesMedida.firstWhere(
+      (u) => u['id'] == unidadMedidaSeleccionada,
+      orElse: () => {'abreviatura': ''},
+    );
+    return (unidad['abreviatura'] ?? '').toString();
+  }
+
   bool validarPaso(int paso) {
     switch (paso) {
       case 0:
@@ -406,6 +427,7 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
     final nombre = nombreController.text.trim();
     final cantidad = cantidadController.text.trim();
     final fechaVencimiento = fechaVencimientoController.text.trim();
+    final esGranel = _esAGranel();
 
     try {
       final codigo = generarCodigo();
@@ -435,16 +457,20 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
         datosBase['categoria'] = categoriaSeleccionada;
       }
 
-      for (int i = 0; i < stock; i++) {
+      // Para productos a granel: solo 1 registro, la cantidad ES el stock
+      // Para otros productos: crear N registros según stock seleccionado
+      final cantidadRegistros = esGranel ? 1 : stock;
+
+      for (int i = 0; i < cantidadRegistros; i++) {
         await Supabase.instance.client.from('producto').insert(datosBase);
       }
 
       if (mounted) {
         Navigator.pop(context);
-        Fluttertoast.showToast(
-          msg: '$stock producto(s) agregado(s)',
-          backgroundColor: Colors.green,
-        );
+        final mensaje = esGranel
+            ? 'Producto a granel agregado ($cantidad ${_getUnidadAbreviatura()})'
+            : '$stock producto(s) agregado(s)';
+        Fluttertoast.showToast(msg: mensaje, backgroundColor: Colors.green);
         widget.onSuccess();
       }
     } catch (e) {
@@ -1009,93 +1035,122 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
           ),
           const SizedBox(height: 24),
 
-          // Stock
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.inventory_2, color: Colors.green[700], size: 24),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Unidades a agregar',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.green[800],
+          // Stock - Solo mostrar si NO es a granel
+          if (!_esAGranel()) ...[
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.inventory_2,
+                        color: Colors.green[700],
+                        size: 24,
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton.filled(
-                      onPressed: stock > 1
-                          ? () => setState(() {
-                              stock--;
-                              stockController.text = stock.toString();
-                            })
-                          : null,
-                      icon: const Icon(Icons.remove, size: 28),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.green.withValues(alpha: 0.2),
-                        foregroundColor: Colors.green[700],
-                        minimumSize: const Size(56, 56),
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    SizedBox(
-                      width: 120,
-                      child: TextField(
-                        controller: stockController,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
+                      const SizedBox(width: 10),
+                      Text(
+                        'Unidades a agregar',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.green[800],
                         ),
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 16,
-                          ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton.filled(
+                        onPressed: stock > 1
+                            ? () => setState(() {
+                                stock--;
+                                stockController.text = stock.toString();
+                              })
+                            : null,
+                        icon: const Icon(Icons.remove, size: 28),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.green.withValues(alpha: 0.2),
+                          foregroundColor: Colors.green[700],
+                          minimumSize: const Size(56, 56),
                         ),
-                        keyboardType: TextInputType.number,
-                        onChanged: (value) => setState(() {
-                          stock = (int.tryParse(value) ?? 1).clamp(1, 9999);
-                        }),
                       ),
-                    ),
-                    const SizedBox(width: 20),
-                    IconButton.filled(
-                      onPressed: stock < 9999
-                          ? () => setState(() {
-                              stock++;
-                              stockController.text = stock.toString();
-                            })
-                          : null,
-                      icon: const Icon(Icons.add, size: 28),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.green.withValues(alpha: 0.2),
-                        foregroundColor: Colors.green[700],
-                        minimumSize: const Size(56, 56),
+                      const SizedBox(width: 20),
+                      SizedBox(
+                        width: 120,
+                        child: TextField(
+                          controller: stockController,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 16,
+                            ),
+                          ),
+                          keyboardType: TextInputType.number,
+                          onChanged: (value) => setState(() {
+                            stock = (int.tryParse(value) ?? 1).clamp(1, 9999);
+                          }),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 20),
+                      IconButton.filled(
+                        onPressed: stock < 9999
+                            ? () => setState(() {
+                                stock++;
+                                stockController.text = stock.toString();
+                              })
+                            : null,
+                        icon: const Icon(Icons.add, size: 28),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.green.withValues(alpha: 0.2),
+                          foregroundColor: Colors.green[700],
+                          minimumSize: const Size(56, 56),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
+          ] else ...[
+            // Mensaje informativo para productos a granel
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue[700], size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Producto a granel: el stock será igual a la cantidad ingresada (${cantidadController.text} ${_getUnidadAbreviatura()})',
+                      style: TextStyle(fontSize: 14, color: Colors.blue[800]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
 
           // Opciones avanzadas
           ExpansionTile(

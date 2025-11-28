@@ -364,13 +364,23 @@ class _InventarioPageState extends State<ProductosScreen> {
     final client = Supabase.instance.client;
 
     try {
-      // 1) Productos - cargar todos primero
-      final resProd = await client
-          .from('producto')
-          .select()
-          .order('nombre_producto', ascending: true);
+      // ✅ OPTIMIZACIÓN: Ejecutar todas las consultas en paralelo
+      final results = await Future.wait([
+        // 0: Productos
+        client
+            .from('producto')
+            .select()
+            .order('nombre_producto', ascending: true),
+        // 1: Presentaciones
+        client.from('presentacion').select('id_presentacion,descripcion'),
+        // 2: Unidades de medida
+        client.from('unidad_medida').select('id,nombre,abreviatura'),
+      ]);
 
-      List<dynamic> dataProd = (resProd is List) ? resProd : <dynamic>[];
+      // Procesar productos
+      List<dynamic> dataProd = (results[0] is List)
+          ? results[0] as List
+          : <dynamic>[];
 
       // Filtrar en memoria por estado
       if (mostrarEliminados) {
@@ -383,13 +393,8 @@ class _InventarioPageState extends State<ProductosScreen> {
             .toList();
       }
 
-      // 2) Presentaciones para mapear id_presentacion -> descripcion
-      final resPres = await client
-          .from('presentacion')
-          .select('id_presentacion,descripcion')
-          .order('id_presentacion', ascending: true);
-
-      final dataPres = (resPres is List) ? resPres : <dynamic>[];
+      // Procesar presentaciones
+      final dataPres = (results[1] is List) ? results[1] as List : <dynamic>[];
       final Map<int, Map<String, dynamic>> presMap = {};
       for (final p in dataPres) {
         final id = p['id_presentacion'] as int?;
@@ -398,13 +403,10 @@ class _InventarioPageState extends State<ProductosScreen> {
         }
       }
 
-      // 3) Unidades de medida para mapear id -> nombre/abreviatura
-      final resUnidades = await client
-          .from('unidad_medida')
-          .select('id,nombre,abreviatura')
-          .order('id', ascending: true);
-
-      final dataUnidades = (resUnidades is List) ? resUnidades : <dynamic>[];
+      // Procesar unidades de medida
+      final dataUnidades = (results[2] is List)
+          ? results[2] as List
+          : <dynamic>[];
       final Map<int, Map<String, dynamic>> unidadesMap = {};
       for (final u in dataUnidades) {
         final id = u['id'] as int?;
@@ -416,14 +418,14 @@ class _InventarioPageState extends State<ProductosScreen> {
         }
       }
 
-      // 4) Stock por código (conteo)
+      // Stock por código (conteo en memoria)
       final Map<String, int> stock = {};
       for (final item in dataProd) {
         final codigo = item['codigo']?.toString() ?? 'Sin código';
         stock[codigo] = (stock[codigo] ?? 0) + 1;
       }
 
-      // 5) Extraer categorías únicas
+      // Extraer categorías únicas
       final Set<String> categoriasSet = {};
       for (final item in dataProd) {
         final cat = item['categoria']?.toString();
@@ -433,20 +435,20 @@ class _InventarioPageState extends State<ProductosScreen> {
       }
       final categoriasLista = categoriasSet.toList()..sort();
 
-      setState(() {
-        productos = dataProd;
-        presentaciones = presMap;
-        unidadesMedida = unidadesMap;
-        stockPorTipo = stock;
-        categorias = categoriasLista;
-        cargando = false;
-      });
+      if (mounted) {
+        setState(() {
+          productos = dataProd;
+          presentaciones = presMap;
+          unidadesMedida = unidadesMap;
+          stockPorTipo = stock;
+          categorias = categoriasLista;
+          cargando = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error al cargar datos: $e');
-      setState(() {
-        cargando = false;
-      });
       if (mounted) {
+        setState(() => cargando = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al cargar productos: $e'),

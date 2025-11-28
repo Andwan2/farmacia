@@ -23,8 +23,6 @@ class _HomeScreenState extends State<HomeScreen> {
   int totalProveedores = 0;
 
   // Para gráficas
-  String periodoSeleccionado = 'semana'; // 'semana' o 'mes'
-  Map<String, int> ventasPorPeriodo = {}; // Para el bar chart
   double totalGanancias = 0.0;
   double totalGastos = 0.0;
 
@@ -38,16 +36,48 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => cargando = true);
 
     try {
-      // Total de productos disponibles
-      final productosResponse = await Supabase.instance.client
-          .from('producto')
-          .select('id_producto, fecha_vencimiento, estado')
-          .eq('estado', 'Disponible');
-
-      totalProductos = productosResponse.length;
-
-      // Productos próximos a vencer (30 días)
       final ahora = DateTime.now();
+      final hoyStr = _formatDate(ahora);
+      final inicioMesDate = DateTime(ahora.year, ahora.month, 1);
+      final inicioMes = _formatDate(inicioMesDate);
+
+      // ✅ OPTIMIZACIÓN: Ejecutar todas las consultas en paralelo
+      final results = await Future.wait([
+        // 0: Productos disponibles
+        Supabase.instance.client
+            .from('producto')
+            .select('id_producto, fecha_vencimiento')
+            .eq('estado', 'Disponible'),
+        // 1: Ventas del mes (incluye hoy)
+        Supabase.instance.client
+            .from('venta')
+            .select('id_venta, total, fecha')
+            .gte('fecha', inicioMes),
+        // 2: Compras del mes
+        Supabase.instance.client
+            .from('compra')
+            .select('total')
+            .gte('fecha', inicioMes),
+        // 3: Total clientes
+        Supabase.instance.client.from('cliente').select('id_cliente'),
+        // 4: Total proveedores
+        Supabase.instance.client.from('proveedor').select('id_proveedor'),
+        // 5: Productos en ventas del mes (para calcular costos) - UNA sola consulta
+        Supabase.instance.client
+            .from('producto_en_venta')
+            .select('id_venta, producto(precio_compra)')
+            .gte('id_venta', 0), // Traer todos, filtraremos en memoria
+      ]);
+
+      final productosResponse = results[0] as List;
+      final ventasMesResponse = results[1] as List;
+      final comprasMesResponse = results[2] as List;
+      final clientesResponse = results[3] as List;
+      final proveedoresResponse = results[4] as List;
+      final productosEnVentaResponse = results[5] as List;
+
+      // Procesar productos
+      totalProductos = productosResponse.length;
       final en30Dias = ahora.add(const Duration(days: 30));
       productosProximosVencer = productosResponse.where((p) {
         final fechaVenc = p['fecha_vencimiento'] as String?;
@@ -56,68 +86,49 @@ class _HomeScreenState extends State<HomeScreen> {
         return fecha.isAfter(ahora) && fecha.isBefore(en30Dias);
       }).length;
 
-      // Productos con stock bajo (agrupados, menos de 5 unidades)
+      // Stock bajo
       final productosAgrupados = <String, int>{};
       for (final p in productosResponse) {
         final nombre = p['id_producto'].toString();
         productosAgrupados[nombre] = (productosAgrupados[nombre] ?? 0) + 1;
       }
-      productosStockBajo = productosAgrupados.values
-          .where((stock) => stock < 5)
-          .length;
+      productosStockBajo = productosAgrupados.values.where((s) => s < 5).length;
 
-      // Ventas de hoy
-      final hoyStr =
-          '${ahora.year}-${ahora.month.toString().padLeft(2, '0')}-${ahora.day.toString().padLeft(2, '0')}';
-      final ventasHoyResponse = await Supabase.instance.client
-          .from('venta')
-          .select('total')
-          .eq('fecha', hoyStr);
+      // Procesar ventas - filtrar hoy y calcular totales
+      ventasHoy = 0.0;
+      ventasMes = 0.0;
+      final ventasIds = <int>{};
 
-      ventasHoy = ventasHoyResponse.fold<double>(
-        0.0,
-        (sum, v) => sum + ((v['total'] as num?)?.toDouble() ?? 0.0),
-      );
-
-      // Ventas del mes
-      final inicioMesDate = DateTime(ahora.year, ahora.month, 1);
-      final inicioMes =
-          '${inicioMesDate.year}-${inicioMesDate.month.toString().padLeft(2, '0')}-${inicioMesDate.day.toString().padLeft(2, '0')}';
-      final ventasMesResponse = await Supabase.instance.client
-          .from('venta')
-          .select('total')
-          .gte('fecha', inicioMes);
-
-      ventasMes = ventasMesResponse.fold<double>(
-        0.0,
-        (sum, v) => sum + ((v['total'] as num?)?.toDouble() ?? 0.0),
-      );
+      for (var v in ventasMesResponse) {
+        final total = (v['total'] as num?)?.toDouble() ?? 0.0;
+        ventasMes += total;
+        if (v['fecha'] == hoyStr) ventasHoy += total;
+        ventasIds.add(v['id_venta'] as int);
+      }
 
       // Compras del mes
-      final comprasMesResponse = await Supabase.instance.client
-          .from('compra')
-          .select('total')
-          .gte('fecha', inicioMes);
-
       comprasMes = comprasMesResponse.fold<double>(
         0.0,
         (sum, c) => sum + ((c['total'] as num?)?.toDouble() ?? 0.0),
       );
 
-      // Total de clientes
-      final clientesResponse = await Supabase.instance.client
-          .from('cliente')
-          .select('id_cliente');
+      // Contadores
       totalClientes = clientesResponse.length;
-
-      // Total de proveedores
-      final proveedoresResponse = await Supabase.instance.client
-          .from('proveedor')
-          .select('id_proveedor');
       totalProveedores = proveedoresResponse.length;
 
-      // Cargar datos para gráficas
-      await cargarDatosGraficas();
+      // ✅ Calcular costos SIN consultas adicionales
+      double totalCostos = 0.0;
+      for (var pv in productosEnVentaResponse) {
+        final idVenta = pv['id_venta'] as int?;
+        if (idVenta != null && ventasIds.contains(idVenta)) {
+          final producto = pv['producto'] as Map<String, dynamic>?;
+          totalCostos +=
+              (producto?['precio_compra'] as num?)?.toDouble() ?? 0.0;
+        }
+      }
+
+      totalGanancias = ventasMes - totalCostos;
+      totalGastos = comprasMes + totalCostos;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -129,118 +140,8 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => cargando = false);
   }
 
-  Future<void> cargarDatosGraficas() async {
-    try {
-      final ahora = DateTime.now();
-
-      // Cargar ventas por período para el bar chart
-      if (periodoSeleccionado == 'semana') {
-        // Últimos 7 días
-        ventasPorPeriodo = {};
-        for (int i = 6; i >= 0; i--) {
-          final fecha = ahora.subtract(Duration(days: i));
-          final fechaStr =
-              '${fecha.year}-${fecha.month.toString().padLeft(2, '0')}-${fecha.day.toString().padLeft(2, '0')}';
-          final diaNombre = _obtenerNombreDia(fecha.weekday);
-
-          final ventasResponse = await Supabase.instance.client
-              .from('venta')
-              .select('id_venta')
-              .eq('fecha', fechaStr);
-
-          ventasPorPeriodo[diaNombre] = ventasResponse.length;
-        }
-      } else {
-        // Últimas 4 semanas del mes
-        ventasPorPeriodo = {};
-        final inicioMes = DateTime(ahora.year, ahora.month, 1);
-
-        for (int semana = 1; semana <= 4; semana++) {
-          final inicioSemana = inicioMes.add(Duration(days: (semana - 1) * 7));
-          final finSemana = inicioSemana.add(const Duration(days: 6));
-
-          final inicioStr =
-              '${inicioSemana.year}-${inicioSemana.month.toString().padLeft(2, '0')}-${inicioSemana.day.toString().padLeft(2, '0')}';
-          final finStr =
-              '${finSemana.year}-${finSemana.month.toString().padLeft(2, '0')}-${finSemana.day.toString().padLeft(2, '0')}';
-
-          final ventasResponse = await Supabase.instance.client
-              .from('venta')
-              .select('id_venta')
-              .gte('fecha', inicioStr)
-              .lte('fecha', finStr);
-
-          ventasPorPeriodo['Semana $semana'] = ventasResponse.length;
-        }
-      }
-
-      // Calcular ganancias y gastos para el pie chart
-      final inicioMesDate = DateTime(ahora.year, ahora.month, 1);
-      final inicioMes =
-          '${inicioMesDate.year}-${inicioMesDate.month.toString().padLeft(2, '0')}-${inicioMesDate.day.toString().padLeft(2, '0')}';
-
-      // Obtener todas las ventas del mes con productos
-      final ventasResponse = await Supabase.instance.client
-          .from('venta')
-          .select('id_venta, total')
-          .gte('fecha', inicioMes);
-
-      double totalVentas = 0.0;
-      double totalCostos = 0.0;
-
-      for (var venta in ventasResponse) {
-        final idVenta = venta['id_venta'];
-        final totalVenta = (venta['total'] as num?)?.toDouble() ?? 0.0;
-        totalVentas += totalVenta;
-
-        // Obtener productos de la venta para calcular costos
-        final productosVenta = await Supabase.instance.client
-            .from('producto_en_venta')
-            .select('producto(precio_compra)')
-            .eq('id_venta', idVenta);
-
-        for (var pv in productosVenta) {
-          final producto = pv['producto'] as Map<String, dynamic>?;
-          final precioCompra =
-              (producto?['precio_compra'] as num?)?.toDouble() ?? 0.0;
-          totalCostos += precioCompra;
-        }
-      }
-
-      totalGanancias = totalVentas - totalCostos;
-      totalGastos = comprasMes + totalCostos;
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error al cargar gráficas: $e')));
-      }
-      // Valores por defecto en caso de error
-      ventasPorPeriodo = {};
-      totalGanancias = 0.0;
-      totalGastos = 0.0;
-    }
-  }
-
-  String _obtenerNombreDia(int weekday) {
-    switch (weekday) {
-      case 1:
-        return 'Lun';
-      case 2:
-        return 'Mar';
-      case 3:
-        return 'Mié';
-      case 4:
-        return 'Jue';
-      case 5:
-        return 'Vie';
-      case 6:
-        return 'Sáb';
-      case 7:
-        return 'Dom';
-      default:
-        return '';
-    }
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -424,9 +325,30 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isDark, {
     bool fullWidth = false,
   }) {
+    // Colores adaptados para cada modo
+    final bgColor = isDark
+        ? const Color(0xFF1E1E1E) // Fondo oscuro elegante
+        : Colors.white;
+    final iconColor = isDark
+        ? _getLighterColor(color) // Color más brillante en oscuro
+        : color.withValues(alpha: 0.8);
+    final textColor = isDark ? Colors.white70 : const Color(0xFF333333);
+    final valueColor = isDark
+        ? _getLighterColor(color) // Valores brillantes en oscuro
+        : _getDarkerColor(color);
+    final borderColor = isDark
+        ? color.withValues(alpha: 0.4) // Borde visible en oscuro
+        : color.withValues(alpha: 0.3);
+    final shadowColor = color.withValues(alpha: isDark ? 0.2 : 0.3);
+
     return Card(
-      elevation: 2,
-      color: isDark ? color.withOpacity(0.2) : color.withOpacity(0.1),
+      elevation: 3,
+      color: bgColor,
+      shadowColor: shadowColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: borderColor, width: 1),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -435,23 +357,30 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(icono, color: color, size: 32),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: isDark ? 0.2 : 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icono, color: iconColor, size: 28),
+                ),
                 if (!fullWidth)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                      horizontal: 10,
+                      vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
+                      color: color.withValues(alpha: isDark ? 0.3 : 0.15),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
                       valor,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: color,
+                        color: valueColor,
                       ),
                     ),
                   ),
@@ -461,9 +390,9 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(
               titulo,
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[700],
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: textColor,
               ),
             ),
             if (fullWidth) ...[
@@ -471,9 +400,9 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(
                 valor,
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: color,
+                  color: valueColor,
                 ),
               ),
             ],
@@ -481,6 +410,21 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  // Obtener color más oscuro para mejor contraste en modo claro
+  Color _getDarkerColor(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl.withLightness((hsl.lightness * 0.6).clamp(0.0, 1.0)).toColor();
+  }
+
+  // Obtener color más brillante para mejor visibilidad en modo oscuro
+  Color _getLighterColor(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl
+        .withLightness((hsl.lightness * 1.3).clamp(0.0, 0.85))
+        .withSaturation((hsl.saturation * 1.1).clamp(0.0, 1.0))
+        .toColor();
   }
 
   Widget _buildPieChart(bool isDark) {

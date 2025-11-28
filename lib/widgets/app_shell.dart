@@ -83,10 +83,10 @@ class AppDrawer extends StatelessWidget {
 
           const Divider(),
 
-          _buildSection("Recursos humanos", [
+          _buildSection("Recursos Humanos", [
             ('Proveedores', '/proveedores', Icons.corporate_fare),
-            ('Clientes', '/clientes', Icons.verified_user),
-            ('Empleados', '/empleados', Icons.person),
+            ('Clientes', '/clientes', Icons.people),
+            ('Personal', '/empleados', Icons.badge),
           ], context),
 
           const Divider(),
