@@ -613,36 +613,43 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
           border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
         ),
         child: SafeArea(
-          child: Row(
-            children: [
-              if (currentStep > 0)
-                TextButton.icon(
-                  onPressed: () => irAPaso(currentStep - 1),
-                  icon: const Icon(Icons.arrow_back, size: 18),
-                  label: const Text('Anterior'),
-                )
-              else
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar'),
-                ),
-              const Spacer(),
-              if (currentStep < totalSteps - 1)
-                FilledButton.icon(
-                  onPressed: validarPaso(currentStep)
-                      ? () => irAPaso(currentStep + 1)
-                      : null,
-                  icon: const Icon(Icons.arrow_forward, size: 18),
-                  label: const Text('Siguiente'),
-                )
-              else
-                FilledButton.icon(
-                  onPressed: validarPaso(currentStep) ? _guardarProducto : null,
-                  icon: const Icon(Icons.check, size: 18),
-                  label: const Text('Agregar'),
-                  style: FilledButton.styleFrom(backgroundColor: Colors.green),
-                ),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 20),
+            child: Row(
+              children: [
+                if (currentStep > 0)
+                  TextButton.icon(
+                    onPressed: () => irAPaso(currentStep - 1),
+                    icon: const Icon(Icons.arrow_back, size: 18),
+                    label: const Text('Anterior'),
+                  )
+                else
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancelar'),
+                  ),
+                const Spacer(),
+                if (currentStep < totalSteps - 1)
+                  FilledButton.icon(
+                    onPressed: validarPaso(currentStep)
+                        ? () => irAPaso(currentStep + 1)
+                        : null,
+                    icon: const Icon(Icons.arrow_forward, size: 18),
+                    label: const Text('Siguiente'),
+                  )
+                else
+                  FilledButton.icon(
+                    onPressed: validarPaso(currentStep)
+                        ? _guardarProducto
+                        : null,
+                    icon: const Icon(Icons.check, size: 18),
+                    label: const Text('Agregar'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.green,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -768,6 +775,7 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
               Expanded(
                 child: DropdownButtonFormField<int>(
                   value: presentacionSeleccionada,
+                  isExpanded: true,
                   decoration: InputDecoration(
                     hintText: 'Seleccionar presentación',
                     border: OutlineInputBorder(
@@ -778,21 +786,29 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
                   items: listaPresentaciones.map<DropdownMenuItem<int>>((p) {
                     return DropdownMenuItem<int>(
                       value: p['id_presentacion'] as int,
-                      child: Text(p['descripcion']?.toString() ?? ''),
+                      child: Text(
+                        p['descripcion']?.toString() ?? '',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     );
                   }).toList(),
                   onChanged: (value) =>
                       setState(() => presentacionSeleccionada = value),
                 ),
               ),
-              const SizedBox(width: 12),
-              IconButton.filled(
-                onPressed: _agregarNuevaPresentacion,
-                icon: const Icon(Icons.add),
-                tooltip: 'Nueva presentación',
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.green.withValues(alpha: 0.15),
-                  foregroundColor: Colors.green[700],
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: IconButton(
+                  onPressed: _agregarNuevaPresentacion,
+                  icon: const Icon(Icons.add, size: 20),
+                  tooltip: 'Nueva presentación',
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.green.withValues(alpha: 0.15),
+                    foregroundColor: Colors.green[700],
+                    padding: EdgeInsets.zero,
+                  ),
                 ),
               ),
             ],
@@ -811,17 +827,21 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                flex: 2,
+              SizedBox(
+                width: 80,
                 child: TextField(
                   controller: cantidadController,
                   decoration: InputDecoration(
-                    hintText: 'Ej: 500',
+                    hintText: '500',
                     labelText: 'Cantidad',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 16,
+                    ),
                   ),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -829,11 +849,11 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
                   onChanged: (_) => setState(() {}),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
-                flex: 3,
                 child: DropdownButtonFormField<int>(
                   value: unidadMedidaSeleccionada,
+                  isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'Unidad',
                     border: OutlineInputBorder(
@@ -844,21 +864,29 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
                   items: listaUnidadesMedida.map<DropdownMenuItem<int>>((u) {
                     return DropdownMenuItem<int>(
                       value: u['id'] as int,
-                      child: Text('${u['nombre']} (${u['abreviatura']})'),
+                      child: Text(
+                        '${u['nombre']} (${u['abreviatura']})',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     );
                   }).toList(),
                   onChanged: (value) =>
                       setState(() => unidadMedidaSeleccionada = value),
                 ),
               ),
-              const SizedBox(width: 12),
-              IconButton.filled(
-                onPressed: _agregarNuevaUnidadMedida,
-                icon: const Icon(Icons.add),
-                tooltip: 'Nueva unidad',
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.blue.withValues(alpha: 0.15),
-                  foregroundColor: Colors.blue[700],
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: IconButton(
+                  onPressed: _agregarNuevaUnidadMedida,
+                  icon: const Icon(Icons.add, size: 20),
+                  tooltip: 'Nueva unidad',
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.blue.withValues(alpha: 0.15),
+                    foregroundColor: Colors.blue[700],
+                    padding: EdgeInsets.zero,
+                  ),
                 ),
               ),
             ],
@@ -1075,28 +1103,34 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      IconButton.filled(
-                        onPressed: stock > 1
-                            ? () => setState(() {
-                                stock--;
-                                stockController.text = stock.toString();
-                              })
-                            : null,
-                        icon: const Icon(Icons.remove, size: 28),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.green.withValues(alpha: 0.2),
-                          foregroundColor: Colors.green[700],
-                          minimumSize: const Size(56, 56),
+                      SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: IconButton(
+                          onPressed: stock > 1
+                              ? () => setState(() {
+                                  stock--;
+                                  stockController.text = stock.toString();
+                                })
+                              : null,
+                          icon: const Icon(Icons.remove, size: 24),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.green.withValues(
+                              alpha: 0.2,
+                            ),
+                            foregroundColor: Colors.green[700],
+                            padding: EdgeInsets.zero,
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 20),
+                      const SizedBox(width: 12),
                       SizedBox(
-                        width: 120,
+                        width: 80,
                         child: TextField(
                           controller: stockController,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            fontSize: 28,
+                            fontSize: 24,
                             fontWeight: FontWeight.bold,
                           ),
                           decoration: InputDecoration(
@@ -1104,7 +1138,7 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             contentPadding: const EdgeInsets.symmetric(
-                              vertical: 16,
+                              vertical: 12,
                             ),
                           ),
                           keyboardType: TextInputType.number,
@@ -1113,19 +1147,25 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
                           }),
                         ),
                       ),
-                      const SizedBox(width: 20),
-                      IconButton.filled(
-                        onPressed: stock < 9999
-                            ? () => setState(() {
-                                stock++;
-                                stockController.text = stock.toString();
-                              })
-                            : null,
-                        icon: const Icon(Icons.add, size: 28),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.green.withValues(alpha: 0.2),
-                          foregroundColor: Colors.green[700],
-                          minimumSize: const Size(56, 56),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: IconButton(
+                          onPressed: stock < 9999
+                              ? () => setState(() {
+                                  stock++;
+                                  stockController.text = stock.toString();
+                                })
+                              : null,
+                          icon: const Icon(Icons.add, size: 24),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.green.withValues(
+                              alpha: 0.2,
+                            ),
+                            foregroundColor: Colors.green[700],
+                            padding: EdgeInsets.zero,
+                          ),
                         ),
                       ),
                     ],
