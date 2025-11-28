@@ -289,15 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 12),
             _buildPieChart(isDark),
 
-            const SizedBox(height: 24),
-
-            // Nota de actualización
-            Center(
-              child: Text(
-                'Desliza hacia abajo para actualizar',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
-            ),
+            const SizedBox(height: 30),
           ],
         ),
       ),

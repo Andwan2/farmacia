@@ -972,67 +972,72 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
           ],
         ),
       ),
-      body: Column(
-        children: [
-          // Filtros de fecha
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.date_range),
-                    label: Text(
-                      fechaInicio != null
-                          ? 'Desde: ${fechaInicio!.day}/${fechaInicio!.month}/${fechaInicio!.year}'
-                          : 'Fecha inicio',
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(
+            children: [
+              // Filtros de fecha
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.date_range),
+                        label: Text(
+                          fechaInicio != null
+                              ? 'Desde: ${fechaInicio!.day}/${fechaInicio!.month}/${fechaInicio!.year}'
+                              : 'Fecha inicio',
+                        ),
+                        onPressed: seleccionarFechaInicio,
+                      ),
                     ),
-                    onPressed: seleccionarFechaInicio,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.date_range),
-                    label: Text(
-                      fechaFin != null
-                          ? 'Hasta: ${fechaFin!.day}/${fechaFin!.month}/${fechaFin!.year}'
-                          : 'Fecha fin',
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.date_range),
+                        label: Text(
+                          fechaFin != null
+                              ? 'Hasta: ${fechaFin!.day}/${fechaFin!.month}/${fechaFin!.year}'
+                              : 'Fecha fin',
+                        ),
+                        onPressed: seleccionarFechaFin,
+                      ),
                     ),
-                    onPressed: seleccionarFechaFin,
-                  ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.search),
+                      tooltip: 'Aplicar filtros',
+                      onPressed: cargarVentas,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.clear),
+                      tooltip: 'Limpiar filtros',
+                      onPressed: () {
+                        setState(() {
+                          fechaInicio = null;
+                          fechaFin = null;
+                        });
+                        cargarVentas();
+                      },
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: 'Aplicar filtros',
-                  onPressed: cargarVentas,
+              ),
+              // Contenido de tabs
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildReporteGeneral(isDark),
+                    _buildReporteDetallado(isDark),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.clear),
-                  tooltip: 'Limpiar filtros',
-                  onPressed: () {
-                    setState(() {
-                      fechaInicio = null;
-                      fechaFin = null;
-                    });
-                    cargarVentas();
-                  },
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          // Contenido de tabs
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildReporteGeneral(isDark),
-                _buildReporteDetallado(isDark),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

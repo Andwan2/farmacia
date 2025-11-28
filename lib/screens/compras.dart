@@ -227,31 +227,60 @@ class _ComprasScreenContent extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: provider.proveedor.isEmpty
-                          ? null
-                          : provider.proveedor,
-                      decoration: const InputDecoration(
-                        labelText: 'Proveedor',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: provider.proveedores
-                          .map(
-                            (p) => DropdownMenuItem<String>(
-                              value: p.nombreProveedor,
-                              child: Text(
-                                p.nombreProveedor,
-                                overflow: TextOverflow.ellipsis,
+                    child: Autocomplete<String>(
+                      optionsBuilder: (textEditingValue) {
+                        if (textEditingValue.text.isEmpty) {
+                          return provider.proveedores.map(
+                            (p) => p.nombreProveedor,
+                          );
+                        }
+                        return provider.proveedores
+                            .where(
+                              (p) => p.nombreProveedor.toLowerCase().contains(
+                                textEditingValue.text.toLowerCase(),
                               ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) provider.setProveedor(value);
+                            )
+                            .map((p) => p.nombreProveedor);
                       },
+                      onSelected: (value) => provider.setProveedor(value),
+                      initialValue: TextEditingValue(text: provider.proveedor),
+                      fieldViewBuilder:
+                          (context, controller, focusNode, onFieldSubmitted) {
+                            return TextField(
+                              controller: controller,
+                              focusNode: focusNode,
+                              decoration: InputDecoration(
+                                labelText: 'Proveedor',
+                                border: const OutlineInputBorder(),
+                                isDense: true,
+                                suffixIcon: controller.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear, size: 18),
+                                        onPressed: () {
+                                          controller.clear();
+                                          provider.setProveedor('');
+                                        },
+                                      )
+                                    : null,
+                              ),
+                              onChanged: (value) {
+                                // Actualizar proveedor si coincide exactamente
+                                final match = provider.proveedores.where(
+                                  (p) =>
+                                      p.nombreProveedor.toLowerCase() ==
+                                      value.toLowerCase(),
+                                );
+                                if (match.isNotEmpty) {
+                                  provider.setProveedor(
+                                    match.first.nombreProveedor,
+                                  );
+                                }
+                              },
+                            );
+                          },
                     ),
                   ),
+                  const SizedBox(width: 4),
                   IconButton(
                     tooltip: 'Nuevo proveedor',
                     icon: const Icon(Icons.add_business),
@@ -530,27 +559,67 @@ class _ComprasScreenContent extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: provider.proveedor.isEmpty
-                                ? null
-                                : provider.proveedor,
-                            decoration: const InputDecoration(
-                              labelText: 'Proveedor',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: provider.proveedores
-                                .map(
-                                  (p) => DropdownMenuItem<String>(
-                                    value: p.nombreProveedor,
-                                    child: Text(p.nombreProveedor),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                provider.setProveedor(value);
+                          child: Autocomplete<String>(
+                            optionsBuilder: (textEditingValue) {
+                              if (textEditingValue.text.isEmpty) {
+                                return provider.proveedores.map(
+                                  (p) => p.nombreProveedor,
+                                );
                               }
+                              return provider.proveedores
+                                  .where(
+                                    (p) => p.nombreProveedor
+                                        .toLowerCase()
+                                        .contains(
+                                          textEditingValue.text.toLowerCase(),
+                                        ),
+                                  )
+                                  .map((p) => p.nombreProveedor);
                             },
+                            onSelected: (value) => provider.setProveedor(value),
+                            initialValue: TextEditingValue(
+                              text: provider.proveedor,
+                            ),
+                            fieldViewBuilder:
+                                (
+                                  context,
+                                  controller,
+                                  focusNode,
+                                  onFieldSubmitted,
+                                ) {
+                                  return TextField(
+                                    controller: controller,
+                                    focusNode: focusNode,
+                                    decoration: InputDecoration(
+                                      labelText: 'Proveedor',
+                                      border: const OutlineInputBorder(),
+                                      suffixIcon: controller.text.isNotEmpty
+                                          ? IconButton(
+                                              icon: const Icon(
+                                                Icons.clear,
+                                                size: 18,
+                                              ),
+                                              onPressed: () {
+                                                controller.clear();
+                                                provider.setProveedor('');
+                                              },
+                                            )
+                                          : null,
+                                    ),
+                                    onChanged: (value) {
+                                      final match = provider.proveedores.where(
+                                        (p) =>
+                                            p.nombreProveedor.toLowerCase() ==
+                                            value.toLowerCase(),
+                                      );
+                                      if (match.isNotEmpty) {
+                                        provider.setProveedor(
+                                          match.first.nombreProveedor,
+                                        );
+                                      }
+                                    },
+                                  );
+                                },
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -559,9 +628,9 @@ class _ComprasScreenContent extends StatelessWidget {
                           icon: const Icon(Icons.add_business),
                           onPressed: () {
                             mostrarAgregarProveedor(context, () {
-                              final compraProvider = context
-                                  .read<CompraProvider>();
-                              compraProvider.cargarProveedores();
+                              context
+                                  .read<CompraProvider>()
+                                  .cargarProveedores();
                             });
                           },
                         ),

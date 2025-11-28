@@ -51,7 +51,12 @@ class AppShell extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(title: const Text('ABARI')),
         drawer: const AppDrawer(),
-        body: child,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 0),
+            child: child,
+          ),
+        ),
       ),
     );
   }
@@ -65,10 +70,22 @@ class AppDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Drawer(
       child: ListView(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(10),
         children: [
           const DrawerHeader(
-            child: Text('Menú Principal', style: TextStyle(fontSize: 18)),
+            //padding: EdgeInsets.zero,
+            //margin: EdgeInsets.zero,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Text(
+                'Menú Principal',
+                style: TextStyle(
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                ),
+              ),
+            ),
           ),
 
           _buildSection("Principal", [

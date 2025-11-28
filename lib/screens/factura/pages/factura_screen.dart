@@ -183,28 +183,31 @@ class _FacturaScreenContentState extends State<_FacturaScreenContent> {
       },
       child: Scaffold(
         body: SafeArea(
-          child: Column(
-            children: [
-              // Barra de progreso
-              _buildProgressBar(context, isMobile),
-              // Contenido del PageView
-              Expanded(
-                child: PageView(
-                  controller: _pageController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  onPageChanged: (index) {
-                    setState(() {
-                      _currentStep = index;
-                    });
-                  },
-                  children: [
-                    _buildStep1Products(context, isMobile),
-                    _buildStep2PaymentData(context, isMobile),
-                    _buildStep3Confirmation(context, isMobile),
-                  ],
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 20),
+            child: Column(
+              children: [
+                // Barra de progreso
+                _buildProgressBar(context, isMobile),
+                // Contenido del PageView
+                Expanded(
+                  child: PageView(
+                    controller: _pageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentStep = index;
+                      });
+                    },
+                    children: [
+                      _buildStep1Products(context, isMobile),
+                      _buildStep2PaymentData(context, isMobile),
+                      _buildStep3Confirmation(context, isMobile),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

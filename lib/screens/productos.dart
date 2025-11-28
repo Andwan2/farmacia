@@ -1360,248 +1360,265 @@ class _InventarioPageState extends State<ProductosScreen> {
     });
 
     return Scaffold(
-      body: Column(
-        children: [
-          // Barra de búsqueda y filtros
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Barra de búsqueda con botón de filtros
-                Row(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(
+            children: [
+              // Barra de búsqueda y filtros
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        decoration: const InputDecoration(
-                          hintText: 'Buscar producto',
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                        ),
-                        onChanged: (value) => setState(() => busqueda = value),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Botón de filtros con badge
-                    Stack(
+                    // Barra de búsqueda con botón de filtros
+                    Row(
                       children: [
-                        IconButton(
-                          onPressed: () => _mostrarFiltros(context),
-                          icon: const Icon(Icons.filter_list),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).colorScheme.primaryContainer,
-                            padding: const EdgeInsets.all(16),
-                          ),
-                        ),
-                        if (filtrosActivos > 0)
-                          Positioned(
-                            right: 4,
-                            top: 4,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 18,
-                                minHeight: 18,
-                              ),
-                              child: Text(
-                                '$filtrosActivos',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
+                        Expanded(
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              hintText: 'Buscar producto',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
                               ),
                             ),
+                            onChanged: (value) =>
+                                setState(() => busqueda = value),
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Botón de filtros con badge
+                        Stack(
+                          children: [
+                            IconButton(
+                              onPressed: () => _mostrarFiltros(context),
+                              icon: const Icon(Icons.filter_list),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.primaryContainer,
+                                padding: const EdgeInsets.all(16),
+                              ),
+                            ),
+                            if (filtrosActivos > 0)
+                              Positioned(
+                                right: 4,
+                                top: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 18,
+                                    minHeight: 18,
+                                  ),
+                                  child: Text(
+                                    '$filtrosActivos',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ],
+                    ),
+                    // Chips de filtros activos
+                    if (filtrosPresentacion.isNotEmpty ||
+                        filtrosCategorias.isNotEmpty ||
+                        ordenarPor != 'nombre') ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ...filtrosCategorias.map(
+                            (cat) => Chip(
+                              label: Text(cat),
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.secondaryContainer,
+                              onDeleted: () {
+                                setState(() {
+                                  filtrosCategorias.remove(cat);
+                                });
+                              },
+                              deleteIcon: const Icon(Icons.close, size: 18),
+                            ),
+                          ),
+                          ...filtrosPresentacion.map(
+                            (pres) => Chip(
+                              label: Text(pres),
+                              onDeleted: () {
+                                setState(() {
+                                  filtrosPresentacion.remove(pres);
+                                });
+                              },
+                              deleteIcon: const Icon(Icons.close, size: 18),
+                            ),
+                          ),
+                          if (ordenarPor != 'nombre')
+                            Chip(
+                              label: Text(
+                                'Orden: ${_getNombreOrden(ordenarPor)}',
+                              ),
+                              onDeleted: () =>
+                                  setState(() => ordenarPor = 'nombre'),
+                              deleteIcon: const Icon(Icons.close, size: 18),
+                            ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    // Botón de agregar producto
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        await mostrarAgregarProducto(context, cargarDatos);
+                      },
+                      icon: const Icon(Icons.add_circle_outline, size: 20),
+                      label: const Text('Agregar producto'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Switch
+                    SwitchListTile(
+                      title: Text(
+                        mostrarEliminados
+                            ? 'Mostrar solo productos inactivos'
+                            : 'Mostrar solo productos activos',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      value: mostrarEliminados,
+                      onChanged: (value) {
+                        setState(() {
+                          mostrarEliminados = value;
+                        });
+                        cargarDatos();
+                      },
+                      secondary: Icon(
+                        mostrarEliminados
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        size: 20,
+                      ),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
                     ),
                   ],
                 ),
-                // Chips de filtros activos
-                if (filtrosPresentacion.isNotEmpty ||
-                    filtrosCategorias.isNotEmpty ||
-                    ordenarPor != 'nombre') ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ...filtrosCategorias.map(
-                        (cat) => Chip(
-                          label: Text(cat),
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.secondaryContainer,
-                          onDeleted: () {
-                            setState(() {
-                              filtrosCategorias.remove(cat);
-                            });
-                          },
-                          deleteIcon: const Icon(Icons.close, size: 18),
-                        ),
-                      ),
-                      ...filtrosPresentacion.map(
-                        (pres) => Chip(
-                          label: Text(pres),
-                          onDeleted: () {
-                            setState(() {
-                              filtrosPresentacion.remove(pres);
-                            });
-                          },
-                          deleteIcon: const Icon(Icons.close, size: 18),
-                        ),
-                      ),
-                      if (ordenarPor != 'nombre')
-                        Chip(
-                          label: Text('Orden: ${_getNombreOrden(ordenarPor)}'),
-                          onDeleted: () =>
-                              setState(() => ordenarPor = 'nombre'),
-                          deleteIcon: const Icon(Icons.close, size: 18),
-                        ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 12),
-                // Botón de agregar producto
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    await mostrarAgregarProducto(context, cargarDatos);
-                  },
-                  icon: const Icon(Icons.add_circle_outline, size: 20),
-                  label: const Text('Agregar producto'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
-                    ),
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 48),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Switch
-                SwitchListTile(
-                  title: Text(
-                    mostrarEliminados
-                        ? 'Mostrar solo productos inactivos'
-                        : 'Mostrar solo productos activos',
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                  value: mostrarEliminados,
-                  onChanged: (value) {
-                    setState(() {
-                      mostrarEliminados = value;
-                    });
-                    cargarDatos();
-                  },
-                  secondary: Icon(
-                    mostrarEliminados ? Icons.visibility_off : Icons.visibility,
-                    size: 20,
-                  ),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ],
-            ),
-          ),
-          // Lista de productos agrupados por categoría
-          Expanded(
-            child: cargando
-                ? const Center(child: CircularProgressIndicator())
-                : Consumer<ThemeProvider>(
-                    builder: (context, themeProvider, child) {
-                      final colorScheme = Theme.of(context).colorScheme;
-                      final isDark = themeProvider.isDarkMode;
+              ),
+              // Lista de productos agrupados por categoría
+              Expanded(
+                child: cargando
+                    ? const Center(child: CircularProgressIndicator())
+                    : Consumer<ThemeProvider>(
+                        builder: (context, themeProvider, child) {
+                          final colorScheme = Theme.of(context).colorScheme;
+                          final isDark = themeProvider.isDarkMode;
 
-                      // Agrupar por categoría
-                      final Map<String, List<dynamic>> porCategoria = {};
-                      for (final p in listaFiltrada) {
-                        final cat =
-                            p['categoria']?.toString() ?? 'Sin categoría';
-                        porCategoria.putIfAbsent(cat, () => []).add(p);
-                      }
-                      final categoriasOrdenadas = porCategoria.keys.toList()
-                        ..sort();
+                          // Agrupar por categoría
+                          final Map<String, List<dynamic>> porCategoria = {};
+                          for (final p in listaFiltrada) {
+                            final cat =
+                                p['categoria']?.toString() ?? 'Sin categoría';
+                            porCategoria.putIfAbsent(cat, () => []).add(p);
+                          }
+                          final categoriasOrdenadas = porCategoria.keys.toList()
+                            ..sort();
 
-                      return ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        itemCount: categoriasOrdenadas.length,
-                        itemBuilder: (context, catIndex) {
-                          final categoria = categoriasOrdenadas[catIndex];
-                          final productosCategoria = porCategoria[categoria]!;
+                          return ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            itemCount: categoriasOrdenadas.length,
+                            itemBuilder: (context, catIndex) {
+                              final categoria = categoriasOrdenadas[catIndex];
+                              final productosCategoria =
+                                  porCategoria[categoria]!;
 
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Separador de categoría
-                              Container(
-                                width: double.infinity,
-                                margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: colorScheme.secondaryContainer
-                                      .withOpacity(0.5),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.category,
-                                      size: 18,
-                                      color: colorScheme.secondary,
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Separador de categoría
+                                  Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.fromLTRB(
+                                      12,
+                                      8,
+                                      12,
+                                      4,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      categoria,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: colorScheme.secondary,
-                                      ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
                                     ),
-                                    const Spacer(),
-                                    Text(
-                                      '${productosCategoria.length} items',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: colorScheme.onSecondaryContainer,
-                                      ),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.secondaryContainer
+                                          .withOpacity(0.5),
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
-                                  ],
-                                ),
-                              ),
-                              // Productos de esta categoría
-                              ...productosCategoria.map(
-                                (p) => _buildProductoCard(
-                                  context,
-                                  p,
-                                  colorScheme,
-                                  isDark,
-                                ),
-                              ),
-                            ],
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.category,
+                                          size: 18,
+                                          color: colorScheme.secondary,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          categoria,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: colorScheme.secondary,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          '${productosCategoria.length} items',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: colorScheme
+                                                .onSecondaryContainer,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Productos de esta categoría
+                                  ...productosCategoria.map(
+                                    (p) => _buildProductoCard(
+                                      context,
+                                      p,
+                                      colorScheme,
+                                      isDark,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           );
                         },
-                      );
-                    },
-                  ),
+                      ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
