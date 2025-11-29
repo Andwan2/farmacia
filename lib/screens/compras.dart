@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:abari/models/producto_db.dart';
 import 'package:abari/providers/compra_provider.dart';
-import 'package:abari/screens/factura/widgets/producto_search_dialog.dart';
 import 'package:abari/modal/seleccionar_empleado_modal.dart';
 import 'package:abari/modal/agregar_producto_modal.dart';
 import 'package:abari/modal/agregar_proveedor_modal.dart';
@@ -25,159 +23,145 @@ class ComprasScreen extends StatelessWidget {
 class _ComprasScreenContent extends StatelessWidget {
   const _ComprasScreenContent();
 
-  Future<void> _agregarProductoDialog(BuildContext context) async {
+  void _agregarNuevoProducto(BuildContext context) {
     final provider = context.read<CompraProvider>();
 
-    // Primero seleccionar un producto existente
-    final producto = await showDialog<ProductoDB>(
-      context: context,
-      builder: (context) => const ProductoSearchDialog(),
-    );
-
-    if (producto == null) return;
-
-    final cantidadController = TextEditingController(text: '1');
-    final precioCompraController = TextEditingController(
-      text: (producto.precioCompra ?? 0.0).toStringAsFixed(2),
-    );
-    final precioVentaController = TextEditingController(
-      text: (producto.precioVenta ?? 0.0).toStringAsFixed(2),
-    );
-
-    DateTime fechaVenc =
-        DateTime.tryParse(producto.fechaVencimiento ?? '') ?? DateTime.now();
-    final formatoFecha = DateFormat('dd/MM/yyyy');
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: Text('Agregar producto a la compra'),
-              content: SizedBox(
-                width: 400,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      producto.nombreProducto,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: cantidadController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Cantidad',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: precioCompraController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Precio de compra (por unidad)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: precioVentaController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Precio de venta (por unidad)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Fecha de vencimiento',
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: fechaVenc,
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            fechaVenc = picked;
-                          });
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade400),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.calendar_today, size: 18),
-                            const SizedBox(width: 8),
-                            Text(formatoFecha.format(fechaVenc)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Agregar'),
-                ),
-              ],
-            );
-          },
+    mostrarAgregarProducto(
+      context,
+      () {}, // onSuccess callback
+      onProductoCreado: (productoCreado) {
+        // Agregar el producto creado a la lista de compras
+        provider.agregarProductoItem(
+          ProductoCompraItem(
+            idProductoBase: null, // Es un producto nuevo
+            idPresentacion: productoCreado.idPresentacion,
+            nombre: productoCreado.nombre,
+            tipo: productoCreado.codigo,
+            medida: productoCreado.cantidad.toString(),
+            fechaVencimiento: '',
+            precioCompra: productoCreado.precioCompra,
+            precioVenta: productoCreado.precioVenta,
+            cantidad: productoCreado.stock,
+          ),
         );
       },
     );
+  }
 
-    if (result != true) return;
+  Widget _buildPriceChip(
+    BuildContext context,
+    String label,
+    String value,
+    Color color,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: color.withValues(alpha: 0.8),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    final cantidad = int.tryParse(cantidadController.text) ?? 0;
-    final precioCompra =
-        double.tryParse(precioCompraController.text.replaceAll(',', '.')) ??
-        0.0;
-    final precioVenta =
-        double.tryParse(precioVentaController.text.replaceAll(',', '.')) ?? 0.0;
-
-    if (cantidad <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('La cantidad debe ser mayor a 0.')),
-      );
+  Future<void> _confirmarLimpiar(
+    BuildContext context,
+    CompraProvider provider,
+  ) async {
+    // Si no hay productos, limpiar directamente
+    if (provider.productos.isEmpty) {
+      provider.limpiarCompra();
       return;
     }
 
-    provider.agregarProductoItem(
-      ProductoCompraItem.fromProductoDB(
-        producto,
-        cantidad: cantidad,
-        precioCompra: precioCompra,
-        precioVenta: precioVenta,
-      ).copyWith(fechaVencimiento: fechaVenc.toIso8601String().split('T')[0]),
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Icon(Icons.warning_amber, color: Colors.orange[700], size: 48),
+        title: const Text('¿Limpiar compra?'),
+        content: const Text(
+          'Se eliminarán todos los productos agregados y se reiniciará el formulario. Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Limpiar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      provider.limpiarCompra();
+    }
+  }
+
+  Widget _buildResumenRow(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon,
+    Color color, {
+    bool isLarge = false,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color, size: isLarge ? 22 : 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: isLarge ? 15 : 14,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: isLarge ? 18 : 15,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 
@@ -365,135 +349,287 @@ class _ComprasScreenContent extends StatelessWidget {
               const SizedBox(height: 16),
 
               // Lista de productos
-              Container(
-                constraints: const BoxConstraints(maxHeight: 300),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade400),
-                ),
-                child: provider.productos.isEmpty
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(32),
-                          child: Text('No hay productos en la compra'),
-                        ),
-                      )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: provider.productos.length,
-                        itemBuilder: (context, index) {
-                          final item = provider.productos[index];
-                          return ListTile(
-                            dense: true,
-                            title: Text(
-                              item.nombre,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              '${item.cantidad}x C\$${item.precioCompra.toStringAsFixed(2)}',
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: Colors.red,
-                                size: 20,
-                              ),
-                              onPressed: () => provider.eliminarProducto(index),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-              const SizedBox(height: 12),
-
-              // Botones de agregar
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _agregarProductoDialog(context),
-                      icon: const Icon(Icons.add_circle_outline, size: 18),
-                      label: const Text(
-                        'Agregar',
-                        overflow: TextOverflow.ellipsis,
-                      ),
+              if (provider.productos.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outlineVariant,
                     ),
+                    color: Theme.of(context).colorScheme.surfaceContainerLowest,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => mostrarAgregarProducto(context, () {}),
-                      icon: const Icon(Icons.add_box_outlined, size: 18),
-                      label: const Text(
-                        'Nuevo',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Resumen
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Resumen',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                      Icon(
+                        Icons.shopping_cart_outlined,
+                        size: 48,
+                        color: Theme.of(context).colorScheme.outline,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       Text(
-                        'Total: C\$${provider.totalCosto.toStringAsFixed(2)}',
-                      ),
-                      Text(
-                        'Venta esperable: C\$${provider.totalVentaEsperable.toStringAsFixed(2)}',
-                      ),
-                      Text(
-                        'Ganancia: C\$${provider.gananciaEsperable.toStringAsFixed(2)}',
-                      ),
-                      if (!isValid &&
-                          provider.productos.isNotEmpty &&
-                          errorValidacion != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            errorValidacion,
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                            ),
-                          ),
+                        'No hay productos',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.outline,
+                          fontSize: 16,
                         ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Agrega productos a la compra',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.outline,
+                          fontSize: 13,
+                        ),
+                      ),
                     ],
                   ),
+                )
+              else
+                Column(
+                  children: provider.productos.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    final subtotalCompra = item.precioCompra * item.cantidad;
+                    final subtotalVenta = item.precioVenta * item.cantidad;
+                    final ganancia = subtotalVenta - subtotalCompra;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                        color: Theme.of(context).colorScheme.surface,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${item.cantidad}x',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    item.nombre,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.red[400],
+                                    size: 22,
+                                  ),
+                                  onPressed: () => provider.eliminarProducto(index),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildPriceChip(
+                                    context,
+                                    'Compra',
+                                    'C\$${subtotalCompra.toStringAsFixed(2)}',
+                                    Colors.red,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildPriceChip(
+                                    context,
+                                    'Venta',
+                                    'C\$${subtotalVenta.toStringAsFixed(2)}',
+                                    Colors.green,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildPriceChip(
+                                    context,
+                                    'Ganancia',
+                                    'C\$${ganancia.toStringAsFixed(2)}',
+                                    Colors.blue,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              const SizedBox(height: 12),
+
+              // Botón de nuevo producto
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _agregarNuevoProducto(context),
+                  icon: const Icon(Icons.add_box_outlined, size: 20),
+                  label: const Text(
+                    'Nuevo producto',
+                    style: TextStyle(fontSize: 15),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 20),
+
+              // Resumen mejorado
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+                      Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.3),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.receipt_long,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Resumen de compra',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildResumenRow(
+                      context,
+                      'Total invertido',
+                      'C\$${provider.totalCosto.toStringAsFixed(2)}',
+                      Icons.shopping_bag_outlined,
+                      Colors.red,
+                      isLarge: true,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildResumenRow(
+                      context,
+                      'Venta esperable',
+                      'C\$${provider.totalVentaEsperable.toStringAsFixed(2)}',
+                      Icons.sell_outlined,
+                      Colors.green,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildResumenRow(
+                      context,
+                      'Ganancia esperada',
+                      'C\$${provider.gananciaEsperable.toStringAsFixed(2)}',
+                      Icons.trending_up,
+                      Colors.blue,
+                    ),
+                    if (!isValid && errorValidacion != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.warning_amber, color: Colors.red[400], size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                errorValidacion,
+                                style: TextStyle(
+                                  color: Colors.red[400],
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
 
               // Botones de acción
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => provider.limpiarCompra(),
-                      child: const Text('Limpiar'),
+                    child: OutlinedButton.icon(
+                      onPressed: () => _confirmarLimpiar(context, provider),
+                      icon: const Icon(Icons.clear_all, size: 20),
+                      label: const Text('Limpiar'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                   Expanded(
+                    flex: 2,
                     child: ElevatedButton.icon(
                       onPressed: !isValid
                           ? null
                           : () => _guardarCompra(context, provider),
-                      icon: const Icon(Icons.save),
-                      label: const Text('Guardar'),
+                      icon: const Icon(Icons.save, size: 20),
+                      label: const Text(
+                        'Guardar compra',
+                        style: TextStyle(fontSize: 15),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
                   ),
@@ -837,32 +973,16 @@ class _ComprasScreenContent extends StatelessWidget {
 
                     const SizedBox(height: 16),
 
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () => _agregarProductoDialog(context),
-                            icon: const Icon(Icons.add_circle_outline),
-                            label: const Text('Agregar producto a compra'),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _agregarNuevoProducto(context),
+                        icon: const Icon(Icons.add_box_outlined),
+                        label: const Text('Nuevo producto'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              mostrarAgregarProducto(context, () {
-                                // Después de crear productos, no hace
-                                // falta recargar nada específico aquí.
-                              });
-                            },
-                            icon: const Icon(Icons.add_box_outlined),
-                            label: const Text('Nuevo producto'),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 );
