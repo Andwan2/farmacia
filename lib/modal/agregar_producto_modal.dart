@@ -2,10 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Datos del producto creado para ser usado en compras
+class ProductoCreado {
+  final String nombre;
+  final String codigo;
+  final int idPresentacion;
+  final double cantidad;
+  final double precioCompra;
+  final double precioVenta;
+  final int stock;
+
+  ProductoCreado({
+    required this.nombre,
+    required this.codigo,
+    required this.idPresentacion,
+    required this.cantidad,
+    required this.precioCompra,
+    required this.precioVenta,
+    required this.stock,
+  });
+}
+
 Future<void> mostrarAgregarProducto(
   BuildContext context,
-  VoidCallback onSuccess,
-) async {
+  VoidCallback onSuccess, {
+  void Function(ProductoCreado)? onProductoCreado,
+}) async {
   // Cargar datos iniciales
   final presentaciones = await Supabase.instance.client
       .from('presentacion')
@@ -40,6 +62,7 @@ Future<void> mostrarAgregarProducto(
         listaUnidadesMedida: unidadesMedida as List,
         listaCategorias: categoriasSet.toList()..sort(),
         onSuccess: onSuccess,
+        onProductoCreado: onProductoCreado,
       ),
     ),
   );
@@ -50,12 +73,14 @@ class _AgregarProductoPage extends StatefulWidget {
   final List<dynamic> listaUnidadesMedida;
   final List<String> listaCategorias;
   final VoidCallback onSuccess;
+  final void Function(ProductoCreado)? onProductoCreado;
 
   const _AgregarProductoPage({
     required this.listaPresentaciones,
     required this.listaUnidadesMedida,
     required this.listaCategorias,
     required this.onSuccess,
+    this.onProductoCreado,
   });
 
   @override
@@ -67,7 +92,6 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
   final nombreController = TextEditingController();
   final cantidadController = TextEditingController();
   final stockController = TextEditingController(text: '1');
-  final fechaVencimientoController = TextEditingController();
   final fechaAgregadoController = TextEditingController();
   final precioCompraController = TextEditingController();
   final precioVentaController = TextEditingController();
@@ -81,7 +105,6 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
 
   int? presentacionSeleccionada;
   int? unidadMedidaSeleccionada;
-  bool sinFechaVencimiento = false;
   String? categoriaSeleccionada;
 
   late List<dynamic> listaPresentaciones;
@@ -106,7 +129,6 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
     nombreController.dispose();
     cantidadController.dispose();
     stockController.dispose();
-    fechaVencimientoController.dispose();
     fechaAgregadoController.dispose();
     precioCompraController.dispose();
     precioVentaController.dispose();
@@ -196,8 +218,8 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
             cantidadController.text.trim().isNotEmpty &&
             unidadMedidaSeleccionada != null;
       case 2:
-        return sinFechaVencimiento ||
-            fechaVencimientoController.text.isNotEmpty;
+        return precioCompraController.text.trim().isNotEmpty &&
+            precioVentaController.text.trim().isNotEmpty;
       default:
         return true;
     }
@@ -237,7 +259,7 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
         mensaje = 'Completa la presentación, cantidad y unidad';
         break;
       case 2:
-        mensaje = 'Selecciona una fecha de vencimiento o marca "Sin fecha"';
+        mensaje = 'Los precios de compra y venta son obligatorios';
         break;
       default:
         mensaje = 'Completa los campos requeridos';
@@ -433,7 +455,6 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
   Future<void> _guardarProducto() async {
     final nombre = nombreController.text.trim();
     final cantidad = cantidadController.text.trim();
-    final fechaVencimiento = fechaVencimientoController.text.trim();
     final esGranel = _esAGranel();
 
     try {
@@ -446,9 +467,6 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
         'cantidad': double.tryParse(cantidad),
       };
 
-      if (fechaVencimiento.isNotEmpty) {
-        datosBase['fecha_vencimiento'] = fechaVencimiento;
-      }
       if (precioCompraController.text.isNotEmpty) {
         datosBase['precio_compra'] = double.tryParse(
           precioCompraController.text,
@@ -473,6 +491,20 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
       }
 
       if (mounted) {
+        // Llamar callback con datos del producto creado
+        if (widget.onProductoCreado != null) {
+          final productoCreado = ProductoCreado(
+            nombre: nombre,
+            codigo: codigo,
+            idPresentacion: presentacionSeleccionada!,
+            cantidad: double.tryParse(cantidad) ?? 0,
+            precioCompra: double.tryParse(precioCompraController.text) ?? 0,
+            precioVenta: double.tryParse(precioVentaController.text) ?? 0,
+            stock: esGranel ? 1 : stock,
+          );
+          widget.onProductoCreado!(productoCreado);
+        }
+
         Navigator.pop(context);
         final mensaje = esGranel
             ? 'Producto a granel agregado ($cantidad ${_getUnidadAbreviatura()})'
@@ -941,89 +973,9 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Fecha vencimiento
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.event, color: colorScheme.primary, size: 24),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Fecha de vencimiento',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                CheckboxListTile(
-                  title: const Text('Sin fecha de vencimiento'),
-                  subtitle: const Text('Marcar si el producto no caduca'),
-                  value: sinFechaVencimiento,
-                  onChanged: (value) {
-                    setState(() {
-                      sinFechaVencimiento = value ?? false;
-                      if (sinFechaVencimiento)
-                        fechaVencimientoController.clear();
-                    });
-                  },
-                  contentPadding: EdgeInsets.zero,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                if (!sinFechaVencimiento) ...[
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: fechaVencimientoController,
-                    decoration: InputDecoration(
-                      labelText: 'Fecha de vencimiento *',
-                      hintText: 'Seleccionar fecha',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      suffixIcon: const Icon(Icons.calendar_today),
-                      filled: true,
-                    ),
-                    readOnly: true,
-                    onTap: () async {
-                      final fecha = await showDatePicker(
-                        context: context,
-                        initialDate: DateTime.now().add(
-                          const Duration(days: 365),
-                        ),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(
-                          const Duration(days: 3650),
-                        ),
-                      );
-                      if (fecha != null) {
-                        fechaVencimientoController.text = fecha
-                            .toIso8601String()
-                            .split('T')
-                            .first;
-                        setState(() {});
-                      }
-                    },
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
           // Precios
           Text(
-            'Precios (opcional)',
+            'Precios *',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,

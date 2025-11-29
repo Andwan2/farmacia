@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:abari/providers/theme_provider.dart';
 import 'package:abari/modal/editar_producto_modal.dart';
-import 'package:abari/modal/agregar_producto_modal.dart';
 
 class ProductosScreen extends StatefulWidget {
   const ProductosScreen({super.key});
@@ -1479,10 +1479,10 @@ class _InventarioPageState extends State<ProductosScreen> {
                       ),
                     ],
                     const SizedBox(height: 12),
-                    // Botón de agregar producto
+                    // Botón de agregar producto - navega a compras
                     ElevatedButton.icon(
-                      onPressed: () async {
-                        await mostrarAgregarProducto(context, cargarDatos);
+                      onPressed: () {
+                        context.pushNamed('compras');
                       },
                       icon: const Icon(Icons.add_circle_outline, size: 20),
                       label: const Text('Agregar producto'),

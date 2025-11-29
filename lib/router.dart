@@ -64,10 +64,12 @@ final GoRouter router = GoRouter(
         ),
         GoRoute(
           path: '/compras',
+          name: 'compras',
           builder: (context, state) => const ComprasScreen(),
         ),
         GoRoute(
           path: '/about',
+          name: 'about',
           builder: (context, state) => const AboutScreen(),
         ),
         GoRoute(
