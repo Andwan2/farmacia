@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -39,9 +40,9 @@ class AppShell extends StatelessWidget {
               ],
             ),
           );
-          if (shouldExit == true && context.mounted) {
-            // Cerrar la app
-            Navigator.of(context).pop();
+          if (shouldExit == true) {
+            // Cerrar la app correctamente
+            SystemNavigator.pop();
           }
         } else {
           // En otras pantallas, volver al home

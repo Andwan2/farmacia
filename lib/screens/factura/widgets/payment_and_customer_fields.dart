@@ -320,6 +320,8 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
                         _nombreClienteController.text = value;
                         _mostrarDatosCliente = true;
                       });
+                      // Guardar nombre del cliente nuevo en el provider
+                      provider.setCliente(value);
                     }
                   },
                   onSubmitted: (String value) {
@@ -454,6 +456,12 @@ class _PaymentAndCustomerFieldsState extends State<PaymentAndCustomerFields> {
                     fillColor: Theme.of(context).colorScheme.surface,
                   ),
                   keyboardType: TextInputType.phone,
+                  onChanged: (value) {
+                    // Guardar teléfono del cliente nuevo en el provider
+                    if (_clienteSeleccionadoId == null) {
+                      provider.setDatosClienteNuevo(telefono: value);
+                    }
+                  },
                 ),
                 if (_clienteSeleccionadoId != null) ...[
                   const SizedBox(height: 10),
