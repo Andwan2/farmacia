@@ -1402,6 +1402,55 @@ class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> 
     Navigator.pop(context);
   }
 
+  void _abrirOpcionesAvanzadas() {
+    // Guardar referencia al callback antes de cerrar
+    final onProductoEditado = widget.onProductoEditado;
+    final itemOriginal = widget.item;
+    
+    // Obtener el navigator context antes de cerrar el modal
+    final navigatorContext = Navigator.of(context).context;
+    
+    // Cerrar este modal primero
+    Navigator.pop(context);
+    
+    // Usar Future.delayed para asegurar que el modal se cerró
+    Future.delayed(const Duration(milliseconds: 100), () {
+      // Abrir el modal completo de agregar producto con datos pre-llenados
+      mostrarAgregarProducto(
+        navigatorContext,
+        () {}, // onSuccess - no necesitamos recargar nada
+        datosIniciales: ProductoInicial(
+          nombre: itemOriginal.nombre,
+          codigo: itemOriginal.codigo,
+          idPresentacion: itemOriginal.idPresentacion,
+          idUnidadMedida: itemOriginal.idUnidadMedida,
+          cantidad: itemOriginal.cantidadProducto,
+          precioCompra: itemOriginal.precioCompra,
+          precioVenta: itemOriginal.precioVenta,
+          stock: itemOriginal.stock,
+          categoria: itemOriginal.categoria,
+        ),
+        onProductoCreado: (productoCreado) {
+          // Crear el item actualizado con los datos del modal avanzado
+          final productoEditado = ProductoCompraItem(
+            idProductoBase: itemOriginal.idProductoBase,
+            idPresentacion: productoCreado.idPresentacion,
+            idUnidadMedida: productoCreado.idUnidadMedida,
+            nombre: productoCreado.nombre,
+            codigo: productoCreado.codigo,
+            cantidadProducto: productoCreado.cantidad,
+            fechaVencimiento: itemOriginal.fechaVencimiento,
+            precioCompra: productoCreado.precioCompra,
+            precioVenta: productoCreado.precioVenta,
+            stock: productoCreado.stock,
+            categoria: productoCreado.categoria,
+          );
+          onProductoEditado(productoEditado);
+        },
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -1547,7 +1596,25 @@ class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> 
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            // Botón de opciones avanzadas
+            TextButton.icon(
+              onPressed: _abrirOpcionesAvanzadas,
+              icon: Icon(
+                Icons.tune,
+                size: 18,
+                color: colorScheme.secondary,
+              ),
+              label: Text(
+                'Opciones avanzadas (presentación, unidad de medida...)',
+                style: TextStyle(
+                  color: colorScheme.secondary,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
 
             // Botones
             Row(

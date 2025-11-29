@@ -27,10 +27,36 @@ class ProductoCreado {
   });
 }
 
+/// Datos iniciales para editar un producto existente
+class ProductoInicial {
+  final String? nombre;
+  final String? codigo;
+  final int? idPresentacion;
+  final int? idUnidadMedida;
+  final double? cantidad;
+  final double? precioCompra;
+  final double? precioVenta;
+  final int? stock;
+  final String? categoria;
+
+  const ProductoInicial({
+    this.nombre,
+    this.codigo,
+    this.idPresentacion,
+    this.idUnidadMedida,
+    this.cantidad,
+    this.precioCompra,
+    this.precioVenta,
+    this.stock,
+    this.categoria,
+  });
+}
+
 Future<void> mostrarAgregarProducto(
   BuildContext context,
   VoidCallback onSuccess, {
   void Function(ProductoCreado)? onProductoCreado,
+  ProductoInicial? datosIniciales,
 }) async {
   // Cargar datos iniciales
   final presentaciones = await Supabase.instance.client
@@ -67,6 +93,7 @@ Future<void> mostrarAgregarProducto(
         listaCategorias: categoriasSet.toList()..sort(),
         onSuccess: onSuccess,
         onProductoCreado: onProductoCreado,
+        datosIniciales: datosIniciales,
       ),
     ),
   );
@@ -78,6 +105,7 @@ class _AgregarProductoPage extends StatefulWidget {
   final List<String> listaCategorias;
   final VoidCallback onSuccess;
   final void Function(ProductoCreado)? onProductoCreado;
+  final ProductoInicial? datosIniciales;
 
   const _AgregarProductoPage({
     required this.listaPresentaciones,
@@ -85,6 +113,7 @@ class _AgregarProductoPage extends StatefulWidget {
     required this.listaCategorias,
     required this.onSuccess,
     this.onProductoCreado,
+    this.datosIniciales,
   });
 
   @override
@@ -126,6 +155,36 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
     super.initState();
     listaPresentaciones = List.from(widget.listaPresentaciones);
     listaUnidadesMedida = List.from(widget.listaUnidadesMedida);
+    
+    // Inicializar con datos existentes si se proporcionan
+    final datos = widget.datosIniciales;
+    if (datos != null) {
+      if (datos.nombre != null) {
+        nombreController.text = datos.nombre!;
+      }
+      if (datos.cantidad != null) {
+        cantidadController.text = datos.cantidad.toString();
+      }
+      if (datos.stock != null) {
+        stock = datos.stock!;
+        stockController.text = datos.stock.toString();
+      }
+      if (datos.precioCompra != null) {
+        precioCompraController.text = datos.precioCompra.toString();
+      }
+      if (datos.precioVenta != null) {
+        precioVentaController.text = datos.precioVenta.toString();
+      }
+      if (datos.idPresentacion != null) {
+        presentacionSeleccionada = datos.idPresentacion;
+      }
+      if (datos.idUnidadMedida != null) {
+        unidadMedidaSeleccionada = datos.idUnidadMedida;
+      }
+      if (datos.categoria != null) {
+        categoriaSeleccionada = datos.categoria;
+      }
+    }
   }
 
   @override
