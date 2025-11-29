@@ -1,10 +1,17 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Servicio para obtener predicciones desde Supabase Edge Function
 class PredictionService {
   static final _client = Supabase.instance.client;
 
+  // Claves para SharedPreferences
+  static const String _cacheKey = 'prediction_cache';
+  static const String _lastUpdateKey = 'prediction_last_update';
+
   /// Llama a la edge function 'get-predict' y retorna el resultado
+  /// Si falla, intenta cargar datos desde caché
   static Future<PredictionResult> obtenerPredicciones() async {
     try {
       final response = await _client.functions.invoke(
@@ -23,9 +30,83 @@ class PredictionService {
         throw Exception(data['error'] ?? 'Error desconocido');
       }
 
-      return PredictionResult.fromJson(data);
+      final result = PredictionResult.fromJson(data);
+
+      // Guardar en caché
+      await _guardarEnCache(data);
+
+      return result;
     } catch (e) {
+      // Intentar cargar desde caché si hay error
+      final cached = await _cargarDesdeCache();
+      if (cached != null) {
+        return cached;
+      }
       throw Exception('Error al obtener predicciones: $e');
+    }
+  }
+
+  /// Guarda los datos de predicción en SharedPreferences
+  static Future<void> _guardarEnCache(Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKey, jsonEncode(data));
+      await prefs.setString(_lastUpdateKey, DateTime.now().toIso8601String());
+    } catch (e) {
+      // Ignorar errores de caché
+    }
+  }
+
+  /// Carga los datos de predicción desde SharedPreferences
+  static Future<PredictionResult?> _cargarDesdeCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(_cacheKey);
+      if (cached != null) {
+        final data = jsonDecode(cached) as Map<String, dynamic>;
+        final result = PredictionResult.fromJson(data);
+        result.esDesdeCache = true;
+        result.ultimaActualizacion = await obtenerUltimaActualizacion();
+        return result;
+      }
+    } catch (e) {
+      // Ignorar errores de caché
+    }
+    return null;
+  }
+
+  /// Obtiene la fecha de última actualización desde SharedPreferences
+  static Future<DateTime?> obtenerUltimaActualizacion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastUpdate = prefs.getString(_lastUpdateKey);
+      if (lastUpdate != null) {
+        return DateTime.parse(lastUpdate);
+      }
+    } catch (e) {
+      // Ignorar errores
+    }
+    return null;
+  }
+
+  /// Verifica si hay datos en caché disponibles
+  static Future<bool> hayCacheDisponible() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.containsKey(_cacheKey);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Limpia el caché de predicciones
+  static Future<void> limpiarCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_cacheKey);
+      await prefs.remove(_lastUpdateKey);
+    } catch (e) {
+      // Ignorar errores
     }
   }
 }
@@ -34,6 +115,12 @@ class PredictionService {
 class PredictionResult {
   final List<PredictionPoint> predictions;
   final int periods;
+
+  /// Indica si los datos fueron cargados desde caché
+  bool esDesdeCache = false;
+
+  /// Fecha y hora de la última actualización exitosa
+  DateTime? ultimaActualizacion;
 
   PredictionResult({required this.predictions, required this.periods});
 

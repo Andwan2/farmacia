@@ -15,6 +15,7 @@ class _PrediccionChartState extends State<PrediccionChart> {
   bool cargando = true;
   String? error;
   PredictionResult? resultado;
+  DateTime? ultimaActualizacion;
 
   @override
   void initState() {
@@ -33,6 +34,9 @@ class _PrediccionChartState extends State<PrediccionChart> {
       if (mounted) {
         setState(() {
           resultado = data;
+          ultimaActualizacion = data.esDesdeCache
+              ? data.ultimaActualizacion
+              : DateTime.now();
           cargando = false;
         });
       }
@@ -105,9 +109,53 @@ class _PrediccionChartState extends State<PrediccionChart> {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              'Próximos 30 días (en córdobas)',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            // Subtítulo con última actualización
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Próximos 30 días (en córdobas)',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ),
+                if (ultimaActualizacion != null) ...[
+                  if (resultado?.esDesdeCache == true)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.cloud_off,
+                            size: 12,
+                            color: Colors.orange[700],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Caché',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.orange[700],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Text(
+                    _formatearUltimaActualizacion(ultimaActualizacion!),
+                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                  ),
+                ],
+              ],
             ),
             const SizedBox(height: 16),
 
@@ -421,5 +469,32 @@ class _PrediccionChartState extends State<PrediccionChart> {
 
   Color _getDarkerColor(Color color) {
     return Color.lerp(color, Colors.black, 0.2)!;
+  }
+
+  String _formatearUltimaActualizacion(DateTime fecha) {
+    final ahora = DateTime.now();
+    final diferencia = ahora.difference(fecha);
+
+    if (diferencia.inMinutes < 1) {
+      return 'Actualizado hace un momento';
+    } else if (diferencia.inMinutes < 60) {
+      return 'Actualizado hace ${diferencia.inMinutes} min';
+    } else if (diferencia.inHours < 24) {
+      return 'Actualizado hace ${diferencia.inHours}h';
+    } else if (diferencia.inDays == 1) {
+      return 'Actualizado ayer ${_formatHora(fecha)}';
+    } else if (diferencia.inDays < 7) {
+      return 'Actualizado hace ${diferencia.inDays} días';
+    } else {
+      return 'Actualizado ${_formatFechaCompleta(fecha)}';
+    }
+  }
+
+  String _formatHora(DateTime fecha) {
+    return '${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _formatFechaCompleta(DateTime fecha) {
+    return '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')} ${_formatHora(fecha)}';
   }
 }
