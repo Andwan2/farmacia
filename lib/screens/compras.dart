@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:abari/providers/compra_provider.dart';
 import 'package:abari/modal/seleccionar_empleado_modal.dart';
 import 'package:abari/modal/agregar_producto_modal.dart';
@@ -1402,53 +1403,26 @@ class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> 
     Navigator.pop(context);
   }
 
-  void _abrirOpcionesAvanzadas() {
-    // Guardar referencia al callback antes de cerrar
-    final onProductoEditado = widget.onProductoEditado;
-    final itemOriginal = widget.item;
+  void _abrirOpcionesAvanzadas() async {
+    final resultado = await showModalBottomSheet<Map<String, int?>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _OpcionesAvanzadasSheet(
+        idPresentacionActual: widget.item.idPresentacion,
+        idUnidadMedidaActual: widget.item.idUnidadMedida,
+      ),
+    );
     
-    // Obtener el navigator context antes de cerrar el modal
-    final navigatorContext = Navigator.of(context).context;
-    
-    // Cerrar este modal primero
-    Navigator.pop(context);
-    
-    // Usar Future.delayed para asegurar que el modal se cerró
-    Future.delayed(const Duration(milliseconds: 100), () {
-      // Abrir el modal completo de agregar producto con datos pre-llenados
-      mostrarAgregarProducto(
-        navigatorContext,
-        () {}, // onSuccess - no necesitamos recargar nada
-        datosIniciales: ProductoInicial(
-          nombre: itemOriginal.nombre,
-          codigo: itemOriginal.codigo,
-          idPresentacion: itemOriginal.idPresentacion,
-          idUnidadMedida: itemOriginal.idUnidadMedida,
-          cantidad: itemOriginal.cantidadProducto,
-          precioCompra: itemOriginal.precioCompra,
-          precioVenta: itemOriginal.precioVenta,
-          stock: itemOriginal.stock,
-          categoria: itemOriginal.categoria,
-        ),
-        onProductoCreado: (productoCreado) {
-          // Crear el item actualizado con los datos del modal avanzado
-          final productoEditado = ProductoCompraItem(
-            idProductoBase: itemOriginal.idProductoBase,
-            idPresentacion: productoCreado.idPresentacion,
-            idUnidadMedida: productoCreado.idUnidadMedida,
-            nombre: productoCreado.nombre,
-            codigo: productoCreado.codigo,
-            cantidadProducto: productoCreado.cantidad,
-            fechaVencimiento: itemOriginal.fechaVencimiento,
-            precioCompra: productoCreado.precioCompra,
-            precioVenta: productoCreado.precioVenta,
-            stock: productoCreado.stock,
-            categoria: productoCreado.categoria,
-          );
-          onProductoEditado(productoEditado);
-        },
+    if (resultado != null) {
+      // Actualizar los valores seleccionados en el item
+      final productoEditado = widget.item.copyWith(
+        idPresentacion: resultado['idPresentacion'],
+        idUnidadMedida: resultado['idUnidadMedida'],
       );
-    });
+      widget.onProductoEditado(productoEditado);
+      if (mounted) Navigator.pop(context);
+    }
   }
 
   @override
@@ -1644,6 +1618,221 @@ class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> 
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Modal pequeño para opciones avanzadas (presentación y unidad de medida)
+class _OpcionesAvanzadasSheet extends StatefulWidget {
+  final int idPresentacionActual;
+  final int? idUnidadMedidaActual;
+
+  const _OpcionesAvanzadasSheet({
+    required this.idPresentacionActual,
+    this.idUnidadMedidaActual,
+  });
+
+  @override
+  State<_OpcionesAvanzadasSheet> createState() => _OpcionesAvanzadasSheetState();
+}
+
+class _OpcionesAvanzadasSheetState extends State<_OpcionesAvanzadasSheet> {
+  List<dynamic> presentaciones = [];
+  List<dynamic> unidadesMedida = [];
+  bool cargando = true;
+  
+  int? presentacionSeleccionada;
+  int? unidadMedidaSeleccionada;
+
+  @override
+  void initState() {
+    super.initState();
+    presentacionSeleccionada = widget.idPresentacionActual;
+    unidadMedidaSeleccionada = widget.idUnidadMedidaActual;
+    _cargarDatos();
+  }
+
+  Future<void> _cargarDatos() async {
+    try {
+      final futures = await Future.wait([
+        Supabase.instance.client
+            .from('presentacion')
+            .select('id_presentacion,descripcion')
+            .order('descripcion', ascending: true),
+        Supabase.instance.client
+            .from('unidad_medida')
+            .select('id,nombre,abreviatura')
+            .order('nombre', ascending: true),
+      ]);
+      
+      if (mounted) {
+        setState(() {
+          presentaciones = futures[0] as List;
+          unidadesMedida = futures[1] as List;
+          cargando = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => cargando = false);
+      }
+    }
+  }
+
+  void _guardar() {
+    Navigator.pop(context, {
+      'idPresentacion': presentacionSeleccionada,
+      'idUnidadMedida': unidadMedidaSeleccionada,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Título
+            Row(
+              children: [
+                Icon(Icons.tune, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Opciones avanzadas',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            if (cargando)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else ...[
+              // Presentación
+              Text(
+                'Presentación',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<int>(
+                value: presentacionSeleccionada,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.inventory_2_outlined),
+                  hintText: 'Seleccionar presentación',
+                ),
+                items: presentaciones.map((p) {
+                  return DropdownMenuItem<int>(
+                    value: p['id_presentacion'] as int,
+                    child: Text(p['descripcion'] as String),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() => presentacionSeleccionada = value);
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Unidad de medida
+              Text(
+                'Unidad de medida',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<int>(
+                value: unidadMedidaSeleccionada,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.straighten),
+                  hintText: 'Seleccionar unidad',
+                ),
+                items: unidadesMedida.map((u) {
+                  final nombre = u['nombre'] as String;
+                  final abrev = u['abreviatura'] as String?;
+                  return DropdownMenuItem<int>(
+                    value: u['id'] as int,
+                    child: Text(abrev != null ? '$nombre ($abrev)' : nombre),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() => unidadMedidaSeleccionada = value);
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // Botones
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Cancelar'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: presentacionSeleccionada != null ? _guardar : null,
+                      icon: const Icon(Icons.check),
+                      label: const Text('Aplicar'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 8),
           ],
         ),
