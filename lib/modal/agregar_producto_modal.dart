@@ -7,19 +7,23 @@ class ProductoCreado {
   final String nombre;
   final String codigo;
   final int idPresentacion;
+  final int? idUnidadMedida;
   final double cantidad;
   final double precioCompra;
   final double precioVenta;
   final int stock;
+  final String? categoria;
 
   ProductoCreado({
     required this.nombre,
     required this.codigo,
     required this.idPresentacion,
+    this.idUnidadMedida,
     required this.cantidad,
     required this.precioCompra,
     required this.precioVenta,
     required this.stock,
+    this.categoria,
   });
 }
 
@@ -497,10 +501,12 @@ class _AgregarProductoPageState extends State<_AgregarProductoPage> {
             nombre: nombre,
             codigo: codigo,
             idPresentacion: presentacionSeleccionada!,
+            idUnidadMedida: unidadMedidaSeleccionada,
             cantidad: double.tryParse(cantidad) ?? 0,
             precioCompra: double.tryParse(precioCompraController.text) ?? 0,
             precioVenta: double.tryParse(precioVentaController.text) ?? 0,
             stock: esGranel ? 1 : stock,
+            categoria: categoriaSeleccionada,
           );
           widget.onProductoCreado!(productoCreado);
         }

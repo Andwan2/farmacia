@@ -35,15 +35,51 @@ class _ComprasScreenContent extends StatelessWidget {
           ProductoCompraItem(
             idProductoBase: null, // Es un producto nuevo
             idPresentacion: productoCreado.idPresentacion,
+            idUnidadMedida: productoCreado.idUnidadMedida,
             nombre: productoCreado.nombre,
-            tipo: productoCreado.codigo,
-            medida: productoCreado.cantidad.toString(),
-            fechaVencimiento: '',
+            codigo: productoCreado.codigo,
+            cantidadProducto: productoCreado.cantidad,
+            fechaVencimiento: null,
             precioCompra: productoCreado.precioCompra,
             precioVenta: productoCreado.precioVenta,
-            cantidad: productoCreado.stock,
+            stock: productoCreado.stock,
+            categoria: productoCreado.categoria,
           ),
         );
+      },
+    );
+  }
+
+  void _duplicarProducto(CompraProvider provider, ProductoCompraItem item) {
+    // Crear una copia del producto y agregarlo a la lista
+    provider.agregarProductoItem(
+      ProductoCompraItem(
+        idProductoBase: item.idProductoBase,
+        idPresentacion: item.idPresentacion,
+        idUnidadMedida: item.idUnidadMedida,
+        nombre: item.nombre,
+        codigo: item.codigo,
+        cantidadProducto: item.cantidadProducto,
+        fechaVencimiento: item.fechaVencimiento,
+        precioCompra: item.precioCompra,
+        precioVenta: item.precioVenta,
+        stock: item.stock,
+        categoria: item.categoria,
+      ),
+    );
+  }
+
+  void _editarProducto(
+    BuildContext context,
+    CompraProvider provider,
+    int index,
+    ProductoCompraItem item,
+  ) {
+    mostrarEditarProductoCompra(
+      context,
+      item: item,
+      onProductoEditado: (productoEditado) {
+        provider.actualizarProducto(index, productoEditado);
       },
     );
   }
@@ -390,8 +426,8 @@ class _ComprasScreenContent extends StatelessWidget {
                   children: provider.productos.asMap().entries.map((entry) {
                     final index = entry.key;
                     final item = entry.value;
-                    final subtotalCompra = item.precioCompra * item.cantidad;
-                    final subtotalVenta = item.precioVenta * item.cantidad;
+                    final subtotalCompra = item.precioCompra * item.stock;
+                    final subtotalVenta = item.precioVenta * item.stock;
                     final ganancia = subtotalVenta - subtotalCompra;
 
                     return Container(
@@ -420,7 +456,7 @@ class _ComprasScreenContent extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
-                                    '${item.cantidad}x',
+                                    '${item.stock}x',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
@@ -441,12 +477,33 @@ class _ComprasScreenContent extends StatelessWidget {
                                 ),
                                 IconButton(
                                   icon: Icon(
+                                    Icons.edit_outlined,
+                                    color: Theme.of(context).colorScheme.primary,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => _editarProducto(context, provider, index, item),
+                                  visualDensity: VisualDensity.compact,
+                                  tooltip: 'Editar',
+                                ),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.copy_outlined,
+                                    color: Colors.orange[600],
+                                    size: 20,
+                                  ),
+                                  onPressed: () => _duplicarProducto(provider, item),
+                                  visualDensity: VisualDensity.compact,
+                                  tooltip: 'Duplicar',
+                                ),
+                                IconButton(
+                                  icon: Icon(
                                     Icons.delete_outline,
                                     color: Colors.red[400],
-                                    size: 22,
+                                    size: 20,
                                   ),
                                   onPressed: () => provider.eliminarProducto(index),
                                   visualDensity: VisualDensity.compact,
+                                  tooltip: 'Eliminar',
                                 ),
                               ],
                             ),
@@ -931,7 +988,7 @@ class _ComprasScreenContent extends StatelessWidget {
                                               ),
                                               Expanded(
                                                 child: Text(
-                                                  item.cantidad.toString(),
+                                                  item.stock.toString(),
                                                 ),
                                               ),
                                               Expanded(
@@ -946,19 +1003,49 @@ class _ComprasScreenContent extends StatelessWidget {
                                               ),
                                               Expanded(
                                                 child: Text(
-                                                  item.fechaVencimiento,
+                                                  item.fechaVencimiento ?? '-',
                                                 ),
                                               ),
-                                              IconButton(
-                                                icon: const Icon(
-                                                  Icons.delete_outline,
-                                                  color: Colors.red,
-                                                ),
-                                                onPressed: () {
-                                                  provider.eliminarProducto(
-                                                    index,
-                                                  );
-                                                },
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  IconButton(
+                                                    icon: Icon(
+                                                      Icons.edit_outlined,
+                                                      color: Theme.of(context).colorScheme.primary,
+                                                      size: 20,
+                                                    ),
+                                                    onPressed: () => _editarProducto(
+                                                      context,
+                                                      provider,
+                                                      index,
+                                                      item,
+                                                    ),
+                                                    tooltip: 'Editar',
+                                                  ),
+                                                  IconButton(
+                                                    icon: Icon(
+                                                      Icons.copy_outlined,
+                                                      color: Colors.orange[600],
+                                                      size: 20,
+                                                    ),
+                                                    onPressed: () => _duplicarProducto(provider, item),
+                                                    tooltip: 'Duplicar',
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(
+                                                      Icons.delete_outline,
+                                                      color: Colors.red,
+                                                      size: 20,
+                                                    ),
+                                                    onPressed: () {
+                                                      provider.eliminarProducto(
+                                                        index,
+                                                      );
+                                                    },
+                                                    tooltip: 'Eliminar',
+                                                  ),
+                                                ],
                                               ),
                                             ],
                                           ),
@@ -1203,6 +1290,296 @@ class _ComprasScreenContent extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Modal para editar un producto de la lista de compras
+Future<void> mostrarEditarProductoCompra(
+  BuildContext context, {
+  required ProductoCompraItem item,
+  required void Function(ProductoCompraItem) onProductoEditado,
+}) async {
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => _EditarProductoCompraSheet(
+      item: item,
+      onProductoEditado: onProductoEditado,
+    ),
+  );
+}
+
+class _EditarProductoCompraSheet extends StatefulWidget {
+  final ProductoCompraItem item;
+  final void Function(ProductoCompraItem) onProductoEditado;
+
+  const _EditarProductoCompraSheet({
+    required this.item,
+    required this.onProductoEditado,
+  });
+
+  @override
+  State<_EditarProductoCompraSheet> createState() => _EditarProductoCompraSheetState();
+}
+
+class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> {
+  late TextEditingController _nombreController;
+  late TextEditingController _codigoController;
+  late TextEditingController _cantidadController;
+  late TextEditingController _precioCompraController;
+  late TextEditingController _precioVentaController;
+  late TextEditingController _stockController;
+  late TextEditingController _categoriaController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nombreController = TextEditingController(text: widget.item.nombre);
+    _codigoController = TextEditingController(text: widget.item.codigo);
+    _cantidadController = TextEditingController(
+      text: widget.item.cantidadProducto.toString(),
+    );
+    _precioCompraController = TextEditingController(
+      text: widget.item.precioCompra.toString(),
+    );
+    _precioVentaController = TextEditingController(
+      text: widget.item.precioVenta.toString(),
+    );
+    _stockController = TextEditingController(
+      text: widget.item.stock.toString(),
+    );
+    _categoriaController = TextEditingController(
+      text: widget.item.categoria ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    _codigoController.dispose();
+    _cantidadController.dispose();
+    _precioCompraController.dispose();
+    _precioVentaController.dispose();
+    _stockController.dispose();
+    _categoriaController.dispose();
+    super.dispose();
+  }
+
+  void _guardar() {
+    final nombre = _nombreController.text.trim();
+    final codigo = _codigoController.text.trim();
+    final cantidad = double.tryParse(_cantidadController.text) ?? 0;
+    final precioCompra = double.tryParse(_precioCompraController.text) ?? 0;
+    final precioVenta = double.tryParse(_precioVentaController.text) ?? 0;
+    final stock = int.tryParse(_stockController.text) ?? 1;
+    final categoria = _categoriaController.text.trim();
+
+    if (nombre.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El nombre es requerido')),
+      );
+      return;
+    }
+
+    final productoEditado = ProductoCompraItem(
+      idProductoBase: widget.item.idProductoBase,
+      idPresentacion: widget.item.idPresentacion,
+      idUnidadMedida: widget.item.idUnidadMedida,
+      nombre: nombre,
+      codigo: codigo,
+      cantidadProducto: cantidad,
+      fechaVencimiento: widget.item.fechaVencimiento,
+      precioCompra: precioCompra,
+      precioVenta: precioVenta,
+      stock: stock,
+      categoria: categoria.isEmpty ? null : categoria,
+    );
+
+    widget.onProductoEditado(productoEditado);
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Título
+            Row(
+              children: [
+                Icon(Icons.edit, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Editar producto',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Nombre
+            TextField(
+              controller: _nombreController,
+              decoration: const InputDecoration(
+                labelText: 'Nombre del producto',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.inventory_2_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Código y Cantidad en fila
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _codigoController,
+                    decoration: const InputDecoration(
+                      labelText: 'Código',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.qr_code),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _cantidadController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Cantidad (g/ml)',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.scale),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Precios en fila
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _precioCompraController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Precio compra',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.money_off, color: Colors.red[400]),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _precioVentaController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Precio venta',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.attach_money, color: Colors.green[600]),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Stock y Categoría en fila
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _stockController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Unidades',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.numbers),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _categoriaController,
+                    decoration: const InputDecoration(
+                      labelText: 'Categoría',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.category_outlined),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Botones
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Cancelar'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: _guardar,
+                    icon: const Icon(Icons.check),
+                    label: const Text('Guardar cambios'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
