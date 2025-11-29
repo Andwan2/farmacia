@@ -51,15 +51,43 @@ class _ComprasScreenContent extends StatelessWidget {
     );
   }
 
-  void _duplicarProducto(CompraProvider provider, ProductoCompraItem item) {
-    // Crear una copia del producto y agregarlo a la lista
+  Future<void> _duplicarProducto(CompraProvider provider, ProductoCompraItem item) async {
+    // Cargar presentación y unidad de medida para generar nuevo código
+    final presentacionFuture = Supabase.instance.client
+        .from('presentacion')
+        .select('descripcion')
+        .eq('id_presentacion', item.idPresentacion)
+        .maybeSingle();
+
+    final unidadMedidaFuture = item.idUnidadMedida != null
+        ? Supabase.instance.client
+            .from('unidad_medida')
+            .select('abreviatura')
+            .eq('id', item.idUnidadMedida!)
+            .maybeSingle()
+        : Future<Map<String, dynamic>?>.value(null);
+
+    final results = await Future.wait([presentacionFuture, unidadMedidaFuture]);
+
+    final presentacion = results[0];
+    final unidadMedida = results[1];
+
+    // Generar nuevo código
+    final nuevoCodigo = _generarCodigo(
+      nombre: item.nombre,
+      cantidad: item.cantidadProducto,
+      abreviaturaUnidad: unidadMedida?['abreviatura'] as String? ?? '',
+      descripcionPresentacion: presentacion?['descripcion'] as String? ?? '',
+    );
+
+    // Crear una copia del producto con nuevo código
     provider.agregarProductoItem(
       ProductoCompraItem(
-        idProductoBase: item.idProductoBase,
+        idProductoBase: null, // Es un nuevo producto
         idPresentacion: item.idPresentacion,
         idUnidadMedida: item.idUnidadMedida,
         nombre: item.nombre,
-        codigo: item.codigo,
+        codigo: nuevoCodigo,
         cantidadProducto: item.cantidadProducto,
         fechaVencimiento: item.fechaVencimiento,
         precioCompra: item.precioCompra,
@@ -68,6 +96,37 @@ class _ComprasScreenContent extends StatelessWidget {
         categoria: item.categoria,
       ),
     );
+  }
+
+  /// Genera código único usando la misma lógica de agregar_producto_modal
+  String _generarCodigo({
+    required String nombre,
+    required double cantidad,
+    required String abreviaturaUnidad,
+    required String descripcionPresentacion,
+  }) {
+    final nombreLimpio = nombre.trim().replaceAll(' ', '');
+    final abreviatura = abreviaturaUnidad.replaceAll(' ', '');
+    
+    // Si la presentación tiene múltiples palabras, usar solo la última
+    final palabras = descripcionPresentacion.trim().split(' ');
+    final descripcionPres = palabras.length > 1
+        ? palabras.last
+        : descripcionPresentacion.replaceAll(' ', '');
+
+    final esAGranel = descripcionPres.toLowerCase() == 'agranel';
+
+    if (esAGranel) {
+      // Para productos a granel: nombre + unidad de medida (sin cantidad)
+      return '$nombreLimpio$abreviatura$descripcionPres'.toUpperCase();
+    } else {
+      // Para otros productos: nombre + cantidad + unidad + presentación
+      final cantidadFormateada = cantidad == cantidad.toInt()
+          ? cantidad.toInt().toString()
+          : cantidad.toString();
+      return '$nombreLimpio$cantidadFormateada$abreviatura$descripcionPres'
+          .toUpperCase();
+    }
   }
 
   void _editarProducto(
@@ -1333,7 +1392,19 @@ class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> 
   late TextEditingController _precioCompraController;
   late TextEditingController _precioVentaController;
   late TextEditingController _stockController;
-  late TextEditingController _categoriaController;
+  
+  // Variables de estado para opciones avanzadas
+  late int _idPresentacion;
+  late int? _idUnidadMedida;
+  
+  // Para generación de código
+  String _descripcionPresentacion = '';
+  String _abreviaturaUnidad = '';
+  
+  // Categorías
+  List<String> _categorias = [];
+  String? _categoriaSeleccionada;
+  bool _cargandoCategorias = true;
 
   @override
   void initState() {
@@ -1352,20 +1423,140 @@ class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> 
     _stockController = TextEditingController(
       text: widget.item.stock.toString(),
     );
-    _categoriaController = TextEditingController(
-      text: widget.item.categoria ?? '',
+    
+    // Inicializar opciones avanzadas
+    _idPresentacion = widget.item.idPresentacion;
+    _idUnidadMedida = widget.item.idUnidadMedida;
+    _categoriaSeleccionada = widget.item.categoria;
+    
+    // Listeners para regenerar código
+    _nombreController.addListener(_actualizarCodigo);
+    _cantidadController.addListener(_actualizarCodigo);
+    
+    _cargarDatosIniciales();
+  }
+  
+  Future<void> _cargarDatosIniciales() async {
+    await Future.wait([
+      _cargarPresentacionYUnidad(),
+      _cargarCategorias(),
+    ]);
+  }
+  
+  Future<void> _cargarPresentacionYUnidad() async {
+    try {
+      final presentacion = await Supabase.instance.client
+          .from('presentacion')
+          .select('descripcion')
+          .eq('id_presentacion', _idPresentacion)
+          .maybeSingle();
+      
+      Map<String, dynamic>? unidad;
+      if (_idUnidadMedida != null) {
+        unidad = await Supabase.instance.client
+            .from('unidad_medida')
+            .select('abreviatura')
+            .eq('id', _idUnidadMedida!)
+            .maybeSingle();
+      }
+      
+      if (mounted) {
+        setState(() {
+          _descripcionPresentacion = presentacion?['descripcion'] as String? ?? '';
+          _abreviaturaUnidad = unidad?['abreviatura'] as String? ?? '';
+        });
+        _actualizarCodigo();
+      }
+    } catch (e) {
+      // Ignorar errores
+    }
+  }
+  
+  void _actualizarCodigo() {
+    if (_descripcionPresentacion.isEmpty) return;
+    
+    final nombre = _nombreController.text.trim();
+    final cantidad = double.tryParse(_cantidadController.text) ?? 0;
+    
+    if (nombre.isEmpty) return;
+    
+    final nuevoCodigo = _generarCodigoLocal(
+      nombre: nombre,
+      cantidad: cantidad,
+      abreviaturaUnidad: _abreviaturaUnidad,
+      descripcionPresentacion: _descripcionPresentacion,
     );
+    
+    if (_codigoController.text != nuevoCodigo) {
+      _codigoController.text = nuevoCodigo;
+    }
+  }
+  
+  String _generarCodigoLocal({
+    required String nombre,
+    required double cantidad,
+    required String abreviaturaUnidad,
+    required String descripcionPresentacion,
+  }) {
+    final nombreLimpio = nombre.replaceAll(' ', '');
+    final abreviatura = abreviaturaUnidad.replaceAll(' ', '');
+    
+    final palabras = descripcionPresentacion.trim().split(' ');
+    final descripcionPres = palabras.length > 1
+        ? palabras.last
+        : descripcionPresentacion.replaceAll(' ', '');
+
+    final esAGranel = descripcionPres.toLowerCase() == 'agranel';
+
+    if (esAGranel) {
+      return '$nombreLimpio$abreviatura$descripcionPres'.toUpperCase();
+    } else {
+      final cantidadFormateada = cantidad == cantidad.toInt()
+          ? cantidad.toInt().toString()
+          : cantidad.toString();
+      return '$nombreLimpio$cantidadFormateada$abreviatura$descripcionPres'
+          .toUpperCase();
+    }
+  }
+
+  Future<void> _cargarCategorias() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('producto')
+          .select('categoria')
+          .not('categoria', 'is', null);
+
+      final Set<String> categoriasSet = {};
+      for (final item in (response as List)) {
+        final cat = item['categoria']?.toString();
+        if (cat != null && cat.isNotEmpty) {
+          categoriasSet.add(cat);
+        }
+      }
+      
+      if (mounted) {
+        setState(() {
+          _categorias = categoriasSet.toList()..sort();
+          _cargandoCategorias = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _cargandoCategorias = false);
+      }
+    }
   }
 
   @override
   void dispose() {
+    _nombreController.removeListener(_actualizarCodigo);
+    _cantidadController.removeListener(_actualizarCodigo);
     _nombreController.dispose();
     _codigoController.dispose();
     _cantidadController.dispose();
     _precioCompraController.dispose();
     _precioVentaController.dispose();
     _stockController.dispose();
-    _categoriaController.dispose();
     super.dispose();
   }
 
@@ -1376,7 +1567,7 @@ class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> 
     final precioCompra = double.tryParse(_precioCompraController.text) ?? 0;
     final precioVenta = double.tryParse(_precioVentaController.text) ?? 0;
     final stock = int.tryParse(_stockController.text) ?? 1;
-    final categoria = _categoriaController.text.trim();
+    final categoria = _categoriaSeleccionada;
 
     if (nombre.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1387,8 +1578,8 @@ class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> 
 
     final productoEditado = ProductoCompraItem(
       idProductoBase: widget.item.idProductoBase,
-      idPresentacion: widget.item.idPresentacion,
-      idUnidadMedida: widget.item.idUnidadMedida,
+      idPresentacion: _idPresentacion,
+      idUnidadMedida: _idUnidadMedida,
       nombre: nombre,
       codigo: codigo,
       cantidadProducto: cantidad,
@@ -1396,7 +1587,7 @@ class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> 
       precioCompra: precioCompra,
       precioVenta: precioVenta,
       stock: stock,
-      categoria: categoria.isEmpty ? null : categoria,
+      categoria: categoria,
     );
 
     widget.onProductoEditado(productoEditado);
@@ -1409,19 +1600,19 @@ class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> 
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _OpcionesAvanzadasSheet(
-        idPresentacionActual: widget.item.idPresentacion,
-        idUnidadMedidaActual: widget.item.idUnidadMedida,
+        idPresentacionActual: _idPresentacion,
+        idUnidadMedidaActual: _idUnidadMedida,
       ),
     );
     
-    if (resultado != null) {
-      // Actualizar los valores seleccionados en el item
-      final productoEditado = widget.item.copyWith(
-        idPresentacion: resultado['idPresentacion'],
-        idUnidadMedida: resultado['idUnidadMedida'],
-      );
-      widget.onProductoEditado(productoEditado);
-      if (mounted) Navigator.pop(context);
+    if (resultado != null && mounted) {
+      // Actualizar las variables de estado locales
+      setState(() {
+        _idPresentacion = resultado['idPresentacion'] ?? _idPresentacion;
+        _idUnidadMedida = resultado['idUnidadMedida'];
+      });
+      // Recargar datos de presentación/unidad para regenerar código
+      _cargarPresentacionYUnidad();
     }
   }
 
@@ -1490,10 +1681,13 @@ class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> 
                 Expanded(
                   child: TextField(
                     controller: _codigoController,
-                    decoration: const InputDecoration(
-                      labelText: 'Código',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.qr_code),
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: 'Código (auto)',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.qr_code),
+                      filled: true,
+                      fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.5),
                     ),
                   ),
                 ),
@@ -1559,14 +1753,34 @@ class _EditarProductoCompraSheetState extends State<_EditarProductoCompraSheet> 
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: TextField(
-                    controller: _categoriaController,
-                    decoration: const InputDecoration(
-                      labelText: 'Categoría',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.category_outlined),
-                    ),
-                  ),
+                  child: _cargandoCategorias
+                      ? const Center(child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ))
+                      : DropdownButtonFormField<String>(
+                          value: _categoriaSeleccionada,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Categoría',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.category_outlined),
+                          ),
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: null,
+                              child: Text('Sin categoría'),
+                            ),
+                            ..._categorias.map((cat) => DropdownMenuItem<String>(
+                              value: cat,
+                              child: Text(cat, overflow: TextOverflow.ellipsis),
+                            )),
+                          ],
+                          onChanged: (value) {
+                            setState(() => _categoriaSeleccionada = value);
+                          },
+                        ),
                 ),
               ],
             ),
