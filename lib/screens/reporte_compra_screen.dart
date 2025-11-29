@@ -656,8 +656,8 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
                 : Colors.green[50],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     '${comprasSeleccionadas.length} seleccionada(s)',
@@ -666,29 +666,46 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
                       fontSize: 14,
                     ),
                   ),
-                  Text(
-                    'Invertido: C\$${totalCostoSeleccionado.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.orange,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'Venta Esp.: C\$${totalVentaSeleccionada.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.blue,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'Ganancia Esp.: C\$${gananciaSeleccionada.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'Invertido: C\$${totalCostoSeleccionado.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.orange,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Venta: C\$${totalVentaSeleccionada.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Ganancia: C\$${gananciaSeleccionada.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -889,31 +906,6 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reportes de Compras'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.picture_as_pdf, size: 24),
-              label: const Text('Exportar PDF', style: TextStyle(fontSize: 16)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                elevation: 4,
-              ),
-              onPressed: () {
-                if (_tabController.index == 0) {
-                  _exportarPdfGeneral();
-                } else {
-                  _exportarPdfDetallado();
-                }
-              },
-            ),
-          ),
-        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -978,6 +970,18 @@ class _ReportesComprasScreenState extends State<ReportesComprasScreen>
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          if (_tabController.index == 0) {
+            _exportarPdfGeneral();
+          } else {
+            _exportarPdfDetallado();
+          }
+        },
+        backgroundColor: Colors.red,
+        icon: const Icon(Icons.picture_as_pdf),
+        label: const Text('Exportar'),
       ),
     );
   }

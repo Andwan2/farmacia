@@ -83,15 +83,14 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
         final idVenta = v['id_venta'] as int;
         final listaProductos = productosPorVenta[idVenta] ?? [];
 
-        double totalVenta = 0.0;
-        double totalCosto = 0.0;
+        // Usar el total de la tabla venta directamente
+        final totalVenta = (v['total'] as num?)?.toDouble() ?? 0.0;
 
+        // Calcular solo el costo sumando precios de compra
+        double totalCosto = 0.0;
         for (var p in listaProductos) {
-          final precioVenta =
-              (p['producto']?['precio_venta'] as num?)?.toDouble() ?? 0.0;
           final precioCompra =
               (p['producto']?['precio_compra'] as num?)?.toDouble() ?? 0.0;
-          totalVenta += precioVenta;
           totalCosto += precioCompra;
         }
 
@@ -124,7 +123,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     var query = Supabase.instance.client
         .from('venta')
         .select(
-          'id_venta, fecha, cliente(nombre_cliente), empleado(nombre_empleado), payment_method:payment_method_id(name, provider)',
+          'id_venta, fecha, total, cliente(nombre_cliente), empleado(nombre_empleado), payment_method:payment_method_id(name, provider)',
         );
 
     if (fechaInicio != null) {
@@ -678,8 +677,8 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
                 : Colors.green[50],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     '${ventasSeleccionadas.length} seleccionada(s)',
@@ -688,21 +687,34 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
                       fontSize: 14,
                     ),
                   ),
-                  Text(
-                    'Total: C\$${totalVentaSeleccionada.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.blue,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'Ganancia: C\$${gananciaSeleccionada.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'Total: C\$${totalVentaSeleccionada.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.blue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'Ganancia: C\$${gananciaSeleccionada.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -898,72 +910,6 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reportes de Ventas'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  if (_tabController.index == 0) {
-                    _exportarPdfGeneral();
-                  } else {
-                    _exportarPdfDetallado();
-                  }
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.red.shade600, Colors.red.shade800],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.red.shade900.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(
-                          Icons.picture_as_pdf_rounded,
-                          size: 18,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Exportar',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -1038,6 +984,18 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
             ],
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          if (_tabController.index == 0) {
+            _exportarPdfGeneral();
+          } else {
+            _exportarPdfDetallado();
+          }
+        },
+        backgroundColor: Colors.red,
+        icon: const Icon(Icons.picture_as_pdf),
+        label: const Text('Exportar'),
       ),
     );
   }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:abari/services/prediction_service.dart';
+import 'package:abari/widgets/prediccion_chart.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,14 +26,6 @@ class _HomeScreenState extends State<HomeScreen> {
   // Para gráficas
   double totalGanancias = 0.0;
   double totalGastos = 0.0;
-
-  // Predicciones
-  bool cargandoPredicciones = false;
-  bool servidorConectado = false;
-  List<Map<String, dynamic>> datosHistoricos = [];
-  List<Map<String, dynamic>> datosParaProphet = [];
-  List<Map<String, dynamic>> topProductos = [];
-  String? errorPrediccion;
 
   @override
   void initState() {
@@ -246,6 +238,11 @@ class _HomeScreenState extends State<HomeScreen> {
               isDark,
               fullWidth: true,
             ),
+
+            const SizedBox(height: 24),
+
+            // Sección de Predicción de Ventas
+            const PrediccionChart(),
 
             const SizedBox(height: 24),
 
@@ -688,75 +685,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  /// Sección de predicciones de demanda
-
-  Widget _buildInfoRow(String label, String value, IconData icon, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: color),
-        const SizedBox(width: 8),
-        Text(label, style: const TextStyle(fontSize: 13)),
-        const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPrediccionCard(
-    String titulo,
-    // String valor,
-    IconData icono,
-    Color color,
-    bool isDark,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: isDark ? 0.2 : 0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        children: [
-          Icon(icono, color: color, size: 24),
-          const SizedBox(height: 8),
-          /*Text(
-            valor,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: isDark ? _getLighterColor(color) : _getDarkerColor(color),
-            ),
-          ),*/
-          Text(
-            'unidades',
-            style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            titulo,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
     );
   }
 }
