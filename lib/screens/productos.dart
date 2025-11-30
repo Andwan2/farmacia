@@ -404,6 +404,7 @@ class _InventarioPageState extends State<ProductosScreen> {
   void _resetYCargar() {
     setState(() {
       productos = [];
+      stockPorTipo = {};
       _currentOffset = 0;
       hayMasProductos = true;
     });
@@ -549,9 +550,10 @@ class _InventarioPageState extends State<ProductosScreen> {
       }
       _currentOffset = offset + dataProd.length;
 
-      // Stock por código (conteo en memoria para los productos cargados)
-      final Map<String, int> stock = Map.from(stockPorTipo);
-      for (final item in dataProd) {
+      // Stock por código: recalcular desde todos los productos cargados
+      final allProducts = append ? [...productos, ...dataProd] : dataProd;
+      final Map<String, int> stock = {};
+      for (final item in allProducts) {
         final codigo = item['codigo']?.toString() ?? 'Sin código';
         stock[codigo] = (stock[codigo] ?? 0) + 1;
       }
