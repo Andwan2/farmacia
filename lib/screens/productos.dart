@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:abari/providers/theme_provider.dart';
-import 'package:abari/modal/editar_producto_modal.dart';
+import 'package:abari/models/producto_db.dart';
 
 class ProductosScreen extends StatefulWidget {
   const ProductosScreen({super.key});
@@ -13,22 +13,19 @@ class ProductosScreen extends StatefulWidget {
 }
 
 class _InventarioPageState extends State<ProductosScreen> {
-  List<dynamic> productos = [];
-  Map<int, Map<String, dynamic>> presentaciones =
-      {}; // id_presentacion -> {descripcion}
-  Map<int, Map<String, dynamic>> unidadesMedida =
-      {}; // id -> {nombre, abreviatura}
-  Map<String, int> stockPorTipo = {};
-  List<String> categorias = []; // Lista de categorías únicas
+  List<ProductoGrupo> productos = [];
+  Map<int, String> categorias = {}; // id -> nombre de categoría
+  Map<int, String> presentaciones = {}; // id_presentacion -> descripcion
+  Map<int, String> unidadesAbrev = {}; // id_unidad_medida -> abreviatura
   String busqueda = '';
   bool cargando = true;
   bool cargandoMas = false;
   bool hayMasProductos = true;
   bool mostrarEliminados = false;
 
-  // Paginación
+  // Paginación por cursor
   static const int _pageSize = 50;
-  int _currentOffset = 0;
+  String? _cursor;
   final ScrollController _scrollController = ScrollController();
 
   // Debounce para búsqueda
@@ -36,16 +33,12 @@ class _InventarioPageState extends State<ProductosScreen> {
   String _ultimaBusqueda = '';
 
   // Filtros
-  List<String> filtrosPresentacion = []; // Múltiples presentaciones
-  List<String> filtrosCategorias = []; // Múltiples categorías
-  String ordenarPor =
-      'nombre'; // nombre, precio_venta, precio_compra, vencimiento
+  List<int> filtrosCategoriaIds = []; // IDs de categorías seleccionadas
+  String ordenarPor = 'nombre'; // nombre, vencimiento
 
   // Contador de filtros activos
   int get filtrosActivos {
-    int count = 0;
-    count += filtrosPresentacion.length;
-    count += filtrosCategorias.length;
+    int count = filtrosCategoriaIds.length;
     if (ordenarPor != 'nombre') count++;
     return count;
   }
@@ -71,8 +64,7 @@ class _InventarioPageState extends State<ProductosScreen> {
   // Mostrar modal de filtros
   void _mostrarFiltros(BuildContext context) {
     // Variables temporales para los filtros
-    List<String> tempFiltrosPresentacion = List.from(filtrosPresentacion);
-    List<String> tempFiltrosCategorias = List.from(filtrosCategorias);
+    List<int> tempFiltrosCategoriaIds = List.from(filtrosCategoriaIds);
     String tempOrdenarPor = ordenarPor;
 
     showModalBottomSheet(
@@ -84,14 +76,6 @@ class _InventarioPageState extends State<ProductosScreen> {
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
-            // Obtener presentaciones únicas
-            final presentacionesUnicas =
-                presentaciones.values
-                    .map((p) => p['descripcion'] as String)
-                    .toSet()
-                    .toList()
-                  ..sort();
-
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -120,8 +104,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                       TextButton(
                         onPressed: () {
                           setModalState(() {
-                            tempFiltrosPresentacion.clear();
-                            tempFiltrosCategorias.clear();
+                            tempFiltrosCategoriaIds.clear();
                             tempOrdenarPor = 'nombre';
                           });
                         },
@@ -151,72 +134,27 @@ class _InventarioPageState extends State<ProductosScreen> {
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: categorias.map((cat) {
-                              final isSelected = tempFiltrosCategorias.contains(
-                                cat,
-                              );
+                            children: categorias.entries.map((entry) {
+                              final isSelected = tempFiltrosCategoriaIds.contains(entry.key);
                               return FilterChip(
-                                label: Text(cat),
+                                label: Text(entry.value),
                                 selected: isSelected,
                                 onSelected: (selected) {
                                   setModalState(() {
                                     if (selected) {
-                                      tempFiltrosCategorias.add(cat);
+                                      tempFiltrosCategoriaIds.add(entry.key);
                                     } else {
-                                      tempFiltrosCategorias.remove(cat);
+                                      tempFiltrosCategoriaIds.remove(entry.key);
                                     }
                                   });
                                 },
-                                selectedColor: Theme.of(
-                                  context,
-                                ).colorScheme.secondaryContainer,
-                                checkmarkColor: Theme.of(
-                                  context,
-                                ).colorScheme.secondary,
+                                selectedColor: Theme.of(context).colorScheme.secondaryContainer,
+                                checkmarkColor: Theme.of(context).colorScheme.secondary,
                               );
                             }).toList(),
                           ),
                           const SizedBox(height: 24),
                         ],
-
-                        // Filtro por Presentación (múltiple)
-                        const Text(
-                          'Presentación',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: presentacionesUnicas.map((pres) {
-                            final isSelected = tempFiltrosPresentacion.contains(
-                              pres,
-                            );
-                            return FilterChip(
-                              label: Text(pres),
-                              selected: isSelected,
-                              onSelected: (selected) {
-                                setModalState(() {
-                                  if (selected) {
-                                    tempFiltrosPresentacion.add(pres);
-                                  } else {
-                                    tempFiltrosPresentacion.remove(pres);
-                                  }
-                                });
-                              },
-                              selectedColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 24),
 
                         // Ordenar por
                         const Text(
@@ -237,70 +175,17 @@ class _InventarioPageState extends State<ProductosScreen> {
                               onSelected: (selected) {
                                 setModalState(() => tempOrdenarPor = 'nombre');
                               },
-                              selectedColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
+                              selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                              checkmarkColor: Theme.of(context).colorScheme.primary,
                             ),
                             FilterChip(
                               label: const Text('Vencimiento'),
                               selected: tempOrdenarPor == 'vencimiento',
                               onSelected: (selected) {
-                                setModalState(
-                                  () => tempOrdenarPor = 'vencimiento',
-                                );
+                                setModalState(() => tempOrdenarPor = 'vencimiento');
                               },
-                              selectedColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                            ),
-                            FilterChip(
-                              label: const Text('Stock'),
-                              selected: tempOrdenarPor == 'stock',
-                              onSelected: (selected) {
-                                setModalState(() => tempOrdenarPor = 'stock');
-                              },
-                              selectedColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                            ),
-                            FilterChip(
-                              label: const Text('Más reciente'),
-                              selected: tempOrdenarPor == 'agregado_reciente',
-                              onSelected: (selected) {
-                                setModalState(
-                                  () => tempOrdenarPor = 'agregado_reciente',
-                                );
-                              },
-                              selectedColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                            ),
-                            FilterChip(
-                              label: const Text('Más antiguo'),
-                              selected: tempOrdenarPor == 'agregado_antiguo',
-                              onSelected: (selected) {
-                                setModalState(
-                                  () => tempOrdenarPor = 'agregado_antiguo',
-                                );
-                              },
-                              selectedColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
+                              selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                              checkmarkColor: Theme.of(context).colorScheme.primary,
                             ),
                           ],
                         ),
@@ -313,9 +198,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                               child: OutlinedButton(
                                 onPressed: () => Navigator.pop(context),
                                 style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
                                 ),
                                 child: const Text('Cerrar'),
                               ),
@@ -326,12 +209,10 @@ class _InventarioPageState extends State<ProductosScreen> {
                               child: ElevatedButton(
                                 onPressed: () {
                                   final cambioFiltros =
-                                      filtrosPresentacion != tempFiltrosPresentacion ||
-                                      filtrosCategorias != tempFiltrosCategorias ||
+                                      !_listEquals(filtrosCategoriaIds, tempFiltrosCategoriaIds) ||
                                       ordenarPor != tempOrdenarPor;
                                   setState(() {
-                                    filtrosPresentacion = tempFiltrosPresentacion;
-                                    filtrosCategorias = tempFiltrosCategorias;
+                                    filtrosCategoriaIds = tempFiltrosCategoriaIds;
                                     ordenarPor = tempOrdenarPor;
                                   });
                                   Navigator.pop(context);
@@ -340,9 +221,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                                   }
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
                                   backgroundColor: Colors.black,
                                   foregroundColor: Colors.white,
                                 ),
@@ -364,6 +243,14 @@ class _InventarioPageState extends State<ProductosScreen> {
         );
       },
     );
+  }
+
+  bool _listEquals<T>(List<T> a, List<T> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   @override
@@ -404,65 +291,62 @@ class _InventarioPageState extends State<ProductosScreen> {
   void _resetYCargar() {
     setState(() {
       productos = [];
-      stockPorTipo = {};
-      _currentOffset = 0;
+      _cursor = null;
       hayMasProductos = true;
     });
     cargarDatos();
   }
 
   Future<void> _cargarDatosIniciales() async {
-    await _cargarCatalogos();
+    await _cargarCategorias();
     await cargarDatos();
   }
 
-  Future<void> _cargarCatalogos() async {
+  Future<void> _cargarCategorias() async {
     final client = Supabase.instance.client;
     try {
+      // Cargar categorías, presentaciones y unidades en paralelo
       final results = await Future.wait([
-        client.from('presentacion').select('id_presentacion,descripcion'),
-        client.from('unidad_medida').select('id,nombre,abreviatura'),
-        client.from('producto').select('categoria').not('categoria', 'is', null),
+        client.from('categoria').select('id_categoria, nombre').order('nombre'),
+        client.from('presentacion').select('id_presentacion, descripcion'),
+        client.from('unidad_medida').select('id, abreviatura'),
       ]);
 
+      // Procesar categorías
+      final Map<int, String> catMap = {};
+      for (final item in (results[0] as List)) {
+        final id = item['id_categoria'] as int?;
+        final nombre = item['nombre'] as String?;
+        if (id != null && nombre != null) {
+          catMap[id] = nombre;
+        }
+      }
+
       // Procesar presentaciones
-      final dataPres = results[0] as List;
-      final Map<int, Map<String, dynamic>> presMap = {};
-      for (final p in dataPres) {
-        final id = p['id_presentacion'] as int?;
+      final Map<int, String> presMap = {};
+      for (final item in (results[1] as List)) {
+        final id = item['id_presentacion'] as int?;
+        final desc = item['descripcion'] as String?;
         if (id != null) {
-          presMap[id] = {'descripcion': p['descripcion']};
+          presMap[id] = desc ?? '';
         }
       }
 
-      // Procesar unidades de medida
-      final dataUnidades = results[1] as List;
-      final Map<int, Map<String, dynamic>> unidadesMap = {};
-      for (final u in dataUnidades) {
-        final id = u['id'] as int?;
+      // Procesar unidades
+      final Map<int, String> unidMap = {};
+      for (final item in (results[2] as List)) {
+        final id = item['id'] as int?;
+        final abrev = item['abreviatura'] as String?;
         if (id != null) {
-          unidadesMap[id] = {
-            'nombre': u['nombre'],
-            'abreviatura': u['abreviatura'],
-          };
-        }
-      }
-
-      // Extraer categorías únicas
-      final dataCat = results[2] as List;
-      final Set<String> categoriasSet = {};
-      for (final item in dataCat) {
-        final cat = item['categoria']?.toString();
-        if (cat != null && cat.isNotEmpty) {
-          categoriasSet.add(cat);
+          unidMap[id] = abrev ?? '';
         }
       }
 
       if (mounted) {
         setState(() {
+          categorias = catMap;
           presentaciones = presMap;
-          unidadesMedida = unidadesMap;
-          categorias = categoriasSet.toList()..sort();
+          unidadesAbrev = unidMap;
         });
       }
     } catch (e) {
@@ -484,88 +368,38 @@ class _InventarioPageState extends State<ProductosScreen> {
     final client = Supabase.instance.client;
 
     try {
-      // Construir query con filtros en servidor
-      var query = client.from('producto').select();
-
-      // Filtro por estado en servidor
-      if (mostrarEliminados) {
-        query = query.or('estado.eq.Vendido,estado.eq.Removido');
-      } else {
-        query = query.or('estado.is.null,estado.eq.Disponible');
-      }
-
-      // Búsqueda en servidor (ILIKE)
-      if (busqueda.isNotEmpty) {
-        query = query.ilike('nombre_producto', '%$busqueda%');
-      }
-
-      // Filtro por presentación en servidor
-      if (filtrosPresentacion.isNotEmpty) {
-        final presIds = presentaciones.entries
-            .where((e) => filtrosPresentacion.contains(e.value['descripcion']))
-            .map((e) => e.key)
-            .toList();
-        if (presIds.isNotEmpty) {
-          query = query.inFilter('id_presentacion', presIds);
-        }
-      }
-
-      // Filtro por categoría en servidor
-      if (filtrosCategorias.isNotEmpty) {
-        query = query.inFilter('categoria', filtrosCategorias);
-      }
-
-      // Paginación y ordenamiento (order + range al final)
-      final offset = append ? _currentOffset : 0;
+      // Usar la función RPC get_productos_agrupados
+      final String? estado = mostrarEliminados ? 'Vendido' : 'Disponible';
       
-      late final List<dynamic> data;
-      switch (ordenarPor) {
-        case 'vencimiento':
-          data = await query
-              .order('fecha_vencimiento', ascending: true, nullsFirst: false)
-              .range(offset, offset + _pageSize - 1);
-          break;
-        case 'agregado_reciente':
-          data = await query
-              .order('fecha_agregado', ascending: false)
-              .range(offset, offset + _pageSize - 1);
-          break;
-        case 'agregado_antiguo':
-          data = await query
-              .order('fecha_agregado', ascending: true)
-              .range(offset, offset + _pageSize - 1);
-          break;
-        case 'nombre':
-        default:
-          data = await query
-              .order('nombre_producto', ascending: true)
-              .range(offset, offset + _pageSize - 1);
+      final data = await client.rpc('get_productos_agrupados', params: {
+        'p_limit': _pageSize,
+        'p_cursor': append ? _cursor : null,
+        'p_estado': estado,
+        'p_categoria_ids': filtrosCategoriaIds.isNotEmpty ? filtrosCategoriaIds : null,
+        'p_busqueda': busqueda.isNotEmpty ? busqueda : null,
+      });
+
+      final List<ProductoGrupo> nuevosProductos = (data as List)
+          .map((json) => ProductoGrupo.fromJson(json))
+          .toList();
+
+      // Actualizar cursor para siguiente página
+      if (nuevosProductos.isNotEmpty) {
+        _cursor = nuevosProductos.last.codigo;
       }
-
-      final List<dynamic> dataProd = data;
-
-      // Actualizar offset y verificar si hay más
-      if (dataProd.length < _pageSize) {
+      
+      // Verificar si hay más productos
+      if (nuevosProductos.length < _pageSize) {
         hayMasProductos = false;
-      }
-      _currentOffset = offset + dataProd.length;
-
-      // Stock por código: recalcular desde todos los productos cargados
-      final allProducts = append ? [...productos, ...dataProd] : dataProd;
-      final Map<String, int> stock = {};
-      for (final item in allProducts) {
-        final codigo = item['codigo']?.toString() ?? 'Sin código';
-        stock[codigo] = (stock[codigo] ?? 0) + 1;
       }
 
       if (mounted) {
         setState(() {
           if (append) {
-            productos.addAll(dataProd);
+            productos.addAll(nuevosProductos);
           } else {
-            productos = dataProd;
+            productos = nuevosProductos;
           }
-          stockPorTipo = stock;
           cargando = false;
         });
       }
@@ -593,10 +427,10 @@ class _InventarioPageState extends State<ProductosScreen> {
     final idPres = producto['id_presentacion'] as int?;
     final idUnidad = producto['id_unidad_medida'] as int?;
     final presentacion = idPres != null
-        ? (presentaciones[idPres]?['descripcion'] ?? '—')
+        ? (presentaciones[idPres] ?? '—')
         : '—';
     final abreviatura = idUnidad != null
-        ? (unidadesMedida[idUnidad]?['abreviatura'] ?? '')
+        ? (unidadesAbrev[idUnidad] ?? '')
         : '';
     final fechaStr = producto['fecha_vencimiento']?.toString();
     final fecha = fechaStr != null ? DateTime.tryParse(fechaStr) : null;
@@ -1294,121 +1128,19 @@ class _InventarioPageState extends State<ProductosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Agrupar productos por tipo y rango de vencimiento
-    final Map<String, List<dynamic>> gruposPorCodigo = {};
-
-    // Primero agrupar todos los productos por código y estado
+    // Los productos ya vienen agrupados desde la RPC
+    // Agrupar por categoría para mostrar
+    final Map<String, List<ProductoGrupo>> productosPorCategoria = {};
     for (final p in productos) {
-      final codigo = p['codigo']?.toString() ?? 'Sin código';
-      final estado = p['estado'] as String? ?? 'Disponible';
-      final clave = '${codigo}_$estado'; // Agrupar por código Y estado
-      if (!gruposPorCodigo.containsKey(clave)) {
-        gruposPorCodigo[clave] = [];
+      final cat = p.categoria;
+      if (!productosPorCategoria.containsKey(cat)) {
+        productosPorCategoria[cat] = [];
       }
-      gruposPorCodigo[clave]!.add(p);
+      productosPorCategoria[cat]!.add(p);
     }
 
-    // Ahora separar por rangos de vencimiento si hay diferencias > 60 días
-    final List<Map<String, dynamic>> productosAgrupados = [];
-
-    for (final codigoKey in gruposPorCodigo.keys) {
-      final productosDelCodigo = gruposPorCodigo[codigoKey]!;
-
-      // Ordenar por fecha de vencimiento
-      productosDelCodigo.sort((a, b) {
-        final fechaStrA = a['fecha_vencimiento']?.toString();
-        final fechaStrB = b['fecha_vencimiento']?.toString();
-        final fechaA = fechaStrA != null ? DateTime.tryParse(fechaStrA) : null;
-        final fechaB = fechaStrB != null ? DateTime.tryParse(fechaStrB) : null;
-        if (fechaA == null && fechaB == null) return 0;
-        if (fechaA == null) return 1;
-        if (fechaB == null) return -1;
-        return fechaA.compareTo(fechaB);
-      });
-
-      // Crear grupos por rango de vencimiento
-      final List<List<dynamic>> rangosPorVencimiento = [];
-      List<dynamic> grupoActual = [productosDelCodigo[0]];
-      final fechaBaseStr = productosDelCodigo[0]['fecha_vencimiento']
-          ?.toString();
-      DateTime? fechaBaseGrupo = fechaBaseStr != null
-          ? DateTime.tryParse(fechaBaseStr)
-          : null;
-
-      for (int i = 1; i < productosDelCodigo.length; i++) {
-        final producto = productosDelCodigo[i];
-        final fechaProductoStr = producto['fecha_vencimiento']?.toString();
-        final fechaProducto = fechaProductoStr != null
-            ? DateTime.tryParse(fechaProductoStr)
-            : null;
-        final diferenciaDias = (fechaProducto != null && fechaBaseGrupo != null)
-            ? fechaProducto.difference(fechaBaseGrupo).inDays
-            : 0;
-
-        if (diferenciaDias <= 60) {
-          // Mismo grupo
-          grupoActual.add(producto);
-        } else {
-          // Nuevo grupo
-          rangosPorVencimiento.add(grupoActual);
-          grupoActual = [producto];
-          fechaBaseGrupo = fechaProducto;
-        }
-      }
-      rangosPorVencimiento.add(grupoActual);
-
-      // Crear un representante para cada grupo
-      for (final grupo in rangosPorVencimiento) {
-        final representante = Map<String, dynamic>.from(grupo[0]);
-
-        // Verificar si es producto a granel
-        final idPresentacion = representante['id_presentacion'] as int?;
-        final descripcionPresentacion = idPresentacion != null
-            ? (presentaciones[idPresentacion]?['descripcion']
-                      ?.toString()
-                      .toLowerCase() ??
-                  '')
-            : '';
-        final esAGranel = descripcionPresentacion == 'a granel';
-
-        if (esAGranel) {
-          // Para productos a granel: stock = cantidad del producto (como double)
-          final cantidad = representante['cantidad'] as num? ?? 0;
-          representante['_stock_grupo'] = cantidad.toDouble();
-          representante['_es_granel'] = true;
-        } else {
-          // Para otros productos: stock = cantidad de registros en el grupo
-          representante['_stock_grupo'] = grupo.length.toDouble();
-          representante['_es_granel'] = false;
-        }
-        final fechasValidas = grupo
-            .map((p) {
-              final fStr = p['fecha_vencimiento']?.toString();
-              return fStr != null ? DateTime.tryParse(fStr) : null;
-            })
-            .whereType<DateTime>()
-            .toList();
-        if (fechasValidas.isNotEmpty) {
-          representante['_fecha_min'] = fechasValidas.reduce(
-            (a, b) => a.isBefore(b) ? a : b,
-          );
-          representante['_fecha_max'] = fechasValidas.reduce(
-            (a, b) => a.isAfter(b) ? a : b,
-          );
-        }
-        productosAgrupados.add(representante);
-      }
-    }
-
-    // Los filtros ya se aplican en el servidor, solo ordenar por stock si es necesario
-    var listaFiltrada = productosAgrupados.toList();
-    if (ordenarPor == 'stock') {
-      listaFiltrada.sort((a, b) {
-        final stockA = (a['_stock_grupo'] as num?)?.toInt() ?? 1;
-        final stockB = (b['_stock_grupo'] as num?)?.toInt() ?? 1;
-        return stockB.compareTo(stockA);
-      });
-    }
+    // Ordenar categorías alfabéticamente
+    final categoriasOrdenadas = productosPorCategoria.keys.toList()..sort();
 
     return Scaffold(
       body: SafeArea(
@@ -1483,35 +1215,24 @@ class _InventarioPageState extends State<ProductosScreen> {
                       ],
                     ),
                     // Chips de filtros activos
-                    if (filtrosPresentacion.isNotEmpty ||
-                        filtrosCategorias.isNotEmpty ||
+                    if (filtrosCategoriaIds.isNotEmpty ||
                         ordenarPor != 'nombre') ...[
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          ...filtrosCategorias.map(
-                            (cat) => Chip(
-                              label: Text(cat),
+                          ...filtrosCategoriaIds.map(
+                            (catId) => Chip(
+                              label: Text(categorias[catId] ?? 'Categoría $catId'),
                               backgroundColor: Theme.of(
                                 context,
                               ).colorScheme.secondaryContainer,
                               onDeleted: () {
                                 setState(() {
-                                  filtrosCategorias.remove(cat);
+                                  filtrosCategoriaIds.remove(catId);
                                 });
-                              },
-                              deleteIcon: const Icon(Icons.close, size: 18),
-                            ),
-                          ),
-                          ...filtrosPresentacion.map(
-                            (pres) => Chip(
-                              label: Text(pres),
-                              onDeleted: () {
-                                setState(() {
-                                  filtrosPresentacion.remove(pres);
-                                });
+                                _resetYCargar();
                               },
                               deleteIcon: const Icon(Icons.close, size: 18),
                             ),
@@ -1521,8 +1242,10 @@ class _InventarioPageState extends State<ProductosScreen> {
                               label: Text(
                                 'Orden: ${_getNombreOrden(ordenarPor)}',
                               ),
-                              onDeleted: () =>
-                                  setState(() => ordenarPor = 'nombre'),
+                              onDeleted: () {
+                                setState(() => ordenarPor = 'nombre');
+                                _resetYCargar();
+                              },
                               deleteIcon: const Icon(Icons.close, size: 18),
                             ),
                         ],
@@ -1583,16 +1306,6 @@ class _InventarioPageState extends State<ProductosScreen> {
                           final colorScheme = Theme.of(context).colorScheme;
                           final isDark = themeProvider.isDarkMode;
 
-                          // Agrupar por categoría
-                          final Map<String, List<dynamic>> porCategoria = {};
-                          for (final p in listaFiltrada) {
-                            final cat =
-                                p['categoria']?.toString() ?? 'Sin categoría';
-                            porCategoria.putIfAbsent(cat, () => []).add(p);
-                          }
-                          final categoriasOrdenadas = porCategoria.keys.toList()
-                            ..sort();
-
                           return ListView.builder(
                             controller: _scrollController,
                             padding: const EdgeInsets.only(bottom: 16),
@@ -1607,7 +1320,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                               }
                               final categoria = categoriasOrdenadas[catIndex];
                               final productosCategoria =
-                                  porCategoria[categoria]!;
+                                  productosPorCategoria[categoria]!;
 
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1683,57 +1396,21 @@ class _InventarioPageState extends State<ProductosScreen> {
 
   Widget _buildProductoCard(
     BuildContext context,
-    dynamic p,
+    ProductoGrupo p,
     ColorScheme colorScheme,
     bool isDark,
   ) {
-    final nombre = p['nombre_producto']?.toString() ?? 'Sin nombre';
-    final idPres = p['id_presentacion'] as int?;
-    final codigo = p['codigo']?.toString() ?? 'Sin código';
-    final cantidad = p['cantidad']?.toString() ?? '';
-    final idUnidad = p['id_unidad_medida'] as int?;
-    final presentacion = idPres != null
-        ? (presentaciones[idPres]?['descripcion'] ?? '')
-        : '';
-    final abreviatura = idUnidad != null
-        ? (unidadesMedida[idUnidad]?['abreviatura'] ?? '')
-        : '';
-    final fechaStr = p['fecha_vencimiento']?.toString();
-    final fecha = fechaStr != null ? DateTime.tryParse(fechaStr) : null;
-    final diasRestantes = fecha != null
-        ? fecha.difference(DateTime.now()).inDays
-        : 0;
-    final stockGrupoRaw = p['_stock_grupo'] as num? ?? 1;
-    final esGranel = p['_es_granel'] as bool? ?? false;
-    final estado = p['estado'] as String?;
-    final precioCompra = p['precio_compra'] as num?;
-    final precioVenta = p['precio_venta'] as num?;
-
-    // Formatear stock: redondear a .5 o entero, mostrar decimal solo si no es .0
-    String formatearStock(num valor) {
-      // Redondear a .5 más cercano
-      final redondeado = (valor * 2).round() / 2;
-      if (redondeado == redondeado.toInt()) {
-        return redondeado.toInt().toString();
-      } else {
-        return redondeado.toStringAsFixed(1);
-      }
-    }
-
-    final stockFormateado = formatearStock(stockGrupoRaw);
-    final stockGrupo = stockGrupoRaw.toDouble();
-
-    // Texto del stock con unidad de medida si es a granel
-    final stockTexto = esGranel
-        ? '$stockFormateado $abreviatura'
-        : stockFormateado;
-
-    // Construir descripción de presentación compacta
-    final presentacionCompleta = [
-      if (presentacion.isNotEmpty) presentacion,
-      if (cantidad.isNotEmpty) cantidad,
-      if (abreviatura.isNotEmpty) abreviatura,
-    ].join(' ');
+    final nombre = p.nombreProducto;
+    final codigo = p.codigo;
+    final fecha = p.fechaVencimiento;
+    final diasRestantes = p.diasParaVencer;
+    final stock = p.stock;
+    final estado = p.estado;
+    final precioCompra = p.precioCompra;
+    final precioVenta = p.precioVenta;
+    final stockTexto = p.stockTexto;
+    final presentacion = p.presentacionFormateada;
+    final esGranel = p.esGranel;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -1773,9 +1450,9 @@ class _InventarioPageState extends State<ProductosScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: stockGrupo > 5
+                  color: stock > 5
                       ? Colors.blue[600]
-                      : stockGrupo > 0
+                      : stock > 0
                       ? Colors.orange[600]
                       : Colors.red[600],
                   borderRadius: BorderRadius.circular(6),
@@ -1812,7 +1489,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                   child: Column(
                     children: [
                       Text(
-                        esGranel ? 'x $abreviatura' : 'x unidad',
+                        'Precio',
                         style: TextStyle(fontSize: 9, color: Colors.green[100]),
                       ),
                       Text(
@@ -1830,19 +1507,20 @@ class _InventarioPageState extends State<ProductosScreen> {
           ),
           const SizedBox(height: 6),
 
-          // Fila 2: Presentación
-          if (presentacionCompleta.isNotEmpty)
+          // Fila 2: Presentación (si existe)
+          if (presentacion.isNotEmpty) ...[
+            const SizedBox(height: 4),
             Row(
               children: [
                 Icon(
-                  Icons.inventory_2_outlined,
+                  esGranel ? Icons.scale : Icons.inventory_2_outlined,
                   size: 14,
                   color: colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 4),
                 Flexible(
                   child: Text(
-                    presentacionCompleta,
+                    presentacion,
                     style: TextStyle(
                       fontSize: 12,
                       color: colorScheme.onSurfaceVariant,
@@ -1852,8 +1530,9 @@ class _InventarioPageState extends State<ProductosScreen> {
                 ),
               ],
             ),
+          ],
 
-          // Fila 2.5: Código del producto
+          // Fila 3: Código del producto
           const SizedBox(height: 4),
           Row(
             children: [
@@ -1877,9 +1556,8 @@ class _InventarioPageState extends State<ProductosScreen> {
             ],
           ),
 
-          // Fila 3: Precio compra (si existe) + Estado (si eliminado)
-          if (precioCompra != null ||
-              (mostrarEliminados && estado != null)) ...[
+          // Fila 4: Precio compra (si existe) + Estado (si eliminado)
+          if (precioCompra != null || mostrarEliminados) ...[
             const SizedBox(height: 6),
             Row(
               children: [
@@ -1896,7 +1574,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                   ),
                 ],
                 const Spacer(),
-                if (mostrarEliminados && estado != null)
+                if (mostrarEliminados)
                   _buildBadge(
                     icon: estado == 'Vendido'
                         ? Icons.sell
@@ -1925,11 +1603,13 @@ class _InventarioPageState extends State<ProductosScreen> {
               else
                 const Expanded(child: SizedBox()),
 
-              // Acciones
+              // Acciones (TODO: Actualizar para cargar producto individual)
               if (!mostrarEliminados) ...[
                 InkWell(
-                  onTap: () async {
-                    await mostrarEditarProducto(context, p, cargarDatos);
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Función de edición en actualización')),
+                    );
                   },
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
@@ -1943,7 +1623,11 @@ class _InventarioPageState extends State<ProductosScreen> {
                 ),
                 const SizedBox(width: 4),
                 InkWell(
-                  onTap: () => eliminarProducto(context, p),
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Función de eliminación en actualización')),
+                    );
+                  },
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
                     padding: const EdgeInsets.all(6),

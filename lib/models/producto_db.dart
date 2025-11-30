@@ -172,6 +172,11 @@ class ProductoGrupo {
   final DateTime? fechaAgregado;
   final int? categoriaId;
   final String? categoriaNombre;
+  final int? idPresentacion;
+  final String? presentacionDescripcion;
+  final int? idUnidadMedida;
+  final String? unidadMedidaNombre;
+  final String? unidadMedidaAbreviatura;
 
   ProductoGrupo({
     required this.codigo,
@@ -184,6 +189,11 @@ class ProductoGrupo {
     this.fechaAgregado,
     this.categoriaId,
     this.categoriaNombre,
+    this.idPresentacion,
+    this.presentacionDescripcion,
+    this.idUnidadMedida,
+    this.unidadMedidaNombre,
+    this.unidadMedidaAbreviatura,
   });
 
   factory ProductoGrupo.fromJson(Map<String, dynamic> json) {
@@ -200,8 +210,13 @@ class ProductoGrupo {
       fechaAgregado: json['fecha_agregado'] != null
           ? DateTime.tryParse(json['fecha_agregado'].toString())
           : null,
-      categoriaId: json['categoria_id'] as int?,
+      categoriaId: json['id_categoria'] as int?,
       categoriaNombre: json['categoria_nombre'] as String?,
+      idPresentacion: json['id_presentacion'] as int?,
+      presentacionDescripcion: json['presentacion_descripcion'] as String?,
+      idUnidadMedida: json['id_unidad_medida'] as int?,
+      unidadMedidaNombre: json['unidad_medida_nombre'] as String?,
+      unidadMedidaAbreviatura: json['unidad_medida_abreviatura'] as String?,
     );
   }
 
@@ -211,14 +226,33 @@ class ProductoGrupo {
     return fechaVencimiento!.difference(DateTime.now()).inDays;
   }
 
-  /// Stock formateado
+  /// Stock formateado con unidad si es a granel
   String get stockTexto {
     final redondeado = (stock * 2).round() / 2;
-    return redondeado == redondeado.toInt()
+    final stockStr = redondeado == redondeado.toInt()
         ? redondeado.toInt().toString()
         : redondeado.toStringAsFixed(1);
+    if (esGranel && unidadMedidaAbreviatura != null) {
+      return '$stockStr ${unidadMedidaAbreviatura!}';
+    }
+    return stockStr;
   }
 
   /// Categoría para mostrar
   String get categoria => categoriaNombre ?? 'Sin categoría';
+
+  /// Si es producto a granel
+  bool get esGranel =>
+      presentacionDescripcion?.toLowerCase() == 'a granel';
+
+  /// Descripción de presentación formateada
+  String get presentacionFormateada {
+    if (presentacionDescripcion == null) return '';
+    final partes = <String>[];
+    partes.add(presentacionDescripcion!);
+    if (stock > 0 && unidadMedidaAbreviatura != null && !esGranel) {
+      partes.add('${stock.toStringAsFixed(0)} ${unidadMedidaAbreviatura!}');
+    }
+    return partes.join(' - ');
+  }
 }
