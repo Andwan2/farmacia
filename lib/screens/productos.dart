@@ -419,47 +419,20 @@ class _InventarioPageState extends State<ProductosScreen> {
 
   Future<void> eliminarProducto(
     BuildContext context,
-    Map<String, dynamic> producto,
+    ProductoGrupo producto,
   ) async {
-    final nombre = producto['nombre_producto']?.toString() ?? 'Sin nombre';
-    final codigo = producto['codigo']?.toString() ?? 'Sin código';
-    final cantidad = producto['cantidad']?.toString() ?? '';
-    final idPres = producto['id_presentacion'] as int?;
-    final idUnidad = producto['id_unidad_medida'] as int?;
-    final presentacion = idPres != null
-        ? (presentaciones[idPres] ?? '—')
-        : '—';
-    final abreviatura = idUnidad != null
-        ? (unidadesAbrev[idUnidad] ?? '')
-        : '';
-    final fechaStr = producto['fecha_vencimiento']?.toString();
-    final fecha = fechaStr != null ? DateTime.tryParse(fechaStr) : null;
-    final stockGrupo = (producto['_stock_grupo'] as num?)?.toInt() ?? 1;
-    final esGranel = producto['_es_granel'] as bool? ?? false;
-    final codigoOriginal = producto['codigo']?.toString() ?? 'Sin código';
-    final fechaVencimientoOriginal = producto['fecha_vencimiento']
-        ?.toString()
-        .split('T')
-        .first;
-    final estadoOriginal = producto['estado'] as String? ?? 'Disponible';
-
-    // Texto del stock con unidad de medida si es a granel
-    final stockTexto = esGranel
-        ? '$stockGrupo $abreviatura'
-        : '$stockGrupo unidades';
-
-    bool eliminarTodos = true;
-    int cantidadEliminar = 1;
-    final cantidadController = TextEditingController(text: '1');
-    String estadoSeleccionado = 'Vendido'; // Vendido o Removido
+    final nombre = producto.nombreProducto;
+    final codigo = producto.codigo;
+    final presentacion = producto.presentacionDescripcion ?? '—';
+    final stockTexto = producto.stockTexto;
+    final fecha = producto.fechaVencimiento;
+    String estadoSeleccionado = 'Vendido';
 
     final resultado = await showDialog<Map<String, dynamic>?>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
-          builder: (context, setState) {
-            final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
-
+          builder: (context, setDialogState) {
             return AlertDialog(
               title: const Text('Confirmar eliminación'),
               content: SingleChildScrollView(
@@ -477,407 +450,42 @@ class _InventarioPageState extends State<ProductosScreen> {
                     _buildInfoRow('Nombre:', nombre),
                     _buildInfoRow('Código:', codigo),
                     _buildInfoRow('Presentación:', presentacion),
-                    _buildInfoRow('Cantidad:', '$cantidad $abreviatura'),
                     _buildInfoRow('Stock:', stockTexto),
                     _buildInfoRow(
-                      'Fecha de vencimiento:',
+                      'Vencimiento:',
                       fecha?.toIso8601String().split('T').first ?? 'Sin fecha',
                     ),
                     const SizedBox(height: 12),
                     const Divider(),
                     const SizedBox(height: 12),
-                    // Opciones de eliminación
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: isDarkMode
-                            ? Colors.grey[800]
-                            : Colors.orange.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isDarkMode
-                              ? Colors.grey[600]!
-                              : Colors.orange.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.warning_amber_rounded,
-                                color: isDarkMode
-                                    ? Colors.orange[300]
-                                    : Colors.orange[700],
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              const Expanded(
-                                child: Text(
-                                  'Opciones de eliminación',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          // Para productos a granel, mostrar mensaje informativo
-                          if (esGranel)
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: isDarkMode
-                                    ? Colors.blue.withOpacity(0.1)
-                                    : Colors.blue.withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.info_outline,
-                                    size: 16,
-                                    color: Colors.blue[700],
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'Para productos a granel, se reducirá la cantidad del producto.',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.blue[800],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          if (!esGranel)
-                            RadioListTile<bool>(
-                              title: const Text(
-                                'Eliminar todos los productos del grupo',
-                                style: TextStyle(fontSize: 13),
-                              ),
-                              value: true,
-                              groupValue: eliminarTodos,
-                              onChanged: (value) {
-                                setState(() {
-                                  eliminarTodos = value!;
-                                });
-                              },
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          if (!esGranel)
-                            RadioListTile<bool>(
-                              title: const Text(
-                                'Eliminar cantidad específica',
-                                style: TextStyle(fontSize: 13),
-                              ),
-                              value: false,
-                              groupValue: eliminarTodos,
-                              onChanged: (value) {
-                                setState(() {
-                                  eliminarTodos = value!;
-                                });
-                              },
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          // Para productos a granel, mostrar campo de cantidad a reducir
-                          if (esGranel) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              'Cantidad a reducir (Máx: $stockGrupo $abreviatura)',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline),
-                                  onPressed: cantidadEliminar > 1
-                                      ? () {
-                                          setState(() {
-                                            cantidadEliminar--;
-                                            cantidadController.text =
-                                                cantidadEliminar.toString();
-                                          });
-                                        }
-                                      : null,
-                                  iconSize: 28,
-                                  color: isDarkMode
-                                      ? Colors.orange[300]
-                                      : Colors.orange,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 40,
-                                    minHeight: 40,
-                                  ),
-                                ),
-                                SizedBox(
-                                  width: 80,
-                                  child: TextField(
-                                    controller: cantidadController,
-                                    decoration: const InputDecoration(
-                                      border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 8,
-                                      ),
-                                      isDense: true,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    keyboardType: TextInputType.number,
-                                    onChanged: (value) {
-                                      final cantidad = int.tryParse(value) ?? 1;
-                                      setState(() {
-                                        cantidadEliminar = cantidad.clamp(
-                                          1,
-                                          stockGrupo,
-                                        );
-                                        cantidadController.text =
-                                            cantidadEliminar.toString();
-                                        cantidadController.selection =
-                                            TextSelection.fromPosition(
-                                              TextPosition(
-                                                offset: cantidadController
-                                                    .text
-                                                    .length,
-                                              ),
-                                            );
-                                      });
-                                    },
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.add_circle_outline),
-                                  onPressed: cantidadEliminar < stockGrupo
-                                      ? () {
-                                          setState(() {
-                                            cantidadEliminar++;
-                                            cantidadController.text =
-                                                cantidadEliminar.toString();
-                                          });
-                                        }
-                                      : null,
-                                  iconSize: 28,
-                                  color: isDarkMode
-                                      ? Colors.orange[300]
-                                      : Colors.orange,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 40,
-                                    minHeight: 40,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                          if (!esGranel && !eliminarTodos) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              'Cantidad a eliminar (Máx: $stockGrupo)',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline),
-                                  onPressed: cantidadEliminar > 1
-                                      ? () {
-                                          setState(() {
-                                            cantidadEliminar--;
-                                            cantidadController.text =
-                                                cantidadEliminar.toString();
-                                          });
-                                        }
-                                      : null,
-                                  iconSize: 28,
-                                  color: isDarkMode
-                                      ? Colors.orange[300]
-                                      : Colors.orange,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 40,
-                                    minHeight: 40,
-                                  ),
-                                ),
-                                SizedBox(
-                                  width: 80,
-                                  child: TextField(
-                                    controller: cantidadController,
-                                    decoration: const InputDecoration(
-                                      border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 8,
-                                      ),
-                                      isDense: true,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    keyboardType: TextInputType.number,
-                                    onChanged: (value) {
-                                      final cantidad = int.tryParse(value) ?? 1;
-                                      setState(() {
-                                        cantidadEliminar = cantidad.clamp(
-                                          1,
-                                          stockGrupo,
-                                        );
-                                        cantidadController.text =
-                                            cantidadEliminar.toString();
-                                        cantidadController.selection =
-                                            TextSelection.fromPosition(
-                                              TextPosition(
-                                                offset: cantidadController
-                                                    .text
-                                                    .length,
-                                              ),
-                                            );
-                                      });
-                                    },
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.add_circle_outline),
-                                  onPressed: cantidadEliminar < stockGrupo
-                                      ? () {
-                                          setState(() {
-                                            cantidadEliminar++;
-                                            cantidadController.text =
-                                                cantidadEliminar.toString();
-                                          });
-                                        }
-                                      : null,
-                                  iconSize: 28,
-                                  color: isDarkMode
-                                      ? Colors.orange[300]
-                                      : Colors.orange,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 40,
-                                    minHeight: 40,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Divider(),
-                    const SizedBox(height: 12),
-                    // Selector de estado
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: isDarkMode
-                            ? Colors.grey[850]
-                            : Colors.grey.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isDarkMode
-                              ? Colors.grey[700]!
-                              : Colors.grey.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.label_outline,
-                                color: isDarkMode
-                                    ? Colors.grey[400]
-                                    : Colors.grey[700],
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Motivo de eliminación',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          RadioListTile<String>(
-                            title: const Text(
-                              'Vendido',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                            subtitle: const Text(
-                              'El producto fue vendido',
-                              style: TextStyle(fontSize: 11),
-                            ),
-                            value: 'Vendido',
-                            groupValue: estadoSeleccionado,
-                            onChanged: (value) {
-                              setState(() {
-                                estadoSeleccionado = value!;
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          RadioListTile<String>(
-                            title: const Text(
-                              'Removido',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                            subtitle: const Text(
-                              'El producto fue descartado o retirado',
-                              style: TextStyle(fontSize: 11),
-                            ),
-                            value: 'Removido',
-                            groupValue: estadoSeleccionado,
-                            onChanged: (value) {
-                              setState(() {
-                                estadoSeleccionado = value!;
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
+                    // Selector de motivo
                     const Text(
-                      'Esta acción no se puede deshacer.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                        color: Colors.red,
-                      ),
+                      'Motivo de eliminación:',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    RadioListTile<String>(
+                      title: const Text('Vendido', style: TextStyle(fontSize: 13)),
+                      subtitle: const Text('El producto fue vendido', style: TextStyle(fontSize: 11)),
+                      value: 'Vendido',
+                      groupValue: estadoSeleccionado,
+                      onChanged: (value) => setDialogState(() => estadoSeleccionado = value!),
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                    RadioListTile<String>(
+                      title: const Text('Removido', style: TextStyle(fontSize: 13)),
+                      subtitle: const Text('El producto fue descartado', style: TextStyle(fontSize: 11)),
+                      value: 'Removido',
+                      groupValue: estadoSeleccionado,
+                      onChanged: (value) => setDialogState(() => estadoSeleccionado = value!),
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Se eliminarán todos los productos con código: $codigo',
+                      style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.orange),
                     ),
                   ],
                 ),
@@ -888,19 +496,8 @@ class _InventarioPageState extends State<ProductosScreen> {
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context, {
-                      'confirmar': true,
-                      'eliminarTodos': eliminarTodos,
-                      'cantidad': cantidadEliminar,
-                      'estado': estadoSeleccionado,
-                      'esGranel': esGranel,
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                  ),
+                  onPressed: () => Navigator.pop(context, {'confirmar': true, 'estado': estadoSeleccionado}),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
                   child: const Text('Eliminar'),
                 ),
               ],
@@ -912,164 +509,207 @@ class _InventarioPageState extends State<ProductosScreen> {
 
     if (resultado != null && resultado['confirmar'] == true) {
       final estadoFinal = resultado['estado'] as String;
-      final esProductoGranel = resultado['esGranel'] as bool? ?? false;
 
       try {
-        // Lógica especial para productos a granel
-        if (esProductoGranel) {
-          final cantidadReducir = resultado['cantidad'] as int;
-          final cantidadActual = producto['cantidad'] as num? ?? 0;
-          final nuevaCantidad = cantidadActual - cantidadReducir;
+        // Actualizar estado de todos los productos con este código
+        await Supabase.instance.client
+            .from('producto')
+            .update({'estado': estadoFinal})
+            .eq('codigo', codigo)
+            .eq('estado', 'Disponible');
 
-          if (nuevaCantidad <= 0) {
-            // Si la cantidad llega a 0 o menos, marcar como eliminado
-            if (fechaVencimientoOriginal != null) {
-              await Supabase.instance.client
-                  .from('producto')
-                  .update({'estado': estadoFinal})
-                  .eq('codigo', codigoOriginal)
-                  .eq('fecha_vencimiento', fechaVencimientoOriginal)
-                  .eq('estado', estadoOriginal);
-            } else {
-              await Supabase.instance.client
-                  .from('producto')
-                  .update({'estado': estadoFinal})
-                  .eq('codigo', codigoOriginal)
-                  .isFilter('fecha_vencimiento', null)
-                  .eq('estado', estadoOriginal);
-            }
-          } else {
-            // Reducir la cantidad del producto
-            if (fechaVencimientoOriginal != null) {
-              await Supabase.instance.client
-                  .from('producto')
-                  .update({'cantidad': nuevaCantidad})
-                  .eq('codigo', codigoOriginal)
-                  .eq('fecha_vencimiento', fechaVencimientoOriginal)
-                  .eq('estado', estadoOriginal);
-            } else {
-              await Supabase.instance.client
-                  .from('producto')
-                  .update({'cantidad': nuevaCantidad})
-                  .eq('codigo', codigoOriginal)
-                  .isFilter('fecha_vencimiento', null)
-                  .eq('estado', estadoOriginal);
-            }
-          }
+        await cargarDatos();
 
-          await cargarDatos();
-
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  nuevaCantidad <= 0
-                      ? 'Producto eliminado correctamente'
-                      : 'Se redujo $cantidadReducir $abreviatura del stock',
-                ),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
-        } else if (resultado['eliminarTodos'] == true) {
-          // Eliminar todos los productos del grupo con el mismo estado
-          // estadoOriginal ya garantiza que son productos disponibles
-          if (fechaVencimientoOriginal != null) {
-            await Supabase.instance.client
-                .from('producto')
-                .update({'estado': estadoFinal})
-                .eq('codigo', codigoOriginal)
-                .eq('fecha_vencimiento', fechaVencimientoOriginal)
-                .eq('estado', estadoOriginal);
-          } else {
-            await Supabase.instance.client
-                .from('producto')
-                .update({'estado': estadoFinal})
-                .eq('codigo', codigoOriginal)
-                .isFilter('fecha_vencimiento', null)
-                .eq('estado', estadoOriginal);
-          }
-
-          await cargarDatos();
-
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  '$stockGrupo producto(s) eliminado(s) correctamente',
-                ),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
-        } else {
-          // Eliminar solo una cantidad específica
-          final cantidad = resultado['cantidad'] as int;
-
-          // Obtener los IDs de los productos a eliminar con el mismo estado
-          // estadoOriginal ya garantiza que son productos disponibles
-          var selectQuery = Supabase.instance.client
-              .from('producto')
-              .select('id_producto')
-              .eq('codigo', codigoOriginal);
-
-          // Manejar fecha_vencimiento null correctamente
-          if (fechaVencimientoOriginal != null) {
-            selectQuery = selectQuery.eq(
-              'fecha_vencimiento',
-              fechaVencimientoOriginal,
-            );
-          } else {
-            selectQuery = selectQuery.isFilter('fecha_vencimiento', null);
-          }
-
-          final productosGrupo = await selectQuery
-              .eq('estado', estadoOriginal)
-              .limit(cantidad);
-
-          final listaProductos = productosGrupo as List;
-          final idsEliminar = listaProductos
-              .map((p) => p['id_producto'] as int)
-              .toList();
-
-          if (idsEliminar.isEmpty) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('No se encontraron productos para eliminar'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-            }
-            return;
-          }
-
-          // Eliminar solo los productos seleccionados
-          await Supabase.instance.client
-              .from('producto')
-              .update({'estado': estadoFinal})
-              .inFilter('id_producto', idsEliminar);
-
-          await cargarDatos();
-
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  '${idsEliminar.length} producto(s) eliminado(s) correctamente',
-                ),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Producto "$nombre" eliminado correctamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
         }
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error al eliminar productos: $e'),
-              backgroundColor: Colors.red,
-            ),
+            SnackBar(content: Text('Error al eliminar: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> editarProducto(BuildContext context, ProductoGrupo producto) async {
+    final nombreController = TextEditingController(text: producto.nombreProducto);
+    final precioVentaController = TextEditingController(
+      text: producto.precioVenta?.toStringAsFixed(2) ?? '',
+    );
+    final precioCompraController = TextEditingController(
+      text: producto.precioCompra?.toStringAsFixed(2) ?? '',
+    );
+    int? categoriaSeleccionada = producto.categoriaId;
+    int? presentacionSeleccionada = producto.idPresentacion;
+
+    final resultado = await showDialog<Map<String, dynamic>?>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Editar producto'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Código: ${producto.codigo}',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
+                    // Nombre
+                    TextField(
+                      controller: nombreController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre del producto',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Precios en fila
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: precioCompraController,
+                            decoration: const InputDecoration(
+                              labelText: 'Precio compra',
+                              prefixText: 'C\$ ',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: precioVentaController,
+                            decoration: const InputDecoration(
+                              labelText: 'Precio venta',
+                              prefixText: 'C\$ ',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Categoría
+                    DropdownButtonFormField<int>(
+                      value: categoriaSeleccionada,
+                      decoration: const InputDecoration(
+                        labelText: 'Categoría',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: categorias.entries
+                          .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                          .toList(),
+                      onChanged: (value) => setDialogState(() => categoriaSeleccionada = value),
+                    ),
+                    const SizedBox(height: 12),
+                    // Presentación
+                    DropdownButtonFormField<int>(
+                      value: presentacionSeleccionada,
+                      decoration: const InputDecoration(
+                        labelText: 'Presentación',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: presentaciones.entries
+                          .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                          .toList(),
+                      onChanged: (value) => setDialogState(() => presentacionSeleccionada = value),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Los cambios se aplicarán a todos los productos con este código.',
+                      style: TextStyle(fontSize: 11, color: Colors.orange[700], fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, {
+                    'confirmar': true,
+                    'nombre': nombreController.text.trim(),
+                    'precioVenta': double.tryParse(precioVentaController.text),
+                    'precioCompra': double.tryParse(precioCompraController.text),
+                    'categoriaId': categoriaSeleccionada,
+                    'presentacionId': presentacionSeleccionada,
+                  }),
+                  child: const Text('Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (resultado != null && resultado['confirmar'] == true) {
+      try {
+        final updates = <String, dynamic>{};
+        
+        if (resultado['nombre'] != null && resultado['nombre'].toString().isNotEmpty) {
+          updates['nombre_producto'] = resultado['nombre'];
+        }
+        if (resultado['precioVenta'] != null) {
+          updates['precio_venta'] = resultado['precioVenta'];
+        }
+        if (resultado['precioCompra'] != null) {
+          updates['precio_compra'] = resultado['precioCompra'];
+        }
+        if (resultado['categoriaId'] != null) {
+          updates['id_categoria'] = resultado['categoriaId'];
+        }
+        if (resultado['presentacionId'] != null) {
+          updates['id_presentacion'] = resultado['presentacionId'];
+        }
+
+        if (updates.isEmpty) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No hay cambios para guardar'), backgroundColor: Colors.orange),
+            );
+          }
+          return;
+        }
+
+        await Supabase.instance.client
+            .from('producto')
+            .update(updates)
+            .eq('codigo', producto.codigo);
+
+        await cargarDatos();
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Producto actualizado correctamente'), backgroundColor: Colors.green),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error al actualizar: $e'), backgroundColor: Colors.red),
           );
         }
       }
@@ -1603,14 +1243,10 @@ class _InventarioPageState extends State<ProductosScreen> {
               else
                 const Expanded(child: SizedBox()),
 
-              // Acciones (TODO: Actualizar para cargar producto individual)
+              // Acciones
               if (!mostrarEliminados) ...[
                 InkWell(
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Función de edición en actualización')),
-                    );
-                  },
+                  onTap: () => editarProducto(context, p),
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
                     padding: const EdgeInsets.all(6),
@@ -1623,11 +1259,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                 ),
                 const SizedBox(width: 4),
                 InkWell(
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Función de eliminación en actualización')),
-                    );
-                  },
+                  onTap: () => eliminarProducto(context, p),
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
                     padding: const EdgeInsets.all(6),
