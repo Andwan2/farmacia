@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -21,7 +22,18 @@ class _InventarioPageState extends State<ProductosScreen> {
   List<String> categorias = []; // Lista de categorías únicas
   String busqueda = '';
   bool cargando = true;
+  bool cargandoMas = false;
+  bool hayMasProductos = true;
   bool mostrarEliminados = false;
+
+  // Paginación
+  static const int _pageSize = 50;
+  int _currentOffset = 0;
+  final ScrollController _scrollController = ScrollController();
+
+  // Debounce para búsqueda
+  Timer? _debounceTimer;
+  String _ultimaBusqueda = '';
 
   // Filtros
   List<String> filtrosPresentacion = []; // Múltiples presentaciones
@@ -313,13 +325,19 @@ class _InventarioPageState extends State<ProductosScreen> {
                               flex: 2,
                               child: ElevatedButton(
                                 onPressed: () {
+                                  final cambioFiltros =
+                                      filtrosPresentacion != tempFiltrosPresentacion ||
+                                      filtrosCategorias != tempFiltrosCategorias ||
+                                      ordenarPor != tempOrdenarPor;
                                   setState(() {
-                                    filtrosPresentacion =
-                                        tempFiltrosPresentacion;
+                                    filtrosPresentacion = tempFiltrosPresentacion;
                                     filtrosCategorias = tempFiltrosCategorias;
                                     ordenarPor = tempOrdenarPor;
                                   });
                                   Navigator.pop(context);
+                                  if (cambioFiltros) {
+                                    _resetYCargar();
+                                  }
                                 },
                                 style: ElevatedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
@@ -351,50 +369,63 @@ class _InventarioPageState extends State<ProductosScreen> {
   @override
   void initState() {
     super.initState();
-    cargarDatos();
+    _scrollController.addListener(_onScroll);
+    _cargarDatosIniciales();
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> cargarDatos() async {
-    setState(() => cargando = true);
-    final client = Supabase.instance.client;
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200 &&
+        !cargandoMas &&
+        hayMasProductos &&
+        !cargando) {
+      _cargarMasProductos();
+    }
+  }
 
+  void _onBusquedaChanged(String value) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
+      if (value != _ultimaBusqueda) {
+        _ultimaBusqueda = value;
+        setState(() => busqueda = value);
+        _resetYCargar();
+      }
+    });
+  }
+
+  void _resetYCargar() {
+    setState(() {
+      productos = [];
+      _currentOffset = 0;
+      hayMasProductos = true;
+    });
+    cargarDatos();
+  }
+
+  Future<void> _cargarDatosIniciales() async {
+    await _cargarCatalogos();
+    await cargarDatos();
+  }
+
+  Future<void> _cargarCatalogos() async {
+    final client = Supabase.instance.client;
     try {
-      // ✅ OPTIMIZACIÓN: Ejecutar todas las consultas en paralelo
       final results = await Future.wait([
-        // 0: Productos
-        client
-            .from('producto')
-            .select()
-            .order('nombre_producto', ascending: true),
-        // 1: Presentaciones
         client.from('presentacion').select('id_presentacion,descripcion'),
-        // 2: Unidades de medida
         client.from('unidad_medida').select('id,nombre,abreviatura'),
+        client.from('producto').select('categoria').not('categoria', 'is', null),
       ]);
 
-      // Procesar productos
-      List<dynamic> dataProd = (results[0] is List)
-          ? results[0] as List
-          : <dynamic>[];
-
-      // Filtrar en memoria por estado
-      if (mostrarEliminados) {
-        dataProd = dataProd
-            .where((p) => p['estado'] == 'Vendido' || p['estado'] == 'Removido')
-            .toList();
-      } else {
-        dataProd = dataProd
-            .where((p) => p['estado'] == null || p['estado'] == 'Disponible')
-            .toList();
-      }
-
       // Procesar presentaciones
-      final dataPres = (results[1] is List) ? results[1] as List : <dynamic>[];
+      final dataPres = results[0] as List;
       final Map<int, Map<String, dynamic>> presMap = {};
       for (final p in dataPres) {
         final id = p['id_presentacion'] as int?;
@@ -404,9 +435,7 @@ class _InventarioPageState extends State<ProductosScreen> {
       }
 
       // Procesar unidades de medida
-      final dataUnidades = (results[2] is List)
-          ? results[2] as List
-          : <dynamic>[];
+      final dataUnidades = results[1] as List;
       final Map<int, Map<String, dynamic>> unidadesMap = {};
       for (final u in dataUnidades) {
         final id = u['id'] as int?;
@@ -418,30 +447,123 @@ class _InventarioPageState extends State<ProductosScreen> {
         }
       }
 
-      // Stock por código (conteo en memoria)
-      final Map<String, int> stock = {};
-      for (final item in dataProd) {
-        final codigo = item['codigo']?.toString() ?? 'Sin código';
-        stock[codigo] = (stock[codigo] ?? 0) + 1;
-      }
-
       // Extraer categorías únicas
+      final dataCat = results[2] as List;
       final Set<String> categoriasSet = {};
-      for (final item in dataProd) {
+      for (final item in dataCat) {
         final cat = item['categoria']?.toString();
         if (cat != null && cat.isNotEmpty) {
           categoriasSet.add(cat);
         }
       }
-      final categoriasLista = categoriasSet.toList()..sort();
 
       if (mounted) {
         setState(() {
-          productos = dataProd;
           presentaciones = presMap;
           unidadesMedida = unidadesMap;
+          categorias = categoriasSet.toList()..sort();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al cargar catálogos: $e');
+    }
+  }
+
+  Future<void> _cargarMasProductos() async {
+    if (cargandoMas || !hayMasProductos) return;
+    setState(() => cargandoMas = true);
+    await cargarDatos(append: true);
+    setState(() => cargandoMas = false);
+  }
+
+  Future<void> cargarDatos({bool append = false}) async {
+    if (!append) {
+      setState(() => cargando = true);
+    }
+    final client = Supabase.instance.client;
+
+    try {
+      // Construir query con filtros en servidor
+      var query = client.from('producto').select();
+
+      // Filtro por estado en servidor
+      if (mostrarEliminados) {
+        query = query.or('estado.eq.Vendido,estado.eq.Removido');
+      } else {
+        query = query.or('estado.is.null,estado.eq.Disponible');
+      }
+
+      // Búsqueda en servidor (ILIKE)
+      if (busqueda.isNotEmpty) {
+        query = query.ilike('nombre_producto', '%$busqueda%');
+      }
+
+      // Filtro por presentación en servidor
+      if (filtrosPresentacion.isNotEmpty) {
+        final presIds = presentaciones.entries
+            .where((e) => filtrosPresentacion.contains(e.value['descripcion']))
+            .map((e) => e.key)
+            .toList();
+        if (presIds.isNotEmpty) {
+          query = query.inFilter('id_presentacion', presIds);
+        }
+      }
+
+      // Filtro por categoría en servidor
+      if (filtrosCategorias.isNotEmpty) {
+        query = query.inFilter('categoria', filtrosCategorias);
+      }
+
+      // Paginación y ordenamiento (order + range al final)
+      final offset = append ? _currentOffset : 0;
+      
+      late final List<dynamic> data;
+      switch (ordenarPor) {
+        case 'vencimiento':
+          data = await query
+              .order('fecha_vencimiento', ascending: true, nullsFirst: false)
+              .range(offset, offset + _pageSize - 1);
+          break;
+        case 'agregado_reciente':
+          data = await query
+              .order('fecha_agregado', ascending: false)
+              .range(offset, offset + _pageSize - 1);
+          break;
+        case 'agregado_antiguo':
+          data = await query
+              .order('fecha_agregado', ascending: true)
+              .range(offset, offset + _pageSize - 1);
+          break;
+        case 'nombre':
+        default:
+          data = await query
+              .order('nombre_producto', ascending: true)
+              .range(offset, offset + _pageSize - 1);
+      }
+
+      final List<dynamic> dataProd = data;
+
+      // Actualizar offset y verificar si hay más
+      if (dataProd.length < _pageSize) {
+        hayMasProductos = false;
+      }
+      _currentOffset = offset + dataProd.length;
+
+      // Stock por código (conteo en memoria para los productos cargados)
+      final Map<String, int> stock = Map.from(stockPorTipo);
+      for (final item in dataProd) {
+        final codigo = item['codigo']?.toString() ?? 'Sin código';
+        stock[codigo] = (stock[codigo] ?? 0) + 1;
+      }
+
+      if (mounted) {
+        setState(() {
+          if (append) {
+            productos.addAll(dataProd);
+          } else {
+            productos = dataProd;
+          }
           stockPorTipo = stock;
-          categorias = categoriasLista;
           cargando = false;
         });
       }
@@ -1276,88 +1398,15 @@ class _InventarioPageState extends State<ProductosScreen> {
       }
     }
 
-    // Crear mapa para compatibilidad con filtros
-    final Map<String, dynamic> productosPorCodigo = {};
-    for (final p in productosAgrupados) {
-      final estado = p['estado'] as String? ?? 'Disponible';
-      final key = '${p['codigo']}_${p['fecha_vencimiento']}_$estado';
-      productosPorCodigo[key] = p;
+    // Los filtros ya se aplican en el servidor, solo ordenar por stock si es necesario
+    var listaFiltrada = productosAgrupados.toList();
+    if (ordenarPor == 'stock') {
+      listaFiltrada.sort((a, b) {
+        final stockA = (a['_stock_grupo'] as num?)?.toInt() ?? 1;
+        final stockB = (b['_stock_grupo'] as num?)?.toInt() ?? 1;
+        return stockB.compareTo(stockA);
+      });
     }
-
-    // Filtrar por búsqueda, presentación y categoría
-    var listaFiltrada = productosPorCodigo.values.where((p) {
-      final nombre = p['nombre_producto']?.toString() ?? '';
-      final idPres = p['id_presentacion'] as int?;
-      final presentacion = idPres != null
-          ? (presentaciones[idPres]?['descripcion'] ?? '')
-          : '';
-      final categoria = p['categoria']?.toString() ?? '';
-
-      // Filtro de búsqueda
-      final cumpleBusqueda = nombre.toLowerCase().contains(
-        busqueda.toLowerCase(),
-      );
-
-      // Filtro de presentación
-      final cumplePresentacion =
-          filtrosPresentacion.isEmpty ||
-          filtrosPresentacion.contains(presentacion);
-
-      // Filtro de categoría
-      final cumpleCategoria =
-          filtrosCategorias.isEmpty || filtrosCategorias.contains(categoria);
-
-      return cumpleBusqueda && cumplePresentacion && cumpleCategoria;
-    }).toList();
-
-    // Ordenar
-    listaFiltrada.sort((a, b) {
-      switch (ordenarPor) {
-        case 'nombre':
-          final nombreA = a['nombre_producto']?.toString() ?? '';
-          final nombreB = b['nombre_producto']?.toString() ?? '';
-          return nombreA.compareTo(nombreB);
-        case 'vencimiento':
-          final fechaStrA = a['fecha_vencimiento']?.toString();
-          final fechaStrB = b['fecha_vencimiento']?.toString();
-          final fechaA = fechaStrA != null
-              ? DateTime.tryParse(fechaStrA)
-              : null;
-          final fechaB = fechaStrB != null
-              ? DateTime.tryParse(fechaStrB)
-              : null;
-          if (fechaA == null && fechaB == null) return 0;
-          if (fechaA == null) return 1;
-          if (fechaB == null) return -1;
-          return fechaA.compareTo(fechaB);
-        case 'stock':
-          final stockA = (a['_stock_grupo'] as num?)?.toInt() ?? 1;
-          final stockB = (b['_stock_grupo'] as num?)?.toInt() ?? 1;
-          return stockB.compareTo(stockA); // Descendente
-        case 'agregado_reciente':
-          final fechaAgregadoA = a['fecha_agregado']?.toString();
-          final fechaAgregadoB = b['fecha_agregado']?.toString();
-          final fechaA = fechaAgregadoA != null
-              ? (DateTime.tryParse(fechaAgregadoA) ?? DateTime(1970))
-              : DateTime(1970);
-          final fechaB = fechaAgregadoB != null
-              ? (DateTime.tryParse(fechaAgregadoB) ?? DateTime(1970))
-              : DateTime(1970);
-          return fechaB.compareTo(fechaA); // Descendente (más reciente primero)
-        case 'agregado_antiguo':
-          final fechaAgregadoA2 = a['fecha_agregado']?.toString();
-          final fechaAgregadoB2 = b['fecha_agregado']?.toString();
-          final fechaA = fechaAgregadoA2 != null
-              ? (DateTime.tryParse(fechaAgregadoA2) ?? DateTime(1970))
-              : DateTime(1970);
-          final fechaB = fechaAgregadoB2 != null
-              ? (DateTime.tryParse(fechaAgregadoB2) ?? DateTime(1970))
-              : DateTime(1970);
-          return fechaA.compareTo(fechaB); // Ascendente (más antiguo primero)
-        default:
-          return 0;
-      }
-    });
 
     return Scaffold(
       body: SafeArea(
@@ -1385,8 +1434,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                                 vertical: 14,
                               ),
                             ),
-                            onChanged: (value) =>
-                                setState(() => busqueda = value),
+                            onChanged: _onBusquedaChanged,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -1510,7 +1558,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                         setState(() {
                           mostrarEliminados = value;
                         });
-                        cargarDatos();
+                        _resetYCargar();
                       },
                       secondary: Icon(
                         mostrarEliminados
@@ -1544,9 +1592,17 @@ class _InventarioPageState extends State<ProductosScreen> {
                             ..sort();
 
                           return ListView.builder(
+                            controller: _scrollController,
                             padding: const EdgeInsets.only(bottom: 16),
-                            itemCount: categoriasOrdenadas.length,
+                            itemCount: categoriasOrdenadas.length + (cargandoMas ? 1 : 0),
                             itemBuilder: (context, catIndex) {
+                              // Mostrar indicador de carga al final
+                              if (catIndex >= categoriasOrdenadas.length) {
+                                return const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Center(child: CircularProgressIndicator()),
+                                );
+                              }
                               final categoria = categoriasOrdenadas[catIndex];
                               final productosCategoria =
                                   porCategoria[categoria]!;
