@@ -158,3 +158,67 @@ class ProductoAgrupado {
     return partes.join(' ');
   }
 }
+
+/// Producto agrupado desde la función RPC get_productos_agrupados
+/// Usar cuando se necesiten datos ya agrupados por código desde el servidor
+class ProductoGrupo {
+  final String codigo;
+  final String nombreProducto;
+  final String estado;
+  final double stock;
+  final double? precioVenta;
+  final double? precioCompra;
+  final DateTime? fechaVencimiento;
+  final DateTime? fechaAgregado;
+  final int? categoriaId;
+  final String? categoriaNombre;
+
+  ProductoGrupo({
+    required this.codigo,
+    required this.nombreProducto,
+    required this.estado,
+    required this.stock,
+    this.precioVenta,
+    this.precioCompra,
+    this.fechaVencimiento,
+    this.fechaAgregado,
+    this.categoriaId,
+    this.categoriaNombre,
+  });
+
+  factory ProductoGrupo.fromJson(Map<String, dynamic> json) {
+    return ProductoGrupo(
+      codigo: json['codigo'] as String? ?? '',
+      nombreProducto: json['nombre_producto'] as String? ?? '',
+      estado: json['estado'] as String? ?? 'Disponible',
+      stock: (json['stock'] as num?)?.toDouble() ?? 0,
+      precioVenta: (json['precio_venta'] as num?)?.toDouble(),
+      precioCompra: (json['precio_compra'] as num?)?.toDouble(),
+      fechaVencimiento: json['fecha_vencimiento'] != null
+          ? DateTime.tryParse(json['fecha_vencimiento'].toString())
+          : null,
+      fechaAgregado: json['fecha_agregado'] != null
+          ? DateTime.tryParse(json['fecha_agregado'].toString())
+          : null,
+      categoriaId: json['categoria_id'] as int?,
+      categoriaNombre: json['categoria_nombre'] as String?,
+    );
+  }
+
+  /// Días restantes hasta vencimiento
+  int get diasParaVencer {
+    if (fechaVencimiento == null) return 999;
+    return fechaVencimiento!.difference(DateTime.now()).inDays;
+  }
+
+  /// Stock formateado
+  String get stockTexto {
+    final redondeado = (stock * 2).round() / 2;
+    return redondeado == redondeado.toInt()
+        ? redondeado.toInt().toString()
+        : redondeado.toStringAsFixed(1);
+  }
+
+  /// Categoría para mostrar
+  String get categoria => categoriaNombre ?? 'Sin categoría';
+}
