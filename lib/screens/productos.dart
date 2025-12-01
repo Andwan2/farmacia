@@ -137,9 +137,10 @@ class _InventarioPageState extends State<ProductosScreen>
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: categorias.entries.map((entry) {
-                              final isSelected = tempFiltrosCategoriaIds
-                                  .contains(entry.key);
+                            children: categorias.map((cat) {
+                              final isSelected = tempFiltrosCategorias.contains(
+                                cat,
+                              );
                               return FilterChip(
                                 label: Text(cat),
                                 selected: isSelected,
@@ -230,13 +231,12 @@ class _InventarioPageState extends State<ProductosScreen>
                                 onPressed: () {
                                   final cambioFiltros =
                                       !_listEquals(
-                                        filtrosCategoriaIds,
-                                        tempFiltrosCategoriaIds,
+                                        filtrosCategorias,
+                                        tempFiltrosCategorias,
                                       ) ||
                                       ordenarPor != tempOrdenarPor;
                                   setState(() {
-                                    filtrosCategoriaIds =
-                                        tempFiltrosCategoriaIds;
+                                    filtrosCategorias = tempFiltrosCategorias;
                                     ordenarPor = tempOrdenarPor;
                                   });
                                   Navigator.pop(context);
@@ -419,8 +419,8 @@ class _InventarioPageState extends State<ProductosScreen>
           'p_limit': _pageSize,
           'p_cursor': append ? _cursor : null,
           'p_estado': estado,
-          'p_categoria_ids': filtrosCategoriaIds.isNotEmpty
-              ? filtrosCategoriaIds
+          'p_categoria_ids': filtrosCategorias.isNotEmpty
+              ? filtrosCategorias
               : null,
           'p_busqueda': busqueda.isNotEmpty ? busqueda : null,
         },
@@ -712,12 +712,10 @@ class _InventarioPageState extends State<ProductosScreen>
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
-                      items: categorias.entries
+                      items: categorias
                           .map(
-                            (e) => DropdownMenuItem(
-                              value: e.key,
-                              child: Text(e.value),
-                            ),
+                            (cat) =>
+                                DropdownMenuItem(value: cat, child: Text(cat)),
                           )
                           .toList(),
                       onChanged: (value) =>
@@ -996,11 +994,9 @@ class _InventarioPageState extends State<ProductosScreen>
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          ...filtrosCategoriaIds.map(
-                            (catId) => Chip(
-                              label: Text(
-                                categorias[catId] ?? 'Categoría $catId',
-                              ),
+                          ...filtrosCategorias.map(
+                            (cat) => Chip(
+                              label: Text(cat),
                               backgroundColor: Theme.of(
                                 context,
                               ).colorScheme.secondaryContainer,
