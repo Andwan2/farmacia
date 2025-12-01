@@ -68,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
         // 5: Productos en ventas del mes (para calcular costos) - UNA sola consulta
         Supabase.instance.client
             .from('producto_en_venta')
-            .select('id_venta, producto(precio_compra)')
+            .select('id_venta, precio_historico, costo_historico')
             .gte('id_venta', 0), // Traer todos, filtraremos en memoria
       ]);
 
@@ -139,14 +139,12 @@ class _HomeScreenState extends State<HomeScreen> {
       totalClientes = clientesResponse.length;
       totalProveedores = proveedoresResponse.length;
 
-      // ✅ Calcular costos SIN consultas adicionales
+      // ✅ Calcular costos usando costo_historico de producto_en_venta
       double totalCostos = 0.0;
       for (var pv in productosEnVentaResponse) {
         final idVenta = pv['id_venta'] as int?;
         if (idVenta != null && ventasIds.contains(idVenta)) {
-          final producto = pv['producto'] as Map<String, dynamic>?;
-          totalCostos +=
-              (producto?['precio_compra'] as num?)?.toDouble() ?? 0.0;
+          totalCostos += (pv['costo_historico'] as num?)?.toDouble() ?? 0.0;
         }
       }
 

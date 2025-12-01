@@ -135,7 +135,8 @@ class _InventarioPageState extends State<ProductosScreen> {
                             spacing: 8,
                             runSpacing: 8,
                             children: categorias.entries.map((entry) {
-                              final isSelected = tempFiltrosCategoriaIds.contains(entry.key);
+                              final isSelected = tempFiltrosCategoriaIds
+                                  .contains(entry.key);
                               return FilterChip(
                                 label: Text(entry.value),
                                 selected: isSelected,
@@ -148,8 +149,12 @@ class _InventarioPageState extends State<ProductosScreen> {
                                     }
                                   });
                                 },
-                                selectedColor: Theme.of(context).colorScheme.secondaryContainer,
-                                checkmarkColor: Theme.of(context).colorScheme.secondary,
+                                selectedColor: Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
+                                checkmarkColor: Theme.of(
+                                  context,
+                                ).colorScheme.secondary,
                               );
                             }).toList(),
                           ),
@@ -175,17 +180,27 @@ class _InventarioPageState extends State<ProductosScreen> {
                               onSelected: (selected) {
                                 setModalState(() => tempOrdenarPor = 'nombre');
                               },
-                              selectedColor: Theme.of(context).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(context).colorScheme.primary,
+                              selectedColor: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              checkmarkColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
                             ),
                             FilterChip(
                               label: const Text('Vencimiento'),
                               selected: tempOrdenarPor == 'vencimiento',
                               onSelected: (selected) {
-                                setModalState(() => tempOrdenarPor = 'vencimiento');
+                                setModalState(
+                                  () => tempOrdenarPor = 'vencimiento',
+                                );
                               },
-                              selectedColor: Theme.of(context).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(context).colorScheme.primary,
+                              selectedColor: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              checkmarkColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
                             ),
                           ],
                         ),
@@ -198,7 +213,9 @@ class _InventarioPageState extends State<ProductosScreen> {
                               child: OutlinedButton(
                                 onPressed: () => Navigator.pop(context),
                                 style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
                                 ),
                                 child: const Text('Cerrar'),
                               ),
@@ -209,10 +226,14 @@ class _InventarioPageState extends State<ProductosScreen> {
                               child: ElevatedButton(
                                 onPressed: () {
                                   final cambioFiltros =
-                                      !_listEquals(filtrosCategoriaIds, tempFiltrosCategoriaIds) ||
+                                      !_listEquals(
+                                        filtrosCategoriaIds,
+                                        tempFiltrosCategoriaIds,
+                                      ) ||
                                       ordenarPor != tempOrdenarPor;
                                   setState(() {
-                                    filtrosCategoriaIds = tempFiltrosCategoriaIds;
+                                    filtrosCategoriaIds =
+                                        tempFiltrosCategoriaIds;
                                     ordenarPor = tempOrdenarPor;
                                   });
                                   Navigator.pop(context);
@@ -221,9 +242,15 @@ class _InventarioPageState extends State<ProductosScreen> {
                                   }
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  backgroundColor: Colors.black,
-                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primary,
+                                  foregroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimary,
                                 ),
                                 child: const Text('Aplicar filtros'),
                               ),
@@ -370,14 +397,19 @@ class _InventarioPageState extends State<ProductosScreen> {
     try {
       // Usar la función RPC get_productos_agrupados
       final String? estado = mostrarEliminados ? 'Vendido' : 'Disponible';
-      
-      final data = await client.rpc('get_productos_agrupados', params: {
-        'p_limit': _pageSize,
-        'p_cursor': append ? _cursor : null,
-        'p_estado': estado,
-        'p_categoria_ids': filtrosCategoriaIds.isNotEmpty ? filtrosCategoriaIds : null,
-        'p_busqueda': busqueda.isNotEmpty ? busqueda : null,
-      });
+
+      final data = await client.rpc(
+        'get_productos_agrupados',
+        params: {
+          'p_limit': _pageSize,
+          'p_cursor': append ? _cursor : null,
+          'p_estado': estado,
+          'p_categoria_ids': filtrosCategoriaIds.isNotEmpty
+              ? filtrosCategoriaIds
+              : null,
+          'p_busqueda': busqueda.isNotEmpty ? busqueda : null,
+        },
+      );
 
       final List<ProductoGrupo> nuevosProductos = (data as List)
           .map((json) => ProductoGrupo.fromJson(json))
@@ -387,7 +419,7 @@ class _InventarioPageState extends State<ProductosScreen> {
       if (nuevosProductos.isNotEmpty) {
         _cursor = nuevosProductos.last.codigo;
       }
-      
+
       // Verificar si hay más productos
       if (nuevosProductos.length < _pageSize) {
         hayMasProductos = false;
@@ -461,31 +493,52 @@ class _InventarioPageState extends State<ProductosScreen> {
                     // Selector de motivo
                     const Text(
                       'Motivo de eliminación:',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     RadioListTile<String>(
-                      title: const Text('Vendido', style: TextStyle(fontSize: 13)),
-                      subtitle: const Text('El producto fue vendido', style: TextStyle(fontSize: 11)),
+                      title: const Text(
+                        'Vendido',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      subtitle: const Text(
+                        'El producto fue vendido',
+                        style: TextStyle(fontSize: 11),
+                      ),
                       value: 'Vendido',
                       groupValue: estadoSeleccionado,
-                      onChanged: (value) => setDialogState(() => estadoSeleccionado = value!),
+                      onChanged: (value) =>
+                          setDialogState(() => estadoSeleccionado = value!),
                       contentPadding: EdgeInsets.zero,
                       dense: true,
                     ),
                     RadioListTile<String>(
-                      title: const Text('Removido', style: TextStyle(fontSize: 13)),
-                      subtitle: const Text('El producto fue descartado', style: TextStyle(fontSize: 11)),
+                      title: const Text(
+                        'Removido',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      subtitle: const Text(
+                        'El producto fue descartado',
+                        style: TextStyle(fontSize: 11),
+                      ),
                       value: 'Removido',
                       groupValue: estadoSeleccionado,
-                      onChanged: (value) => setDialogState(() => estadoSeleccionado = value!),
+                      onChanged: (value) =>
+                          setDialogState(() => estadoSeleccionado = value!),
                       contentPadding: EdgeInsets.zero,
                       dense: true,
                     ),
                     const SizedBox(height: 12),
                     Text(
                       'Se eliminarán todos los productos con código: $codigo',
-                      style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.orange),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.orange,
+                      ),
                     ),
                   ],
                 ),
@@ -496,8 +549,14 @@ class _InventarioPageState extends State<ProductosScreen> {
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: () => Navigator.pop(context, {'confirmar': true, 'estado': estadoSeleccionado}),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                  onPressed: () => Navigator.pop(context, {
+                    'confirmar': true,
+                    'estado': estadoSeleccionado,
+                  }),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
                   child: const Text('Eliminar'),
                 ),
               ],
@@ -531,15 +590,23 @@ class _InventarioPageState extends State<ProductosScreen> {
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error al eliminar: $e'), backgroundColor: Colors.red),
+            SnackBar(
+              content: Text('Error al eliminar: $e'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       }
     }
   }
 
-  Future<void> editarProducto(BuildContext context, ProductoGrupo producto) async {
-    final nombreController = TextEditingController(text: producto.nombreProducto);
+  Future<void> editarProducto(
+    BuildContext context,
+    ProductoGrupo producto,
+  ) async {
+    final nombreController = TextEditingController(
+      text: producto.nombreProducto,
+    );
     final precioVentaController = TextEditingController(
       text: producto.precioVenta?.toStringAsFixed(2) ?? '',
     );
@@ -616,9 +683,15 @@ class _InventarioPageState extends State<ProductosScreen> {
                         isDense: true,
                       ),
                       items: categorias.entries
-                          .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                          .map(
+                            (e) => DropdownMenuItem(
+                              value: e.key,
+                              child: Text(e.value),
+                            ),
+                          )
                           .toList(),
-                      onChanged: (value) => setDialogState(() => categoriaSeleccionada = value),
+                      onChanged: (value) =>
+                          setDialogState(() => categoriaSeleccionada = value),
                     ),
                     const SizedBox(height: 12),
                     // Presentación
@@ -630,14 +703,25 @@ class _InventarioPageState extends State<ProductosScreen> {
                         isDense: true,
                       ),
                       items: presentaciones.entries
-                          .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                          .map(
+                            (e) => DropdownMenuItem(
+                              value: e.key,
+                              child: Text(e.value),
+                            ),
+                          )
                           .toList(),
-                      onChanged: (value) => setDialogState(() => presentacionSeleccionada = value),
+                      onChanged: (value) => setDialogState(
+                        () => presentacionSeleccionada = value,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Text(
                       'Los cambios se aplicarán a todos los productos con este código.',
-                      style: TextStyle(fontSize: 11, color: Colors.orange[700], fontStyle: FontStyle.italic),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.orange[700],
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ],
                 ),
@@ -652,7 +736,9 @@ class _InventarioPageState extends State<ProductosScreen> {
                     'confirmar': true,
                     'nombre': nombreController.text.trim(),
                     'precioVenta': double.tryParse(precioVentaController.text),
-                    'precioCompra': double.tryParse(precioCompraController.text),
+                    'precioCompra': double.tryParse(
+                      precioCompraController.text,
+                    ),
                     'categoriaId': categoriaSeleccionada,
                     'presentacionId': presentacionSeleccionada,
                   }),
@@ -668,8 +754,9 @@ class _InventarioPageState extends State<ProductosScreen> {
     if (resultado != null && resultado['confirmar'] == true) {
       try {
         final updates = <String, dynamic>{};
-        
-        if (resultado['nombre'] != null && resultado['nombre'].toString().isNotEmpty) {
+
+        if (resultado['nombre'] != null &&
+            resultado['nombre'].toString().isNotEmpty) {
           updates['nombre_producto'] = resultado['nombre'];
         }
         if (resultado['precioVenta'] != null) {
@@ -688,7 +775,10 @@ class _InventarioPageState extends State<ProductosScreen> {
         if (updates.isEmpty) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('No hay cambios para guardar'), backgroundColor: Colors.orange),
+              const SnackBar(
+                content: Text('No hay cambios para guardar'),
+                backgroundColor: Colors.orange,
+              ),
             );
           }
           return;
@@ -703,13 +793,19 @@ class _InventarioPageState extends State<ProductosScreen> {
 
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Producto actualizado correctamente'), backgroundColor: Colors.green),
+            const SnackBar(
+              content: Text('Producto actualizado correctamente'),
+              backgroundColor: Colors.green,
+            ),
           );
         }
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error al actualizar: $e'), backgroundColor: Colors.red),
+            SnackBar(
+              content: Text('Error al actualizar: $e'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       }
@@ -864,7 +960,9 @@ class _InventarioPageState extends State<ProductosScreen> {
                         children: [
                           ...filtrosCategoriaIds.map(
                             (catId) => Chip(
-                              label: Text(categorias[catId] ?? 'Categoría $catId'),
+                              label: Text(
+                                categorias[catId] ?? 'Categoría $catId',
+                              ),
                               backgroundColor: Theme.of(
                                 context,
                               ).colorScheme.secondaryContainer,
@@ -949,13 +1047,17 @@ class _InventarioPageState extends State<ProductosScreen> {
                           return ListView.builder(
                             controller: _scrollController,
                             padding: const EdgeInsets.only(bottom: 16),
-                            itemCount: categoriasOrdenadas.length + (cargandoMas ? 1 : 0),
+                            itemCount:
+                                categoriasOrdenadas.length +
+                                (cargandoMas ? 1 : 0),
                             itemBuilder: (context, catIndex) {
                               // Mostrar indicador de carga al final
                               if (catIndex >= categoriasOrdenadas.length) {
                                 return const Padding(
                                   padding: EdgeInsets.all(16),
-                                  child: Center(child: CircularProgressIndicator()),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
                                 );
                               }
                               final categoria = categoriasOrdenadas[catIndex];

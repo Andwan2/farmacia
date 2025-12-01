@@ -7,7 +7,8 @@ class ProductoFactura {
   final String presentacion;
   final String medida;
   final String fechaVencimiento;
-  final double precio;
+  final double precio; // Precio de venta
+  final double precioCompra; // Precio de compra (costo)
   final double stockMaximo; // Stock total disponible en BD
   final bool esGranel; // Si es producto a granel
   final String? unidadMedida; // Abreviatura de la unidad (ej: "Lb")
@@ -20,6 +21,7 @@ class ProductoFactura {
     required this.medida,
     required this.fechaVencimiento,
     required this.precio,
+    this.precioCompra = 0.0,
     this.stockMaximo = 0,
     this.esGranel = false,
     this.unidadMedida,

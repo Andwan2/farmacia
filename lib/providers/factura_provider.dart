@@ -133,6 +133,7 @@ class FacturaProvider extends ChangeNotifier {
         medida: existente.medida,
         fechaVencimiento: existente.fechaVencimiento,
         precio: existente.precio,
+        precioCompra: existente.precioCompra,
         stockMaximo: existente.stockMaximo,
         esGranel: existente.esGranel,
         unidadMedida: existente.unidadMedida,
@@ -148,6 +149,7 @@ class FacturaProvider extends ChangeNotifier {
           medida: producto.cantidad.toString(),
           fechaVencimiento: producto.fechaVencimiento ?? '',
           precio: producto.precioVenta ?? 0.0,
+          precioCompra: producto.precioCompra ?? 0.0,
           stockMaximo: stockMaximo,
           esGranel: esGranel,
           unidadMedida: producto.abreviaturaUnidad,
@@ -180,6 +182,7 @@ class FacturaProvider extends ChangeNotifier {
           medida: producto.medida,
           fechaVencimiento: producto.fechaVencimiento,
           precio: producto.precio,
+          precioCompra: producto.precioCompra,
           stockMaximo: producto.stockMaximo,
           esGranel: producto.esGranel,
           unidadMedida: producto.unidadMedida,
@@ -200,6 +203,7 @@ class FacturaProvider extends ChangeNotifier {
         medida: producto.medida,
         fechaVencimiento: producto.fechaVencimiento,
         precio: producto.precio,
+        precioCompra: producto.precioCompra,
         stockMaximo: producto.stockMaximo,
         esGranel: producto.esGranel,
         unidadMedida: producto.unidadMedida,
@@ -440,22 +444,46 @@ class FacturaProvider extends ChangeNotifier {
 
       // 3. Insertar en tabla venta
       print('💾 Insertando venta...');
+      final datosVenta = {
+        'fecha': _fecha.toIso8601String().split('T')[0],
+        'total': total,
+        'id_cliente': clienteIdFinal,
+        'id_empleado': _empleadoId,
+        'payment_method_id': _metodoPagoId,
+      };
+      print('📋 Datos a insertar: $datosVenta');
+
       final ventaResponse = await Supabase.instance.client
           .from('venta')
-          .insert({
-            'fecha': _fecha.toIso8601String().split(
-              'T',
-            )[0], // Solo la fecha YYYY-MM-DD
-            'total': total,
-            'id_cliente': clienteIdFinal,
-            'id_empleado': _empleadoId,
-            'payment_method_id': _metodoPagoId,
-          })
-          .select('id_venta')
+          .insert(datosVenta)
+          .select('id_venta, fecha, total, id_cliente, id_empleado')
           .single();
+
+      print('📋 Respuesta de inserción: $ventaResponse');
 
       final idVenta = ventaResponse['id_venta'] as int;
       print('✅ Venta creada con ID: $idVenta');
+
+      // Esperar un momento para asegurar que la BD se sincronice
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Verificar que la venta existe
+      final verificacion = await Supabase.instance.client
+          .from('venta')
+          .select('id_venta, fecha, total')
+          .eq('id_venta', idVenta)
+          .maybeSingle();
+      print('🔍 Verificación de venta existente: $verificacion');
+
+      if (verificacion == null) {
+        print(
+          '❌ ERROR CRÍTICO: La venta con ID $idVenta NO existe después de insertarla',
+        );
+        print('❌ Esto indica un problema con la base de datos o permisos');
+        return 'Error: La venta no se guardó correctamente en la base de datos';
+      }
+
+      print('✅ Venta verificada correctamente en la base de datos');
 
       // 4. Para cada tipo de producto, procesar según si es a granel o no
       print('🔄 Procesando productos...');
@@ -512,23 +540,29 @@ class FacturaProvider extends ChangeNotifier {
             }
           }
 
-          // Insertar en producto_en_venta (solo los productos afectados)
+          // Insertar en producto_en_venta (solo los productos afectados) con precios históricos
+          print(
+            '      📊 Precios granel: venta=${producto.precio}, compra=${producto.precioCompra}',
+          );
           final productosEnVenta = idsProductosAfectados
               .map(
                 (idProducto) => {
                   'id_producto': idProducto,
                   'id_venta': idVenta,
+                  'precio_historico': producto.precio,
+                  'costo_historico': producto.precioCompra,
                 },
               )
               .toList();
 
           if (productosEnVenta.isNotEmpty) {
+            print('      📦 Insertando granel: $productosEnVenta');
             await Supabase.instance.client
                 .from('producto_en_venta')
                 .insert(productosEnVenta);
           }
 
-          print('      ✅ Producto a granel procesado');
+          print('      ✅ Producto a granel procesado con precios históricos');
         } else {
           // PRODUCTOS REGULARES: Marcar N productos como vendidos
           final productosDisponibles = await Supabase.instance.client
@@ -556,21 +590,29 @@ class FacturaProvider extends ChangeNotifier {
               '      ✅ ${idsProductos.length} productos marcados como Vendidos',
             );
 
-            // Insertar en producto_en_venta
+            // Insertar en producto_en_venta con precios históricos
+            print(
+              '      📊 Precios: venta=${producto.precio}, compra=${producto.precioCompra}',
+            );
             final productosEnVenta = idsProductos
                 .map(
                   (idProducto) => {
                     'id_producto': idProducto,
                     'id_venta': idVenta,
+                    'precio_historico': producto.precio,
+                    'costo_historico': producto.precioCompra,
                   },
                 )
                 .toList();
 
+            print('      📦 Insertando: $productosEnVenta');
             await Supabase.instance.client
                 .from('producto_en_venta')
                 .insert(productosEnVenta);
 
-            print('      ✅ Relaciones creadas en producto_en_venta');
+            print(
+              '      ✅ Relaciones creadas en producto_en_venta con precios históricos',
+            );
           } else {
             print('      ⚠️ No se encontraron productos disponibles');
           }

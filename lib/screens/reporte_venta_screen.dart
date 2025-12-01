@@ -20,11 +20,15 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
   List<int> ventasSeleccionadas = []; // IDs de ventas para reporte detallado
   late TabController _tabController;
   bool _isLoading = true; // Estado de carga
+  bool _isLoadingMore = false; // Estado de carga de más datos
+  bool _hasMoreData = true; // Si hay más datos por cargar
 
-  // Filtros para reporte detallado
-  String busquedaCliente = '';
-  String ordenarPor =
-      'fecha_desc'; // fecha_asc, fecha_desc, ganancia_asc, ganancia_desc, total_asc, total_desc, productos_asc, productos_desc
+  // Paginación
+  static const int _pageSize = 50; // Ventas por página
+  int _currentPage = 0;
+
+  // Filtros
+  String ordenarPor = 'fecha_desc';
 
   @override
   void initState() {
@@ -39,8 +43,18 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     super.dispose();
   }
 
-  Future<void> cargarVentas() async {
-    setState(() => _isLoading = true);
+  Future<void> cargarVentas({bool reset = true}) async {
+    if (reset) {
+      setState(() {
+        _isLoading = true;
+        _currentPage = 0;
+        _hasMoreData = true;
+        ventas = [];
+      });
+    } else {
+      if (_isLoadingMore || !_hasMoreData) return;
+      setState(() => _isLoadingMore = true);
+    }
 
     try {
       // Construir filtros de fecha
@@ -54,22 +68,39 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
         fechaFinStr = fechaFin!.toIso8601String().substring(0, 10);
       }
 
-      // ✅ OPTIMIZACIÓN: Ejecutar consultas en paralelo
-      final results = await Future.wait([
-        // Consulta 1: Ventas con filtros
-        _buildVentasQuery(fechaInicioStr, fechaFinStr),
-        // Consulta 2: TODOS los productos en venta de una vez
-        Supabase.instance.client
-            .from('producto_en_venta')
-            .select(
-              'id_venta, producto(nombre_producto, codigo, precio_venta, precio_compra, cantidad, id_presentacion, id_unidad_medida)',
-            ),
-      ]);
+      // Consulta paginada de ventas
+      final ventasBase = await _buildVentasQueryPaginated(
+        fechaInicioStr,
+        fechaFinStr,
+        _currentPage * _pageSize,
+        _pageSize,
+      );
 
-      final ventasBase = List<Map<String, dynamic>>.from(results[0]);
-      final todosProductos = List<Map<String, dynamic>>.from(results[1]);
+      if (ventasBase.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _hasMoreData = false;
+            _isLoading = false;
+            _isLoadingMore = false;
+          });
+        }
+        return;
+      }
 
-      // ✅ Indexar productos por id_venta para acceso O(1)
+      // Obtener IDs de ventas para esta página
+      final ventaIds = ventasBase.map((v) => v['id_venta'] as int).toList();
+
+      // Consulta de productos solo para las ventas de esta página
+      final productosResponse = await Supabase.instance.client
+          .from('producto_en_venta')
+          .select(
+            'id_venta, id_producto, precio_historico, costo_historico, producto(nombre_producto, codigo)',
+          )
+          .inFilter('id_venta', ventaIds);
+
+      final todosProductos = List<Map<String, dynamic>>.from(productosResponse);
+
+      // Indexar productos por id_venta
       final productosPorVenta = <int, List<Map<String, dynamic>>>{};
       for (var p in todosProductos) {
         final idVenta = p['id_venta'] as int?;
@@ -78,20 +109,20 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
         }
       }
 
-      // Procesar ventas SIN consultas adicionales
+      // Procesar ventas
       for (var v in ventasBase) {
         final idVenta = v['id_venta'] as int;
         final listaProductos = productosPorVenta[idVenta] ?? [];
 
-        // Usar el total de la tabla venta directamente
-        final totalVenta = (v['total'] as num?)?.toDouble() ?? 0.0;
-
-        // Calcular solo el costo sumando precios de compra
+        double totalVenta = 0.0;
         double totalCosto = 0.0;
         for (var p in listaProductos) {
-          final precioCompra =
-              (p['producto']?['precio_compra'] as num?)?.toDouble() ?? 0.0;
-          totalCosto += precioCompra;
+          final precioHistorico =
+              (p['precio_historico'] as num?)?.toDouble() ?? 0.0;
+          final costoHistorico =
+              (p['costo_historico'] as num?)?.toDouble() ?? 0.0;
+          totalVenta += precioHistorico;
+          totalCosto += costoHistorico;
         }
 
         v['productos'] = listaProductos;
@@ -102,13 +133,23 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
 
       if (mounted) {
         setState(() {
-          ventas = ventasBase;
+          if (reset) {
+            ventas = ventasBase;
+          } else {
+            ventas.addAll(ventasBase);
+          }
+          _currentPage++;
+          _hasMoreData = ventasBase.length >= _pageSize;
           _isLoading = false;
+          _isLoadingMore = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error al cargar ventas: $e')));
@@ -116,9 +157,11 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     }
   }
 
-  Future<List<dynamic>> _buildVentasQuery(
+  Future<List<Map<String, dynamic>>> _buildVentasQueryPaginated(
     String? fechaInicio,
     String? fechaFin,
+    int offset,
+    int limit,
   ) async {
     var query = Supabase.instance.client
         .from('venta')
@@ -126,6 +169,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
           'id_venta, fecha, total, cliente(nombre_cliente), empleado(nombre_empleado), payment_method:payment_method_id(name, provider)',
         );
 
+    // Aplicar filtros de fecha primero
     if (fechaInicio != null) {
       query = query.gte('fecha', fechaInicio);
     }
@@ -133,7 +177,12 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
       query = query.lte('fecha', fechaFin);
     }
 
-    return await query;
+    // Luego ordenar y paginar
+    final response = await query
+        .order('fecha', ascending: false)
+        .range(offset, offset + limit - 1);
+
+    return List<Map<String, dynamic>>.from(response);
   }
 
   int _contarProductos(Map<String, dynamic> venta) {
@@ -238,14 +287,16 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     for (var venta in ventasParaPdf) {
       final productos = (venta['productos'] as List?) ?? [];
 
-      // Agrupar productos iguales
+      // Agrupar productos iguales usando precio_historico y costo_historico
       final Map<String, Map<String, dynamic>> productosAgrupados = {};
       for (final p in productos) {
         final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
-        final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
+        final nombre =
+            prod['nombre_producto']?.toString() ?? 'Producto eliminado';
         final codigo = prod['codigo']?.toString() ?? 'N/A';
-        final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
-        final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
+        // Usar precio_historico y costo_historico de producto_en_venta
+        final precioVenta = (p['precio_historico'] as num?)?.toDouble() ?? 0.0;
+        final precioCompra = (p['costo_historico'] as num?)?.toDouble() ?? 0.0;
 
         final key = '$nombre|$codigo|$precioVenta|$precioCompra';
 
@@ -389,32 +440,6 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     );
   }
 
-  void seleccionarFechaInicio() async {
-    final fecha = await showDatePicker(
-      context: context,
-      initialDate: fechaInicio ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (fecha != null && mounted) {
-      setState(() => fechaInicio = fecha);
-      cargarVentas(); // Recargar automáticamente
-    }
-  }
-
-  void seleccionarFechaFin() async {
-    final fecha = await showDatePicker(
-      context: context,
-      initialDate: fechaFin ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (fecha != null && mounted) {
-      setState(() => fechaFin = fecha);
-      cargarVentas(); // Recargar automáticamente
-    }
-  }
-
   double calcularTotalGeneral() {
     return ventas.fold(0.0, (sum, v) => sum + (v['total_calculado'] ?? 0.0));
   }
@@ -428,12 +453,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
   }
 
   List<Map<String, dynamic>> _filtrarYOrdenarVentas() {
-    var ventasFiltradas = ventas.where((v) {
-      if (busquedaCliente.isEmpty) return true;
-      final nombreCliente = (v['cliente']?['nombre_cliente']?.toString() ?? '')
-          .toLowerCase();
-      return nombreCliente.contains(busquedaCliente.toLowerCase());
-    }).toList();
+    var ventasFiltradas = List<Map<String, dynamic>>.from(ventas);
 
     // Ordenar según criterio seleccionado
     ventasFiltradas.sort((a, b) {
@@ -472,6 +492,273 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     });
 
     return ventasFiltradas;
+  }
+
+  String _getFilterSummary() {
+    final parts = <String>[];
+
+    if (fechaInicio != null || fechaFin != null) {
+      if (fechaInicio != null && fechaFin != null) {
+        parts.add(
+          '${fechaInicio!.day}/${fechaInicio!.month} - ${fechaFin!.day}/${fechaFin!.month}',
+        );
+      } else if (fechaInicio != null) {
+        parts.add('Desde ${fechaInicio!.day}/${fechaInicio!.month}');
+      } else {
+        parts.add('Hasta ${fechaFin!.day}/${fechaFin!.month}');
+      }
+    }
+
+    if (ordenarPor != 'fecha_desc') {
+      final ordenLabels = {
+        'fecha_asc': 'Fecha ↑',
+        'ganancia_desc': 'Ganancia ↓',
+        'ganancia_asc': 'Ganancia ↑',
+        'total_desc': 'Total ↓',
+        'total_asc': 'Total ↑',
+        'productos_desc': 'Productos ↓',
+        'productos_asc': 'Productos ↑',
+      };
+      parts.add(ordenLabels[ordenarPor] ?? '');
+    }
+
+    return parts.isEmpty ? 'Filtros' : parts.join(' • ');
+  }
+
+  void _mostrarModalFiltros() {
+    var tempFechaInicio = fechaInicio;
+    var tempFechaFin = fechaFin;
+    var tempOrdenarPor = ordenarPor;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filtros',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setModalState(() {
+                            tempFechaInicio = null;
+                            tempFechaFin = null;
+                            tempOrdenarPor = 'fecha_desc';
+                          });
+                        },
+                        child: const Text('Limpiar todo'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Rango de fechas
+                  const Text(
+                    'Rango de fechas',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          label: Text(
+                            tempFechaInicio != null
+                                ? '${tempFechaInicio!.day}/${tempFechaInicio!.month}/${tempFechaInicio!.year}'
+                                : 'Desde',
+                          ),
+                          onPressed: () async {
+                            final fecha = await showDatePicker(
+                              context: context,
+                              initialDate: tempFechaInicio ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                            );
+                            if (fecha != null) {
+                              setModalState(() => tempFechaInicio = fecha);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          label: Text(
+                            tempFechaFin != null
+                                ? '${tempFechaFin!.day}/${tempFechaFin!.month}/${tempFechaFin!.year}'
+                                : 'Hasta',
+                          ),
+                          onPressed: () async {
+                            final fecha = await showDatePicker(
+                              context: context,
+                              initialDate: tempFechaFin ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                            );
+                            if (fecha != null) {
+                              setModalState(() => tempFechaFin = fecha);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Ordenar por
+                  const Text(
+                    'Ordenar por',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildFilterChip(
+                        'Fecha ↓',
+                        'fecha_desc',
+                        tempOrdenarPor,
+                        (v) {
+                          setModalState(() => tempOrdenarPor = v);
+                        },
+                      ),
+                      _buildFilterChip('Fecha ↑', 'fecha_asc', tempOrdenarPor, (
+                        v,
+                      ) {
+                        setModalState(() => tempOrdenarPor = v);
+                      }),
+                      _buildFilterChip(
+                        'Ganancia ↓',
+                        'ganancia_desc',
+                        tempOrdenarPor,
+                        (v) {
+                          setModalState(() => tempOrdenarPor = v);
+                        },
+                      ),
+                      _buildFilterChip(
+                        'Ganancia ↑',
+                        'ganancia_asc',
+                        tempOrdenarPor,
+                        (v) {
+                          setModalState(() => tempOrdenarPor = v);
+                        },
+                      ),
+                      _buildFilterChip(
+                        'Total ↓',
+                        'total_desc',
+                        tempOrdenarPor,
+                        (v) {
+                          setModalState(() => tempOrdenarPor = v);
+                        },
+                      ),
+                      _buildFilterChip('Total ↑', 'total_asc', tempOrdenarPor, (
+                        v,
+                      ) {
+                        setModalState(() => tempOrdenarPor = v);
+                      }),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Botones de acción
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text('Cerrar'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // Verificar si cambiaron las fechas (requiere recarga de BD)
+                            final cambioFechas =
+                                fechaInicio?.toIso8601String() !=
+                                    tempFechaInicio?.toIso8601String() ||
+                                fechaFin?.toIso8601String() !=
+                                    tempFechaFin?.toIso8601String();
+
+                            setState(() {
+                              fechaInicio = tempFechaInicio;
+                              fechaFin = tempFechaFin;
+                              ordenarPor = tempOrdenarPor;
+                            });
+                            Navigator.pop(context);
+
+                            // Solo recargar si cambiaron las fechas
+                            if (cambioFechas) {
+                              cargarVentas();
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onPrimary,
+                          ),
+                          child: const Text('Aplicar filtros'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildFilterChip(
+    String label,
+    String value,
+    String currentValue,
+    Function(String) onSelected,
+  ) {
+    final isSelected = currentValue == value;
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) => onSelected(value),
+      selectedColor: Theme.of(context).colorScheme.primaryContainer,
+      checkmarkColor: Theme.of(context).colorScheme.primary,
+    );
   }
 
   Widget _buildReporteGeneral(bool isDark) {
@@ -533,11 +820,25 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
             ),
           ),
         ),
-        // Lista de ventas
+        // Lista de ventas con paginación
         Expanded(
           child: ListView.builder(
-            itemCount: ventas.length,
+            itemCount: ventas.length + (_hasMoreData ? 1 : 0),
             itemBuilder: (context, index) {
+              // Botón de cargar más al final
+              if (index == ventas.length) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _isLoadingMore
+                      ? const Center(child: CircularProgressIndicator())
+                      : ElevatedButton.icon(
+                          onPressed: () => cargarVentas(reset: false),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Cargar más ventas'),
+                        ),
+                );
+              }
+
               final v = ventas[index];
               final ganancia = v['ganancia_total'] ?? 0.0;
               return Card(
@@ -588,86 +889,6 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
 
     return Column(
       children: [
-        // Filtros y búsqueda
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: TextField(
-                  decoration: InputDecoration(
-                    labelText: 'Buscar por cliente',
-                    hintText: 'Nombre del cliente',
-                    prefixIcon: const Icon(Icons.search),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: busquedaCliente.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              setState(() => busquedaCliente = '');
-                            },
-                          )
-                        : null,
-                  ),
-                  onChanged: (value) {
-                    setState(() => busquedaCliente = value);
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<String>(
-                  value: ordenarPor,
-                  decoration: const InputDecoration(
-                    labelText: 'Ordenar por',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'fecha_desc',
-                      child: Text('Fecha (más reciente)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'fecha_asc',
-                      child: Text('Fecha (más antigua)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'ganancia_desc',
-                      child: Text('Ganancia (mayor)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'ganancia_asc',
-                      child: Text('Ganancia (menor)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'total_desc',
-                      child: Text('Total (mayor)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'total_asc',
-                      child: Text('Total (menor)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'productos_desc',
-                      child: Text('Productos (más)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'productos_asc',
-                      child: Text('Productos (menos)'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => ordenarPor = value);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
         // Resumen de ventas seleccionadas (compacto)
         if (ventasSeleccionadas.isNotEmpty)
           Card(
@@ -723,8 +944,22 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
         // Lista scrolleable de todas las ventas (seleccionadas y disponibles)
         Expanded(
           child: ListView.builder(
-            itemCount: ventasFiltradas.length,
+            itemCount: ventasFiltradas.length + (_hasMoreData ? 1 : 0),
             itemBuilder: (context, index) {
+              // Botón de cargar más al final
+              if (index == ventasFiltradas.length) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _isLoadingMore
+                      ? const Center(child: CircularProgressIndicator())
+                      : ElevatedButton.icon(
+                          onPressed: () => cargarVentas(reset: false),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Cargar más ventas'),
+                        ),
+                );
+              }
+
               final v = ventasFiltradas[index];
               final isSelected = ventasSeleccionadas.contains(
                 v['id_venta'] as int,
@@ -742,14 +977,16 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     final productos = (v['productos'] as List?) ?? [];
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Agrupar productos
+    // Agrupar productos usando precio_historico y costo_historico
     final Map<String, Map<String, dynamic>> productosAgrupados = {};
     for (final p in productos) {
       final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
-      final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
+      final nombre =
+          prod['nombre_producto']?.toString() ?? 'Producto eliminado';
       final codigo = prod['codigo']?.toString() ?? 'N/A';
-      final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
-      final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
+      // Usar precio_historico y costo_historico de producto_en_venta
+      final precioVenta = (p['precio_historico'] as num?)?.toDouble() ?? 0.0;
+      final precioCompra = (p['costo_historico'] as num?)?.toDouble() ?? 0.0;
 
       final key = '$nombre|$codigo|$precioVenta|$precioCompra';
 
@@ -923,51 +1160,34 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
           padding: const EdgeInsets.only(bottom: 20),
           child: Column(
             children: [
-              // Filtros de fecha
+              // Botón de filtros compacto
               Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.date_range),
-                        label: Text(
-                          fechaInicio != null
-                              ? 'Desde: ${fechaInicio!.day}/${fechaInicio!.month}/${fechaInicio!.year}'
-                              : 'Fecha inicio',
-                        ),
-                        onPressed: seleccionarFechaInicio,
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.filter_list),
+                      label: Text(_getFilterSummary()),
+                      onPressed: _mostrarModalFiltros,
+                    ),
+                    if (fechaInicio != null ||
+                        fechaFin != null ||
+                        ordenarPor != 'fecha_desc')
+                      IconButton(
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Limpiar filtros',
+                        onPressed: () {
+                          setState(() {
+                            fechaInicio = null;
+                            fechaFin = null;
+                            ordenarPor = 'fecha_desc';
+                          });
+                          cargarVentas();
+                        },
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.date_range),
-                        label: Text(
-                          fechaFin != null
-                              ? 'Hasta: ${fechaFin!.day}/${fechaFin!.month}/${fechaFin!.year}'
-                              : 'Fecha fin',
-                        ),
-                        onPressed: seleccionarFechaFin,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.search),
-                      tooltip: 'Aplicar filtros',
-                      onPressed: cargarVentas,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.clear),
-                      tooltip: 'Limpiar filtros',
-                      onPressed: () {
-                        setState(() {
-                          fechaInicio = null;
-                          fechaFin = null;
-                        });
-                        cargarVentas();
-                      },
-                    ),
                   ],
                 ),
               ),
