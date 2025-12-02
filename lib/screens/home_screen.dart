@@ -12,6 +12,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool cargando = true;
+  bool entrenandoModelo = false;
 
   // Estadísticas
   int totalProductos = 0;
@@ -165,6 +166,48 @@ class _HomeScreenState extends State<HomeScreen> {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
+  Future<void> _entrenarModelo() async {
+    setState(() => entrenandoModelo = true);
+
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'reinforce-model',
+        body: {},
+      );
+
+      if (mounted) {
+        if (response.status == 200) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Modelo entrenado exitosamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al entrenar modelo: ${response.data}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al entrenar modelo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+
+    if (mounted) {
+      setState(() => entrenandoModelo = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -241,6 +284,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // Sección de Predicción de Ventas
             const PrediccionChart(),
+
+            const SizedBox(height: 16),
+
+            // Botón para entrenar modelo
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: entrenandoModelo ? null : _entrenarModelo,
+                icon: entrenandoModelo
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.model_training),
+                label: Text(
+                  entrenandoModelo ? 'Entrenando...' : 'Entrenar Modelo',
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
 
             const SizedBox(height: 24),
 
@@ -472,7 +546,7 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Ganancias vs Gastos',
+                  'Ventas vs Gastos',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
@@ -522,7 +596,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _buildLeyendaCompacta(
-                        'Ganancias',
+                        'Ventas',
                         Colors.green,
                         totalGanancias,
                       ),
@@ -586,7 +660,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               _buildLeyendaItem(
-                                'Ganancias',
+                                'Ventas',
                                 Colors.green,
                                 totalGanancias,
                               ),
@@ -617,7 +691,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   totalGanancias > totalGastos
                       ? '✅ El negocio es rentable este mes'
-                      : '⚠️ Los gastos superan las ganancias este mes',
+                      : '⚠️ Aun no se recupera la inversion de este mes',
                   style: TextStyle(
                     fontSize: 12,
                     color: totalGanancias > totalGastos

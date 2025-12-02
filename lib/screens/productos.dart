@@ -18,6 +18,7 @@ class _InventarioPageState extends State<ProductosScreen>
   int _selectedTabIndex = 0;
   List<ProductoGrupo> productos = [];
   List<String> categorias = []; // Lista de nombres de categorías únicas
+  Map<String, int> categoriasMap = {}; // Mapa nombre -> id de categorías
   Map<int, String> presentaciones = {}; // id_presentacion -> descripcion
   Map<int, String> unidadesAbrev = {}; // id_unidad_medida -> abreviatura
   String busqueda = '';
@@ -36,12 +37,12 @@ class _InventarioPageState extends State<ProductosScreen>
   String _ultimaBusqueda = '';
 
   // Filtros
-  List<String> filtrosCategorias = []; // Nombres de categorías seleccionadas
+  List<int> filtrosCategoriaIds = []; // IDs de categorías seleccionadas
   String ordenarPor = 'nombre'; // nombre, vencimiento
 
   // Contador de filtros activos
   int get filtrosActivos {
-    int count = filtrosCategorias.length;
+    int count = filtrosCategoriaIds.length;
     if (ordenarPor != 'nombre') count++;
     return count;
   }
@@ -67,7 +68,7 @@ class _InventarioPageState extends State<ProductosScreen>
   // Mostrar modal de filtros
   void _mostrarFiltros(BuildContext context) {
     // Variables temporales para los filtros
-    List<String> tempFiltrosCategorias = List.from(filtrosCategorias);
+    List<int> tempFiltrosCategoriaIds = List.from(filtrosCategoriaIds);
     String tempOrdenarPor = ordenarPor;
 
     showModalBottomSheet(
@@ -107,7 +108,7 @@ class _InventarioPageState extends State<ProductosScreen>
                       TextButton(
                         onPressed: () {
                           setModalState(() {
-                            tempFiltrosCategorias.clear();
+                            tempFiltrosCategoriaIds.clear();
                             tempOrdenarPor = 'nombre';
                           });
                         },
@@ -138,18 +139,21 @@ class _InventarioPageState extends State<ProductosScreen>
                             spacing: 8,
                             runSpacing: 8,
                             children: categorias.map((cat) {
-                              final isSelected = tempFiltrosCategorias.contains(
-                                cat,
-                              );
+                              final catId = categoriasMap[cat];
+                              final isSelected =
+                                  catId != null &&
+                                  tempFiltrosCategoriaIds.contains(catId);
                               return FilterChip(
                                 label: Text(cat),
                                 selected: isSelected,
                                 onSelected: (selected) {
                                   setModalState(() {
-                                    if (selected) {
-                                      tempFiltrosCategorias.add(cat);
-                                    } else {
-                                      tempFiltrosCategorias.remove(cat);
+                                    if (catId != null) {
+                                      if (selected) {
+                                        tempFiltrosCategoriaIds.add(catId);
+                                      } else {
+                                        tempFiltrosCategoriaIds.remove(catId);
+                                      }
                                     }
                                   });
                                 },
@@ -231,12 +235,13 @@ class _InventarioPageState extends State<ProductosScreen>
                                 onPressed: () {
                                   final cambioFiltros =
                                       !_listEquals(
-                                        filtrosCategorias,
-                                        tempFiltrosCategorias,
+                                        filtrosCategoriaIds,
+                                        tempFiltrosCategoriaIds,
                                       ) ||
                                       ordenarPor != tempOrdenarPor;
                                   setState(() {
-                                    filtrosCategorias = tempFiltrosCategorias;
+                                    filtrosCategoriaIds =
+                                        tempFiltrosCategoriaIds;
                                     ordenarPor = tempOrdenarPor;
                                   });
                                   Navigator.pop(context);
@@ -419,8 +424,8 @@ class _InventarioPageState extends State<ProductosScreen>
           'p_limit': _pageSize,
           'p_cursor': append ? _cursor : null,
           'p_estado': estado,
-          'p_categoria_ids': filtrosCategorias.isNotEmpty
-              ? filtrosCategorias
+          'p_categoria_ids': filtrosCategoriaIds.isNotEmpty
+              ? filtrosCategoriaIds
               : null,
           'p_busqueda': busqueda.isNotEmpty ? busqueda : null,
         },
@@ -452,15 +457,18 @@ class _InventarioPageState extends State<ProductosScreen>
 
         // Extraer categorías únicas de los productos cargados (solo en primera carga)
         if (!append && categorias.isEmpty) {
-          final Set<String> catSet = {};
+          final Map<String, int> catMap = {};
           for (final p in productos) {
-            if (p.categoriaNombre != null && p.categoriaNombre!.isNotEmpty) {
-              catSet.add(p.categoriaNombre!);
+            if (p.categoriaNombre != null &&
+                p.categoriaNombre!.isNotEmpty &&
+                p.categoriaId != null) {
+              catMap[p.categoriaNombre!] = p.categoriaId!;
             }
           }
-          final catList = catSet.toList()..sort();
+          final catList = catMap.keys.toList()..sort();
           setState(() {
             categorias = catList;
+            categoriasMap = catMap;
           });
           _initTabController();
         }
@@ -987,28 +995,36 @@ class _InventarioPageState extends State<ProductosScreen>
                       ],
                     ),
                     // Chips de filtros activos
-                    if (filtrosCategorias.isNotEmpty ||
+                    if (filtrosCategoriaIds.isNotEmpty ||
                         ordenarPor != 'nombre') ...[
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          ...filtrosCategorias.map(
-                            (cat) => Chip(
-                              label: Text(cat),
+                          ...filtrosCategoriaIds.map((catId) {
+                            // Buscar el nombre de la categoría por su ID
+                            final catName = categoriasMap.entries
+                                .firstWhere(
+                                  (e) => e.value == catId,
+                                  orElse: () =>
+                                      MapEntry('Categoría $catId', catId),
+                                )
+                                .key;
+                            return Chip(
+                              label: Text(catName),
                               backgroundColor: Theme.of(
                                 context,
                               ).colorScheme.secondaryContainer,
                               onDeleted: () {
                                 setState(() {
-                                  filtrosCategorias.remove(cat);
+                                  filtrosCategoriaIds.remove(catId);
                                 });
                                 _resetYCargar();
                               },
                               deleteIcon: const Icon(Icons.close, size: 18),
-                            ),
-                          ),
+                            );
+                          }),
                           if (ordenarPor != 'nombre')
                             Chip(
                               label: Text(
