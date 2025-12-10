@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:abari/widgets/prediccion_chart.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -11,6 +12,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool cargando = true;
+  bool entrenandoModelo = false;
 
   // Estadísticas
   int totalProductos = 0;
@@ -23,8 +25,6 @@ class _HomeScreenState extends State<HomeScreen> {
   int totalProveedores = 0;
 
   // Para gráficas
-  String periodoSeleccionado = 'semana'; // 'semana' o 'mes'
-  Map<String, int> ventasPorPeriodo = {}; // Para el bar chart
   double totalGanancias = 0.0;
   double totalGastos = 0.0;
 
@@ -38,16 +38,50 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => cargando = true);
 
     try {
-      // Total de productos disponibles
-      final productosResponse = await Supabase.instance.client
-          .from('producto')
-          .select('id_producto, fecha_vencimiento, estado')
-          .eq('estado', 'Disponible');
-
-      totalProductos = productosResponse.length;
-
-      // Productos próximos a vencer (30 días)
       final ahora = DateTime.now();
+      final hoyStr = _formatDate(ahora);
+      final inicioMesDate = DateTime(ahora.year, ahora.month, 1);
+      final inicioMes = _formatDate(inicioMesDate);
+
+      // ✅ OPTIMIZACIÓN: Ejecutar todas las consultas en paralelo
+      final results = await Future.wait([
+        // 0: Productos disponibles (con presentación y cantidad para calcular stock)
+        Supabase.instance.client
+            .from('producto')
+            .select(
+              'id_producto, codigo, fecha_vencimiento, cantidad, presentacion(descripcion)',
+            )
+            .eq('estado', 'Disponible'),
+        // 1: Ventas del mes (incluye hoy)
+        Supabase.instance.client
+            .from('venta')
+            .select('id_venta, total, fecha')
+            .gte('fecha', inicioMes),
+        // 2: Compras del mes
+        Supabase.instance.client
+            .from('compra')
+            .select('total')
+            .gte('fecha', inicioMes),
+        // 3: Total clientes
+        Supabase.instance.client.from('cliente').select('id_cliente'),
+        // 4: Total proveedores
+        Supabase.instance.client.from('proveedor').select('id_proveedor'),
+        // 5: Productos en ventas del mes (para calcular costos) - UNA sola consulta
+        Supabase.instance.client
+            .from('producto_en_venta')
+            .select('id_venta, precio_historico, costo_historico')
+            .gte('id_venta', 0), // Traer todos, filtraremos en memoria
+      ]);
+
+      final productosResponse = results[0] as List;
+      final ventasMesResponse = results[1] as List;
+      final comprasMesResponse = results[2] as List;
+      final clientesResponse = results[3] as List;
+      final proveedoresResponse = results[4] as List;
+      final productosEnVentaResponse = results[5] as List;
+
+      // Procesar productos
+      totalProductos = productosResponse.length;
       final en30Dias = ahora.add(const Duration(days: 30));
       productosProximosVencer = productosResponse.where((p) {
         final fechaVenc = p['fecha_vencimiento'] as String?;
@@ -56,68 +90,67 @@ class _HomeScreenState extends State<HomeScreen> {
         return fecha.isAfter(ahora) && fecha.isBefore(en30Dias);
       }).length;
 
-      // Productos con stock bajo (agrupados, menos de 5 unidades)
-      final productosAgrupados = <String, int>{};
+      // Stock bajo - agrupar por código y considerar si es a granel
+      final stockPorCodigo = <String, double>{};
+      final esGranelPorCodigo = <String, bool>{};
+
       for (final p in productosResponse) {
-        final nombre = p['id_producto'].toString();
-        productosAgrupados[nombre] = (productosAgrupados[nombre] ?? 0) + 1;
+        final codigo = p['codigo']?.toString() ?? p['id_producto'].toString();
+        final presentacion = p['presentacion'] as Map<String, dynamic>?;
+        final descripcionPres =
+            presentacion?['descripcion']?.toString().toLowerCase() ?? '';
+        final esGranel = descripcionPres == 'a granel';
+
+        esGranelPorCodigo[codigo] = esGranel;
+
+        if (esGranel) {
+          // Para productos a granel: stock = cantidad del producto
+          final cantidad = (p['cantidad'] as num?)?.toDouble() ?? 0;
+          // Solo contar una vez por código (el primero que encuentre)
+          if (!stockPorCodigo.containsKey(codigo)) {
+            stockPorCodigo[codigo] = cantidad;
+          }
+        } else {
+          // Para otros productos: stock = cantidad de registros
+          stockPorCodigo[codigo] = (stockPorCodigo[codigo] ?? 0) + 1;
+        }
       }
-      productosStockBajo = productosAgrupados.values
-          .where((stock) => stock < 5)
-          .length;
 
-      // Ventas de hoy
-      final hoyStr =
-          '${ahora.year}-${ahora.month.toString().padLeft(2, '0')}-${ahora.day.toString().padLeft(2, '0')}';
-      final ventasHoyResponse = await Supabase.instance.client
-          .from('venta')
-          .select('total')
-          .eq('fecha', hoyStr);
+      productosStockBajo = stockPorCodigo.values.where((s) => s < 5).length;
 
-      ventasHoy = ventasHoyResponse.fold<double>(
-        0.0,
-        (sum, v) => sum + ((v['total'] as num?)?.toDouble() ?? 0.0),
-      );
+      // Procesar ventas - filtrar hoy y calcular totales
+      ventasHoy = 0.0;
+      ventasMes = 0.0;
+      final ventasIds = <int>{};
 
-      // Ventas del mes
-      final inicioMesDate = DateTime(ahora.year, ahora.month, 1);
-      final inicioMes =
-          '${inicioMesDate.year}-${inicioMesDate.month.toString().padLeft(2, '0')}-${inicioMesDate.day.toString().padLeft(2, '0')}';
-      final ventasMesResponse = await Supabase.instance.client
-          .from('venta')
-          .select('total')
-          .gte('fecha', inicioMes);
-
-      ventasMes = ventasMesResponse.fold<double>(
-        0.0,
-        (sum, v) => sum + ((v['total'] as num?)?.toDouble() ?? 0.0),
-      );
+      for (var v in ventasMesResponse) {
+        final total = (v['total'] as num?)?.toDouble() ?? 0.0;
+        ventasMes += total;
+        if (v['fecha'] == hoyStr) ventasHoy += total;
+        ventasIds.add(v['id_venta'] as int);
+      }
 
       // Compras del mes
-      final comprasMesResponse = await Supabase.instance.client
-          .from('compra')
-          .select('total')
-          .gte('fecha', inicioMes);
-
       comprasMes = comprasMesResponse.fold<double>(
         0.0,
         (sum, c) => sum + ((c['total'] as num?)?.toDouble() ?? 0.0),
       );
 
-      // Total de clientes
-      final clientesResponse = await Supabase.instance.client
-          .from('cliente')
-          .select('id_cliente');
+      // Contadores
       totalClientes = clientesResponse.length;
-
-      // Total de proveedores
-      final proveedoresResponse = await Supabase.instance.client
-          .from('proveedor')
-          .select('id_proveedor');
       totalProveedores = proveedoresResponse.length;
 
-      // Cargar datos para gráficas
-      await cargarDatosGraficas();
+      // ✅ Calcular costos usando costo_historico de producto_en_venta
+      double totalCostos = 0.0;
+      for (var pv in productosEnVentaResponse) {
+        final idVenta = pv['id_venta'] as int?;
+        if (idVenta != null && ventasIds.contains(idVenta)) {
+          totalCostos += (pv['costo_historico'] as num?)?.toDouble() ?? 0.0;
+        }
+      }
+
+      totalGanancias = ventasMes - totalCostos;
+      totalGastos = comprasMes + totalCostos;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -129,117 +162,49 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => cargando = false);
   }
 
-  Future<void> cargarDatosGraficas() async {
-    try {
-      final ahora = DateTime.now();
-
-      // Cargar ventas por período para el bar chart
-      if (periodoSeleccionado == 'semana') {
-        // Últimos 7 días
-        ventasPorPeriodo = {};
-        for (int i = 6; i >= 0; i--) {
-          final fecha = ahora.subtract(Duration(days: i));
-          final fechaStr =
-              '${fecha.year}-${fecha.month.toString().padLeft(2, '0')}-${fecha.day.toString().padLeft(2, '0')}';
-          final diaNombre = _obtenerNombreDia(fecha.weekday);
-
-          final ventasResponse = await Supabase.instance.client
-              .from('venta')
-              .select('id_venta')
-              .eq('fecha', fechaStr);
-
-          ventasPorPeriodo[diaNombre] = ventasResponse.length;
-        }
-      } else {
-        // Últimas 4 semanas del mes
-        ventasPorPeriodo = {};
-        final inicioMes = DateTime(ahora.year, ahora.month, 1);
-
-        for (int semana = 1; semana <= 4; semana++) {
-          final inicioSemana = inicioMes.add(Duration(days: (semana - 1) * 7));
-          final finSemana = inicioSemana.add(const Duration(days: 6));
-
-          final inicioStr =
-              '${inicioSemana.year}-${inicioSemana.month.toString().padLeft(2, '0')}-${inicioSemana.day.toString().padLeft(2, '0')}';
-          final finStr =
-              '${finSemana.year}-${finSemana.month.toString().padLeft(2, '0')}-${finSemana.day.toString().padLeft(2, '0')}';
-
-          final ventasResponse = await Supabase.instance.client
-              .from('venta')
-              .select('id_venta')
-              .gte('fecha', inicioStr)
-              .lte('fecha', finStr);
-
-          ventasPorPeriodo['Semana $semana'] = ventasResponse.length;
-        }
-      }
-
-      // Calcular ganancias y gastos para el pie chart
-      final inicioMesDate = DateTime(ahora.year, ahora.month, 1);
-      final inicioMes =
-          '${inicioMesDate.year}-${inicioMesDate.month.toString().padLeft(2, '0')}-${inicioMesDate.day.toString().padLeft(2, '0')}';
-
-      // Obtener todas las ventas del mes con productos
-      final ventasResponse = await Supabase.instance.client
-          .from('venta')
-          .select('id_venta, total')
-          .gte('fecha', inicioMes);
-
-      double totalVentas = 0.0;
-      double totalCostos = 0.0;
-
-      for (var venta in ventasResponse) {
-        final idVenta = venta['id_venta'];
-        final totalVenta = (venta['total'] as num?)?.toDouble() ?? 0.0;
-        totalVentas += totalVenta;
-
-        // Obtener productos de la venta para calcular costos
-        final productosVenta = await Supabase.instance.client
-            .from('producto_en_venta')
-            .select('producto(precio_compra)')
-            .eq('id_venta', idVenta);
-
-        for (var pv in productosVenta) {
-          final producto = pv['producto'] as Map<String, dynamic>?;
-          final precioCompra =
-              (producto?['precio_compra'] as num?)?.toDouble() ?? 0.0;
-          totalCostos += precioCompra;
-        }
-      }
-
-      totalGanancias = totalVentas - totalCostos;
-      totalGastos = comprasMes + totalCostos;
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error al cargar gráficas: $e')));
-      }
-      // Valores por defecto en caso de error
-      ventasPorPeriodo = {};
-      totalGanancias = 0.0;
-      totalGastos = 0.0;
-    }
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
-  String _obtenerNombreDia(int weekday) {
-    switch (weekday) {
-      case 1:
-        return 'Lun';
-      case 2:
-        return 'Mar';
-      case 3:
-        return 'Mié';
-      case 4:
-        return 'Jue';
-      case 5:
-        return 'Vie';
-      case 6:
-        return 'Sáb';
-      case 7:
-        return 'Dom';
-      default:
-        return '';
+  Future<void> _entrenarModelo() async {
+    setState(() => entrenandoModelo = true);
+
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'reinforce-model',
+        body: {},
+      );
+
+      if (mounted) {
+        if (response.status == 200) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Modelo entrenado exitosamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al entrenar modelo: ${response.data}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al entrenar modelo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+
+    if (mounted) {
+      setState(() => entrenandoModelo = false);
     }
   }
 
@@ -271,12 +236,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            Center(
-              child: Text(
-                'Bienvenido al Dashboard',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+
+            Text(
+              'Bienvenido al Dashboard',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
+
             const SizedBox(height: 24),
 
             // Sección de Inventario
@@ -317,31 +282,61 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 24),
 
+            // Sección de Predicción de Ventas
+            const PrediccionChart(),
+
+            const SizedBox(height: 16),
+
+            // Botón para entrenar modelo
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: entrenandoModelo ? null : _entrenarModelo,
+                icon: entrenandoModelo
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.model_training),
+                label: Text(
+                  entrenandoModelo ? 'Entrenando...' : 'Entrenar Modelo',
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
             // Sección de Ventas
             _buildSeccionTitulo('Ventas', Icons.point_of_sale),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildCardEstadistica(
-                    'Ventas Hoy',
-                    'C\$${ventasHoy.toStringAsFixed(2)}',
-                    Icons.today,
-                    Colors.green,
-                    isDark,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildCardEstadistica(
-                    'Ventas del Mes',
-                    'C\$${ventasMes.toStringAsFixed(2)}',
-                    Icons.calendar_month,
-                    Colors.teal,
-                    isDark,
-                  ),
-                ),
-              ],
+            _buildCardEstadistica(
+              'Ventas Hoy',
+              'C\$${ventasHoy.toStringAsFixed(2)}',
+              Icons.today,
+              Colors.green,
+              isDark,
+              fullWidth: true,
+            ),
+            const SizedBox(height: 12),
+            _buildCardEstadistica(
+              'Ventas del Mes',
+              'C\$${ventasMes.toStringAsFixed(2)}',
+              Icons.calendar_month,
+              Colors.teal,
+              isDark,
+              fullWidth: true,
             ),
 
             const SizedBox(height: 24),
@@ -389,27 +384,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 24),
 
-            // Sección de Análisis de Ventas (Bar Chart)
-            _buildSeccionTitulo('Análisis de Ventas', Icons.bar_chart),
-            const SizedBox(height: 12),
-            _buildBarChart(isDark),
-
-            const SizedBox(height: 24),
-
             // Sección de Rentabilidad (Pie Chart)
             _buildSeccionTitulo('Rentabilidad del Negocio', Icons.pie_chart),
             const SizedBox(height: 12),
             _buildPieChart(isDark),
 
-            const SizedBox(height: 24),
-
-            // Nota de actualización
-            Center(
-              child: Text(
-                'Desliza hacia abajo para actualizar',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
-            ),
+            const SizedBox(height: 30),
           ],
         ),
       ),
@@ -437,9 +417,30 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isDark, {
     bool fullWidth = false,
   }) {
+    // Colores adaptados para cada modo
+    final bgColor = isDark
+        ? const Color(0xFF1E1E1E) // Fondo oscuro elegante
+        : Colors.white;
+    final iconColor = isDark
+        ? _getLighterColor(color) // Color más brillante en oscuro
+        : color.withValues(alpha: 0.8);
+    final textColor = isDark ? Colors.white70 : const Color(0xFF333333);
+    final valueColor = isDark
+        ? _getLighterColor(color) // Valores brillantes en oscuro
+        : _getDarkerColor(color);
+    final borderColor = isDark
+        ? color.withValues(alpha: 0.4) // Borde visible en oscuro
+        : color.withValues(alpha: 0.3);
+    final shadowColor = color.withValues(alpha: isDark ? 0.2 : 0.3);
+
     return Card(
-      elevation: 2,
-      color: isDark ? color.withOpacity(0.2) : color.withOpacity(0.1),
+      elevation: 3,
+      color: bgColor,
+      shadowColor: shadowColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: borderColor, width: 1),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -448,23 +449,30 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(icono, color: color, size: 32),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: isDark ? 0.2 : 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icono, color: iconColor, size: 28),
+                ),
                 if (!fullWidth)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                      horizontal: 10,
+                      vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
+                      color: color.withValues(alpha: isDark ? 0.3 : 0.15),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
                       valor,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: color,
+                        color: valueColor,
                       ),
                     ),
                   ),
@@ -474,9 +482,9 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(
               titulo,
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[700],
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: textColor,
               ),
             ),
             if (fullWidth) ...[
@@ -484,9 +492,9 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(
                 valor,
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: color,
+                  color: valueColor,
                 ),
               ),
             ],
@@ -496,157 +504,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildBarChart(bool isDark) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Selector de período
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                const Text(
-                  'Frecuencia de Ventas',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'semana', label: Text('Semana')),
-                    ButtonSegment(value: 'mes', label: Text('Mes')),
-                  ],
-                  selected: {periodoSeleccionado},
-                  onSelectionChanged: (Set<String> newSelection) {
-                    setState(() {
-                      periodoSeleccionado = newSelection.first;
-                    });
-                    cargarDatosGraficas();
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 250,
-              child: ventasPorPeriodo.isEmpty
-                  ? const Center(child: Text('No hay datos disponibles'))
-                  : BarChart(
-                      BarChartData(
-                        alignment: BarChartAlignment.spaceAround,
-                        maxY:
-                            (ventasPorPeriodo.values.reduce(
-                                      (a, b) => a > b ? a : b,
-                                    ) +
-                                    5)
-                                .toDouble(),
-                        barTouchData: BarTouchData(
-                          enabled: true,
-                          touchTooltipData: BarTouchTooltipData(
-                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                              final label = ventasPorPeriodo.keys.elementAt(
-                                groupIndex,
-                              );
-                              return BarTooltipItem(
-                                '$label\n${rod.toY.toInt()} ventas',
-                                const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        titlesData: FlTitlesData(
-                          show: true,
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              getTitlesWidget: (value, meta) {
-                                if (value.toInt() >= 0 &&
-                                    value.toInt() < ventasPorPeriodo.length) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 8),
-                                    child: Text(
-                                      ventasPorPeriodo.keys.elementAt(
-                                        value.toInt(),
-                                      ),
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  );
-                                }
-                                return const Text('');
-                              },
-                            ),
-                          ),
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 40,
-                              getTitlesWidget: (value, meta) {
-                                return Text(
-                                  value.toInt().toString(),
-                                  style: const TextStyle(fontSize: 12),
-                                );
-                              },
-                            ),
-                          ),
-                          topTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          rightTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                        ),
-                        gridData: FlGridData(
-                          show: true,
-                          drawVerticalLine: false,
-                          horizontalInterval: 1,
-                          getDrawingHorizontalLine: (value) {
-                            return FlLine(
-                              color: Colors.grey.withOpacity(0.2),
-                              strokeWidth: 1,
-                            );
-                          },
-                        ),
-                        borderData: FlBorderData(show: false),
-                        barGroups: ventasPorPeriodo.entries.map((entry) {
-                          final index = ventasPorPeriodo.keys.toList().indexOf(
-                            entry.key,
-                          );
-                          return BarChartGroupData(
-                            x: index,
-                            barRods: [
-                              BarChartRodData(
-                                toY: entry.value.toDouble(),
-                                color: Colors.blue,
-                                width: 20,
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(6),
-                                  topRight: Radius.circular(6),
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                    ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              periodoSeleccionado == 'semana'
-                  ? 'Muestra las ventas de los últimos 7 días'
-                  : 'Muestra las ventas por semana del mes actual',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-          ],
-        ),
-      ),
-    );
+  // Obtener color más oscuro para mejor contraste en modo claro
+  Color _getDarkerColor(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl.withLightness((hsl.lightness * 0.6).clamp(0.0, 1.0)).toColor();
+  }
+
+  // Obtener color más brillante para mejor visibilidad en modo oscuro
+  Color _getLighterColor(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl
+        .withLightness((hsl.lightness * 1.3).clamp(0.0, 0.85))
+        .withSaturation((hsl.saturation * 1.1).clamp(0.0, 1.0))
+        .toColor();
   }
 
   Widget _buildPieChart(bool isDark) {
@@ -657,38 +527,113 @@ class _HomeScreenState extends State<HomeScreen> {
     final porcentajeGastos = total > 0 ? (totalGastos / total) * 100 : 0.0;
 
     return Card(
-      elevation: 2,
+      elevation: isDark ? 1 : 2,
+      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Colors.teal.withValues(alpha: isDark ? 0.4 : 0.3),
+          width: 1,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Distribución de Ganancias vs Gastos',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 250,
-              child: total == 0
-                  ? const Center(child: Text('No hay datos disponibles'))
-                  : Row(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isMobile = constraints.maxWidth < 350;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ventas vs Gastos',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                if (total == 0)
+                  const SizedBox(
+                    height: 200,
+                    child: Center(child: Text('No hay datos disponibles')),
+                  )
+                else if (isMobile) ...[
+                  // Layout vertical para mobile
+                  SizedBox(
+                    height: 180,
+                    child: PieChart(
+                      PieChartData(
+                        sectionsSpace: 2,
+                        centerSpaceRadius: 40,
+                        sections: [
+                          PieChartSectionData(
+                            value: totalGanancias,
+                            title: '${porcentajeGanancias.toStringAsFixed(0)}%',
+                            color: Colors.green,
+                            radius: 50,
+                            titleStyle: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          PieChartSectionData(
+                            value: totalGastos,
+                            title: '${porcentajeGastos.toStringAsFixed(0)}%',
+                            color: Colors.red,
+                            radius: 50,
+                            titleStyle: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Leyenda compacta
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildLeyendaCompacta(
+                        'Ventas',
+                        Colors.green,
+                        totalGanancias,
+                      ),
+                      _buildLeyendaCompacta('Gastos', Colors.red, totalGastos),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                      'Total: C\$${total.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  // Layout horizontal para tablet/desktop
+                  SizedBox(
+                    height: 200,
+                    child: Row(
                       children: [
                         Expanded(
                           flex: 2,
                           child: PieChart(
                             PieChartData(
                               sectionsSpace: 2,
-                              centerSpaceRadius: 60,
+                              centerSpaceRadius: 40,
                               sections: [
                                 PieChartSectionData(
                                   value: totalGanancias,
                                   title:
                                       '${porcentajeGanancias.toStringAsFixed(1)}%',
                                   color: Colors.green,
-                                  radius: 80,
+                                  radius: 60,
                                   titleStyle: const TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
@@ -698,9 +643,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   title:
                                       '${porcentajeGastos.toStringAsFixed(1)}%',
                                   color: Colors.red,
-                                  radius: 80,
+                                  radius: 60,
                                   titleStyle: const TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
@@ -715,23 +660,23 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               _buildLeyendaItem(
-                                'Ganancias',
+                                'Ventas',
                                 Colors.green,
                                 totalGanancias,
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 8),
                               _buildLeyendaItem(
                                 'Gastos',
                                 Colors.red,
                                 totalGastos,
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 12),
                               const Divider(),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 4),
                               Text(
                                 'Total: C\$${total.toStringAsFixed(2)}',
                                 style: const TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -740,23 +685,47 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ],
                     ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              totalGanancias > totalGastos
-                  ? '✅ El negocio es rentable este mes'
-                  : '⚠️ Los gastos superan las ganancias este mes',
-              style: TextStyle(
-                fontSize: 12,
-                color: totalGanancias > totalGastos
-                    ? Colors.green
-                    : Colors.orange,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Text(
+                  totalGanancias > totalGastos
+                      ? '✅ El negocio es rentable este mes'
+                      : '⚠️ Aun no se recupera la inversion de este mes',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: totalGanancias > totalGastos
+                        ? Colors.green
+                        : Colors.orange,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
+    );
+  }
+
+  Widget _buildLeyendaCompacta(String label, Color color, double valor) {
+    return Column(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+        ),
+        Text(
+          'C\$${valor.toStringAsFixed(0)}',
+          style: const TextStyle(fontSize: 9, color: Colors.grey),
+        ),
+      ],
     );
   }
 

@@ -19,11 +19,16 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
   DateTime? fechaFin;
   List<int> ventasSeleccionadas = []; // IDs de ventas para reporte detallado
   late TabController _tabController;
+  bool _isLoading = true; // Estado de carga
+  bool _isLoadingMore = false; // Estado de carga de más datos
+  bool _hasMoreData = true; // Si hay más datos por cargar
 
-  // Filtros para reporte detallado
-  String busquedaCliente = '';
-  String ordenarPor =
-      'fecha_desc'; // fecha_asc, fecha_desc, ganancia_asc, ganancia_desc, total_asc, total_desc, productos_asc, productos_desc
+  // Paginación
+  static const int _pageSize = 50; // Ventas por página
+  int _currentPage = 0;
+
+  // Filtros
+  String ordenarPor = 'fecha_desc';
 
   @override
   void initState() {
@@ -38,59 +43,146 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     super.dispose();
   }
 
-  Future<void> cargarVentas() async {
+  Future<void> cargarVentas({bool reset = true}) async {
+    if (reset) {
+      setState(() {
+        _isLoading = true;
+        _currentPage = 0;
+        _hasMoreData = true;
+        ventas = [];
+      });
+    } else {
+      if (_isLoadingMore || !_hasMoreData) return;
+      setState(() => _isLoadingMore = true);
+    }
+
+    try {
+      // Construir filtros de fecha
+      String? fechaInicioStr;
+      String? fechaFinStr;
+
+      if (fechaInicio != null) {
+        fechaInicioStr = fechaInicio!.toIso8601String().substring(0, 10);
+      }
+      if (fechaFin != null) {
+        fechaFinStr = fechaFin!.toIso8601String().substring(0, 10);
+      }
+
+      // Consulta paginada de ventas
+      final ventasBase = await _buildVentasQueryPaginated(
+        fechaInicioStr,
+        fechaFinStr,
+        _currentPage * _pageSize,
+        _pageSize,
+      );
+
+      if (ventasBase.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _hasMoreData = false;
+            _isLoading = false;
+            _isLoadingMore = false;
+          });
+        }
+        return;
+      }
+
+      // Obtener IDs de ventas para esta página
+      final ventaIds = ventasBase.map((v) => v['id_venta'] as int).toList();
+
+      // Consulta de productos solo para las ventas de esta página
+      final productosResponse = await Supabase.instance.client
+          .from('producto_en_venta')
+          .select(
+            'id_venta, id_producto, precio_historico, costo_historico, producto(nombre_producto, codigo)',
+          )
+          .inFilter('id_venta', ventaIds);
+
+      final todosProductos = List<Map<String, dynamic>>.from(productosResponse);
+
+      // Indexar productos por id_venta
+      final productosPorVenta = <int, List<Map<String, dynamic>>>{};
+      for (var p in todosProductos) {
+        final idVenta = p['id_venta'] as int?;
+        if (idVenta != null) {
+          productosPorVenta.putIfAbsent(idVenta, () => []).add(p);
+        }
+      }
+
+      // Procesar ventas
+      for (var v in ventasBase) {
+        final idVenta = v['id_venta'] as int;
+        final listaProductos = productosPorVenta[idVenta] ?? [];
+
+        double totalVenta = 0.0;
+        double totalCosto = 0.0;
+        for (var p in listaProductos) {
+          final precioHistorico =
+              (p['precio_historico'] as num?)?.toDouble() ?? 0.0;
+          final costoHistorico =
+              (p['costo_historico'] as num?)?.toDouble() ?? 0.0;
+          totalVenta += precioHistorico;
+          totalCosto += costoHistorico;
+        }
+
+        v['productos'] = listaProductos;
+        v['total_calculado'] = totalVenta;
+        v['total_costo'] = totalCosto;
+        v['ganancia_total'] = totalVenta - totalCosto;
+      }
+
+      if (mounted) {
+        setState(() {
+          if (reset) {
+            ventas = ventasBase;
+          } else {
+            ventas.addAll(ventasBase);
+          }
+          _currentPage++;
+          _hasMoreData = ventasBase.length >= _pageSize;
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al cargar ventas: $e')));
+      }
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _buildVentasQueryPaginated(
+    String? fechaInicio,
+    String? fechaFin,
+    int offset,
+    int limit,
+  ) async {
     var query = Supabase.instance.client
         .from('venta')
         .select(
-          'id_venta, fecha, cliente(nombre_cliente), empleado(nombre_empleado), payment_method:payment_method_id(name, provider)',
+          'id_venta, fecha, total, cliente(nombre_cliente), empleado(nombre_empleado), payment_method:payment_method_id(name, provider)',
         );
 
-    // ✅ Filtros por rango de fechas si se seleccionaron
+    // Aplicar filtros de fecha primero
     if (fechaInicio != null) {
-      final fechaInicioStr = fechaInicio!.toIso8601String().substring(0, 10);
-      query = query.gte('fecha', fechaInicioStr);
+      query = query.gte('fecha', fechaInicio);
     }
-
     if (fechaFin != null) {
-      final fechaFinStr = fechaFin!.toIso8601String().substring(0, 10);
-      query = query.lte('fecha', fechaFinStr);
+      query = query.lte('fecha', fechaFin);
     }
 
-    final response = await query;
-    final ventasBase = List<Map<String, dynamic>>.from(response);
+    // Luego ordenar y paginar
+    final response = await query
+        .order('fecha', ascending: false)
+        .range(offset, offset + limit - 1);
 
-    // 🔎 Calcular total dinámico por cada venta y ganancias
-    for (var v in ventasBase) {
-      final producto = await Supabase.instance.client
-          .from('producto_en_venta')
-          .select(
-            'producto(nombre_producto, precio_venta, precio_compra, tipo)',
-          )
-          .eq('id_venta', v['id_venta']);
-
-      final listaProductos = List<Map<String, dynamic>>.from(producto);
-
-      double totalVenta = 0.0;
-      double totalCosto = 0.0;
-
-      for (var p in listaProductos) {
-        final precioVenta =
-            (p['producto']?['precio_venta'] as num?)?.toDouble() ?? 0.0;
-        final precioCompra =
-            (p['producto']?['precio_compra'] as num?)?.toDouble() ?? 0.0;
-        totalVenta += precioVenta;
-        totalCosto += precioCompra;
-      }
-
-      v['productos'] = listaProductos;
-      v['total_calculado'] = totalVenta;
-      v['total_costo'] = totalCosto;
-      v['ganancia_total'] = totalVenta - totalCosto;
-    }
-
-    setState(() {
-      ventas = ventasBase;
-    });
+    return List<Map<String, dynamic>>.from(response);
   }
 
   int _contarProductos(Map<String, dynamic> venta) {
@@ -195,21 +287,23 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     for (var venta in ventasParaPdf) {
       final productos = (venta['productos'] as List?) ?? [];
 
-      // Agrupar productos iguales
+      // Agrupar productos iguales usando precio_historico y costo_historico
       final Map<String, Map<String, dynamic>> productosAgrupados = {};
       for (final p in productos) {
         final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
-        final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
-        final tipo = prod['tipo']?.toString() ?? 'N/A';
-        final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
-        final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
+        final nombre =
+            prod['nombre_producto']?.toString() ?? 'Producto eliminado';
+        final codigo = prod['codigo']?.toString() ?? 'N/A';
+        // Usar precio_historico y costo_historico de producto_en_venta
+        final precioVenta = (p['precio_historico'] as num?)?.toDouble() ?? 0.0;
+        final precioCompra = (p['costo_historico'] as num?)?.toDouble() ?? 0.0;
 
-        final key = '$nombre|$tipo|$precioVenta|$precioCompra';
+        final key = '$nombre|$codigo|$precioVenta|$precioCompra';
 
         if (!productosAgrupados.containsKey(key)) {
           productosAgrupados[key] = {
             'nombre': nombre,
-            'tipo': tipo,
+            'codigo': codigo,
             'precio_venta': precioVenta,
             'precio_compra': precioCompra,
             'cantidad': 1,
@@ -255,7 +349,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
               pw.Table.fromTextArray(
                 headers: const [
                   'Producto',
-                  'Tipo',
+                  'Código',
                   'Cant.',
                   'P. Compra',
                   'P. Venta',
@@ -271,7 +365,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
 
                   return [
                     p['nombre']?.toString() ?? 'N/A',
-                    p['tipo']?.toString() ?? 'N/A',
+                    p['codigo']?.toString() ?? 'N/A',
                     cantidad.toString(),
                     'C\$${precioCompra.toStringAsFixed(2)}',
                     'C\$${precioVenta.toStringAsFixed(2)}',
@@ -346,32 +440,6 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     );
   }
 
-  void seleccionarFechaInicio() async {
-    final fecha = await showDatePicker(
-      context: context,
-      initialDate: fechaInicio ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (fecha != null) {
-      setState(() => fechaInicio = fecha);
-      cargarVentas(); // Recargar automáticamente
-    }
-  }
-
-  void seleccionarFechaFin() async {
-    final fecha = await showDatePicker(
-      context: context,
-      initialDate: fechaFin ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (fecha != null) {
-      setState(() => fechaFin = fecha);
-      cargarVentas(); // Recargar automáticamente
-    }
-  }
-
   double calcularTotalGeneral() {
     return ventas.fold(0.0, (sum, v) => sum + (v['total_calculado'] ?? 0.0));
   }
@@ -385,12 +453,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
   }
 
   List<Map<String, dynamic>> _filtrarYOrdenarVentas() {
-    var ventasFiltradas = ventas.where((v) {
-      if (busquedaCliente.isEmpty) return true;
-      final nombreCliente = (v['cliente']?['nombre_cliente']?.toString() ?? '')
-          .toLowerCase();
-      return nombreCliente.contains(busquedaCliente.toLowerCase());
-    }).toList();
+    var ventasFiltradas = List<Map<String, dynamic>>.from(ventas);
 
     // Ordenar según criterio seleccionado
     ventasFiltradas.sort((a, b) {
@@ -429,6 +492,273 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     });
 
     return ventasFiltradas;
+  }
+
+  String _getFilterSummary() {
+    final parts = <String>[];
+
+    if (fechaInicio != null || fechaFin != null) {
+      if (fechaInicio != null && fechaFin != null) {
+        parts.add(
+          '${fechaInicio!.day}/${fechaInicio!.month} - ${fechaFin!.day}/${fechaFin!.month}',
+        );
+      } else if (fechaInicio != null) {
+        parts.add('Desde ${fechaInicio!.day}/${fechaInicio!.month}');
+      } else {
+        parts.add('Hasta ${fechaFin!.day}/${fechaFin!.month}');
+      }
+    }
+
+    if (ordenarPor != 'fecha_desc') {
+      final ordenLabels = {
+        'fecha_asc': 'Fecha ↑',
+        'ganancia_desc': 'Ganancia ↓',
+        'ganancia_asc': 'Ganancia ↑',
+        'total_desc': 'Total ↓',
+        'total_asc': 'Total ↑',
+        'productos_desc': 'Productos ↓',
+        'productos_asc': 'Productos ↑',
+      };
+      parts.add(ordenLabels[ordenarPor] ?? '');
+    }
+
+    return parts.isEmpty ? 'Filtros' : parts.join(' • ');
+  }
+
+  void _mostrarModalFiltros() {
+    var tempFechaInicio = fechaInicio;
+    var tempFechaFin = fechaFin;
+    var tempOrdenarPor = ordenarPor;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filtros',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setModalState(() {
+                            tempFechaInicio = null;
+                            tempFechaFin = null;
+                            tempOrdenarPor = 'fecha_desc';
+                          });
+                        },
+                        child: const Text('Limpiar todo'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Rango de fechas
+                  const Text(
+                    'Rango de fechas',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          label: Text(
+                            tempFechaInicio != null
+                                ? '${tempFechaInicio!.day}/${tempFechaInicio!.month}/${tempFechaInicio!.year}'
+                                : 'Desde',
+                          ),
+                          onPressed: () async {
+                            final fecha = await showDatePicker(
+                              context: context,
+                              initialDate: tempFechaInicio ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                            );
+                            if (fecha != null) {
+                              setModalState(() => tempFechaInicio = fecha);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          label: Text(
+                            tempFechaFin != null
+                                ? '${tempFechaFin!.day}/${tempFechaFin!.month}/${tempFechaFin!.year}'
+                                : 'Hasta',
+                          ),
+                          onPressed: () async {
+                            final fecha = await showDatePicker(
+                              context: context,
+                              initialDate: tempFechaFin ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                            );
+                            if (fecha != null) {
+                              setModalState(() => tempFechaFin = fecha);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Ordenar por
+                  const Text(
+                    'Ordenar por',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildFilterChip(
+                        'Fecha ↓',
+                        'fecha_desc',
+                        tempOrdenarPor,
+                        (v) {
+                          setModalState(() => tempOrdenarPor = v);
+                        },
+                      ),
+                      _buildFilterChip('Fecha ↑', 'fecha_asc', tempOrdenarPor, (
+                        v,
+                      ) {
+                        setModalState(() => tempOrdenarPor = v);
+                      }),
+                      _buildFilterChip(
+                        'Ganancia ↓',
+                        'ganancia_desc',
+                        tempOrdenarPor,
+                        (v) {
+                          setModalState(() => tempOrdenarPor = v);
+                        },
+                      ),
+                      _buildFilterChip(
+                        'Ganancia ↑',
+                        'ganancia_asc',
+                        tempOrdenarPor,
+                        (v) {
+                          setModalState(() => tempOrdenarPor = v);
+                        },
+                      ),
+                      _buildFilterChip(
+                        'Total ↓',
+                        'total_desc',
+                        tempOrdenarPor,
+                        (v) {
+                          setModalState(() => tempOrdenarPor = v);
+                        },
+                      ),
+                      _buildFilterChip('Total ↑', 'total_asc', tempOrdenarPor, (
+                        v,
+                      ) {
+                        setModalState(() => tempOrdenarPor = v);
+                      }),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Botones de acción
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text('Cerrar'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // Verificar si cambiaron las fechas (requiere recarga de BD)
+                            final cambioFechas =
+                                fechaInicio?.toIso8601String() !=
+                                    tempFechaInicio?.toIso8601String() ||
+                                fechaFin?.toIso8601String() !=
+                                    tempFechaFin?.toIso8601String();
+
+                            setState(() {
+                              fechaInicio = tempFechaInicio;
+                              fechaFin = tempFechaFin;
+                              ordenarPor = tempOrdenarPor;
+                            });
+                            Navigator.pop(context);
+
+                            // Solo recargar si cambiaron las fechas
+                            if (cambioFechas) {
+                              cargarVentas();
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onPrimary,
+                          ),
+                          child: const Text('Aplicar filtros'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildFilterChip(
+    String label,
+    String value,
+    String currentValue,
+    Function(String) onSelected,
+  ) {
+    final isSelected = currentValue == value;
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) => onSelected(value),
+      selectedColor: Theme.of(context).colorScheme.primaryContainer,
+      checkmarkColor: Theme.of(context).colorScheme.primary,
+    );
   }
 
   Widget _buildReporteGeneral(bool isDark) {
@@ -490,11 +820,25 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
             ),
           ),
         ),
-        // Lista de ventas
+        // Lista de ventas con paginación
         Expanded(
           child: ListView.builder(
-            itemCount: ventas.length,
+            itemCount: ventas.length + (_hasMoreData ? 1 : 0),
             itemBuilder: (context, index) {
+              // Botón de cargar más al final
+              if (index == ventas.length) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _isLoadingMore
+                      ? const Center(child: CircularProgressIndicator())
+                      : ElevatedButton.icon(
+                          onPressed: () => cargarVentas(reset: false),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Cargar más ventas'),
+                        ),
+                );
+              }
+
               final v = ventas[index];
               final ganancia = v['ganancia_total'] ?? 0.0;
               return Card(
@@ -545,86 +889,6 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
 
     return Column(
       children: [
-        // Filtros y búsqueda
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: TextField(
-                  decoration: InputDecoration(
-                    labelText: 'Buscar por cliente',
-                    hintText: 'Nombre del cliente',
-                    prefixIcon: const Icon(Icons.search),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: busquedaCliente.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              setState(() => busquedaCliente = '');
-                            },
-                          )
-                        : null,
-                  ),
-                  onChanged: (value) {
-                    setState(() => busquedaCliente = value);
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<String>(
-                  value: ordenarPor,
-                  decoration: const InputDecoration(
-                    labelText: 'Ordenar por',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'fecha_desc',
-                      child: Text('Fecha (más reciente)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'fecha_asc',
-                      child: Text('Fecha (más antigua)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'ganancia_desc',
-                      child: Text('Ganancia (mayor)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'ganancia_asc',
-                      child: Text('Ganancia (menor)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'total_desc',
-                      child: Text('Total (mayor)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'total_asc',
-                      child: Text('Total (menor)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'productos_desc',
-                      child: Text('Productos (más)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'productos_asc',
-                      child: Text('Productos (menos)'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => ordenarPor = value);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
         // Resumen de ventas seleccionadas (compacto)
         if (ventasSeleccionadas.isNotEmpty)
           Card(
@@ -634,8 +898,8 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
                 : Colors.green[50],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     '${ventasSeleccionadas.length} seleccionada(s)',
@@ -644,21 +908,34 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
                       fontSize: 14,
                     ),
                   ),
-                  Text(
-                    'Total: C\$${totalVentaSeleccionada.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.blue,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'Ganancia: C\$${gananciaSeleccionada.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'Total: C\$${totalVentaSeleccionada.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.blue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'Ganancia: C\$${gananciaSeleccionada.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -667,8 +944,22 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
         // Lista scrolleable de todas las ventas (seleccionadas y disponibles)
         Expanded(
           child: ListView.builder(
-            itemCount: ventasFiltradas.length,
+            itemCount: ventasFiltradas.length + (_hasMoreData ? 1 : 0),
             itemBuilder: (context, index) {
+              // Botón de cargar más al final
+              if (index == ventasFiltradas.length) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _isLoadingMore
+                      ? const Center(child: CircularProgressIndicator())
+                      : ElevatedButton.icon(
+                          onPressed: () => cargarVentas(reset: false),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Cargar más ventas'),
+                        ),
+                );
+              }
+
               final v = ventasFiltradas[index];
               final isSelected = ventasSeleccionadas.contains(
                 v['id_venta'] as int,
@@ -686,21 +977,23 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
     final productos = (v['productos'] as List?) ?? [];
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Agrupar productos
+    // Agrupar productos usando precio_historico y costo_historico
     final Map<String, Map<String, dynamic>> productosAgrupados = {};
     for (final p in productos) {
       final prod = (p['producto'] as Map<String, dynamic>?) ?? {};
-      final nombre = prod['nombre_producto']?.toString() ?? 'Sin nombre';
-      final tipo = prod['tipo']?.toString() ?? 'N/A';
-      final precioVenta = (prod['precio_venta'] as num?)?.toDouble();
-      final precioCompra = (prod['precio_compra'] as num?)?.toDouble();
+      final nombre =
+          prod['nombre_producto']?.toString() ?? 'Producto eliminado';
+      final codigo = prod['codigo']?.toString() ?? 'N/A';
+      // Usar precio_historico y costo_historico de producto_en_venta
+      final precioVenta = (p['precio_historico'] as num?)?.toDouble() ?? 0.0;
+      final precioCompra = (p['costo_historico'] as num?)?.toDouble() ?? 0.0;
 
-      final key = '$nombre|$tipo|$precioVenta|$precioCompra';
+      final key = '$nombre|$codigo|$precioVenta|$precioCompra';
 
       if (!productosAgrupados.containsKey(key)) {
         productosAgrupados[key] = {
           'nombre': nombre,
-          'tipo': tipo,
+          'codigo': codigo,
           'precio_venta': precioVenta,
           'precio_compra': precioCompra,
           'cantidad': 1,
@@ -770,7 +1063,7 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${p['nombre']} (${p['tipo']}) - Cant: $cantidad',
+                            '${p['nombre']} (${p['codigo']}) - Cant: $cantidad',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
@@ -826,35 +1119,34 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // Mostrar pantalla de carga mientras se cargan los datos
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Reportes de Ventas')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: colorScheme.primary),
+              const SizedBox(height: 24),
+              Text(
+                'Cargando reportes...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reportes de Ventas'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.picture_as_pdf, size: 24),
-              label: const Text('Exportar PDF', style: TextStyle(fontSize: 16)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                elevation: 4,
-              ),
-              onPressed: () {
-                if (_tabController.index == 0) {
-                  _exportarPdfGeneral();
-                } else {
-                  _exportarPdfDetallado();
-                }
-              },
-            ),
-          ),
-        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -863,67 +1155,67 @@ class _ReportesVentasScreenState extends State<ReportesVentasScreen>
           ],
         ),
       ),
-      body: Column(
-        children: [
-          // Filtros de fecha
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.date_range),
-                    label: Text(
-                      fechaInicio != null
-                          ? 'Desde: ${fechaInicio!.day}/${fechaInicio!.month}/${fechaInicio!.year}'
-                          : 'Fecha inicio',
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(
+            children: [
+              // Botón de filtros compacto
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.filter_list),
+                      label: Text(_getFilterSummary()),
+                      onPressed: _mostrarModalFiltros,
                     ),
-                    onPressed: seleccionarFechaInicio,
-                  ),
+                    if (fechaInicio != null ||
+                        fechaFin != null ||
+                        ordenarPor != 'fecha_desc')
+                      IconButton(
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Limpiar filtros',
+                        onPressed: () {
+                          setState(() {
+                            fechaInicio = null;
+                            fechaFin = null;
+                            ordenarPor = 'fecha_desc';
+                          });
+                          cargarVentas();
+                        },
+                      ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.date_range),
-                    label: Text(
-                      fechaFin != null
-                          ? 'Hasta: ${fechaFin!.day}/${fechaFin!.month}/${fechaFin!.year}'
-                          : 'Fecha fin',
-                    ),
-                    onPressed: seleccionarFechaFin,
-                  ),
+              ),
+              // Contenido de tabs
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildReporteGeneral(isDark),
+                    _buildReporteDetallado(isDark),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: 'Aplicar filtros',
-                  onPressed: cargarVentas,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.clear),
-                  tooltip: 'Limpiar filtros',
-                  onPressed: () {
-                    setState(() {
-                      fechaInicio = null;
-                      fechaFin = null;
-                    });
-                    cargarVentas();
-                  },
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          // Contenido de tabs
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildReporteGeneral(isDark),
-                _buildReporteDetallado(isDark),
-              ],
-            ),
-          ),
-        ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          if (_tabController.index == 0) {
+            _exportarPdfGeneral();
+          } else {
+            _exportarPdfDetallado();
+          }
+        },
+        backgroundColor: Colors.red,
+        icon: const Icon(Icons.picture_as_pdf),
+        label: const Text('Exportar'),
       ),
     );
   }

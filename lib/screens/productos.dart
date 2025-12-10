@@ -1,9 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:abari/providers/theme_provider.dart';
-import 'package:abari/modal/editar_producto_modal.dart';
-import 'package:abari/modal/agregar_producto_modal.dart';
+import 'package:abari/models/producto_db.dart';
 
 class ProductosScreen extends StatefulWidget {
   const ProductosScreen({super.key});
@@ -11,24 +12,37 @@ class ProductosScreen extends StatefulWidget {
   State<ProductosScreen> createState() => _InventarioPageState();
 }
 
-class _InventarioPageState extends State<ProductosScreen> {
-  List<dynamic> productos = [];
-  Map<int, Map<String, dynamic>> presentaciones =
-      {}; // id_presentacion -> {descripcion, unidad_medida}
-  Map<String, int> stockPorTipo = {};
+class _InventarioPageState extends State<ProductosScreen>
+    with SingleTickerProviderStateMixin {
+  TabController? _tabController;
+  int _selectedTabIndex = 0;
+  List<ProductoGrupo> productos = [];
+  List<String> categorias = []; // Lista de nombres de categorías únicas
+  Map<String, int> categoriasMap = {}; // Mapa nombre -> id de categorías
+  Map<int, String> presentaciones = {}; // id_presentacion -> descripcion
+  Map<int, String> unidadesAbrev = {}; // id_unidad_medida -> abreviatura
   String busqueda = '';
   bool cargando = true;
+  bool cargandoMas = false;
+  bool hayMasProductos = true;
   bool mostrarEliminados = false;
 
+  // Paginación por cursor
+  static const int _pageSize = 50;
+  String? _cursor;
+  final ScrollController _scrollController = ScrollController();
+
+  // Debounce para búsqueda
+  Timer? _debounceTimer;
+  String _ultimaBusqueda = '';
+
   // Filtros
-  List<String> filtrosPresentacion = []; // Múltiples presentaciones
-  String ordenarPor =
-      'nombre'; // nombre, precio_venta, precio_compra, vencimiento
+  List<int> filtrosCategoriaIds = []; // IDs de categorías seleccionadas
+  String ordenarPor = 'nombre'; // nombre, vencimiento
 
   // Contador de filtros activos
   int get filtrosActivos {
-    int count = 0;
-    count += filtrosPresentacion.length;
+    int count = filtrosCategoriaIds.length;
     if (ordenarPor != 'nombre') count++;
     return count;
   }
@@ -54,7 +68,7 @@ class _InventarioPageState extends State<ProductosScreen> {
   // Mostrar modal de filtros
   void _mostrarFiltros(BuildContext context) {
     // Variables temporales para los filtros
-    List<String> tempFiltrosPresentacion = List.from(filtrosPresentacion);
+    List<int> tempFiltrosCategoriaIds = List.from(filtrosCategoriaIds);
     String tempOrdenarPor = ordenarPor;
 
     showModalBottomSheet(
@@ -66,14 +80,6 @@ class _InventarioPageState extends State<ProductosScreen> {
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
-            // Obtener presentaciones únicas
-            final presentacionesUnicas =
-                presentaciones.values
-                    .map((p) => p['descripcion'] as String)
-                    .toSet()
-                    .toList()
-                  ..sort();
-
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -102,7 +108,7 @@ class _InventarioPageState extends State<ProductosScreen> {
                       TextButton(
                         onPressed: () {
                           setModalState(() {
-                            tempFiltrosPresentacion.clear();
+                            tempFiltrosCategoriaIds.clear();
                             tempOrdenarPor = 'nombre';
                           });
                         },
@@ -119,44 +125,49 @@ class _InventarioPageState extends State<ProductosScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Filtro por Presentación (múltiple)
-                        const Text(
-                          'Presentación',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                        // Filtro por Categoría (múltiple)
+                        if (categorias.isNotEmpty) ...[
+                          const Text(
+                            'Categoría',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: presentacionesUnicas.map((pres) {
-                            final isSelected = tempFiltrosPresentacion.contains(
-                              pres,
-                            );
-                            return FilterChip(
-                              label: Text(pres),
-                              selected: isSelected,
-                              onSelected: (selected) {
-                                setModalState(() {
-                                  if (selected) {
-                                    tempFiltrosPresentacion.add(pres);
-                                  } else {
-                                    tempFiltrosPresentacion.remove(pres);
-                                  }
-                                });
-                              },
-                              selectedColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 24),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: categorias.map((cat) {
+                              final catId = categoriasMap[cat];
+                              final isSelected =
+                                  catId != null &&
+                                  tempFiltrosCategoriaIds.contains(catId);
+                              return FilterChip(
+                                label: Text(cat),
+                                selected: isSelected,
+                                onSelected: (selected) {
+                                  setModalState(() {
+                                    if (catId != null) {
+                                      if (selected) {
+                                        tempFiltrosCategoriaIds.add(catId);
+                                      } else {
+                                        tempFiltrosCategoriaIds.remove(catId);
+                                      }
+                                    }
+                                  });
+                                },
+                                selectedColor: Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
+                                checkmarkColor: Theme.of(
+                                  context,
+                                ).colorScheme.secondary,
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
 
                         // Ordenar por
                         const Text(
@@ -199,49 +210,6 @@ class _InventarioPageState extends State<ProductosScreen> {
                                 context,
                               ).colorScheme.primary,
                             ),
-                            FilterChip(
-                              label: const Text('Stock'),
-                              selected: tempOrdenarPor == 'stock',
-                              onSelected: (selected) {
-                                setModalState(() => tempOrdenarPor = 'stock');
-                              },
-                              selectedColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                            ),
-                            FilterChip(
-                              label: const Text('Más reciente'),
-                              selected: tempOrdenarPor == 'agregado_reciente',
-                              onSelected: (selected) {
-                                setModalState(
-                                  () => tempOrdenarPor = 'agregado_reciente',
-                                );
-                              },
-                              selectedColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                            ),
-                            FilterChip(
-                              label: const Text('Más antiguo'),
-                              selected: tempOrdenarPor == 'agregado_antiguo',
-                              onSelected: (selected) {
-                                setModalState(
-                                  () => tempOrdenarPor = 'agregado_antiguo',
-                                );
-                              },
-                              selectedColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                            ),
                           ],
                         ),
                         const SizedBox(height: 32),
@@ -265,19 +233,32 @@ class _InventarioPageState extends State<ProductosScreen> {
                               flex: 2,
                               child: ElevatedButton(
                                 onPressed: () {
+                                  final cambioFiltros =
+                                      !_listEquals(
+                                        filtrosCategoriaIds,
+                                        tempFiltrosCategoriaIds,
+                                      ) ||
+                                      ordenarPor != tempOrdenarPor;
                                   setState(() {
-                                    filtrosPresentacion =
-                                        tempFiltrosPresentacion;
+                                    filtrosCategoriaIds =
+                                        tempFiltrosCategoriaIds;
                                     ordenarPor = tempOrdenarPor;
                                   });
                                   Navigator.pop(context);
+                                  if (cambioFiltros) {
+                                    _resetYCargar();
+                                  }
                                 },
                                 style: ElevatedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 16,
                                   ),
-                                  backgroundColor: Colors.black,
-                                  foregroundColor: Colors.white,
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primary,
+                                  foregroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimary,
                                 ),
                                 child: const Text('Aplicar filtros'),
                               ),
@@ -299,102 +280,229 @@ class _InventarioPageState extends State<ProductosScreen> {
     );
   }
 
+  bool _listEquals<T>(List<T> a, List<T> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  void _initTabController() {
+    _tabController?.dispose();
+    // +1 para la tab "Todos"
+    _tabController = TabController(
+      length: categorias.length + 1,
+      vsync: this,
+      initialIndex: _selectedTabIndex,
+    );
+    _tabController!.addListener(_onTabChanged);
+  }
+
+  void _onTabChanged() {
+    if (_tabController!.indexIsChanging) return;
+    final newIndex = _tabController!.index;
+    if (newIndex != _selectedTabIndex) {
+      setState(() {
+        _selectedTabIndex = newIndex;
+        // El filtro se aplica en build() basado en _selectedTabIndex
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    cargarDatos();
+    _scrollController.addListener(_onScroll);
+    _cargarDatosIniciales();
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
+    _scrollController.dispose();
+    _tabController?.removeListener(_onTabChanged);
+    _tabController?.dispose();
     super.dispose();
   }
 
-  Future<void> cargarDatos() async {
-    setState(() => cargando = true);
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200 &&
+        !cargandoMas &&
+        hayMasProductos &&
+        !cargando) {
+      _cargarMasProductos();
+    }
+  }
+
+  void _onBusquedaChanged(String value) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
+      if (value != _ultimaBusqueda) {
+        _ultimaBusqueda = value;
+        setState(() => busqueda = value);
+        _resetYCargar();
+      }
+    });
+  }
+
+  void _resetYCargar() {
+    setState(() {
+      productos = [];
+      _cursor = null;
+      hayMasProductos = true;
+    });
+    cargarDatos();
+  }
+
+  Future<void> _cargarDatosIniciales() async {
+    await _cargarCategorias();
+    await cargarDatos();
+  }
+
+  Future<void> _cargarCategorias() async {
+    final client = Supabase.instance.client;
+    try {
+      // Cargar presentaciones y unidades
+      final results = await Future.wait([
+        client.from('presentacion').select('id_presentacion, descripcion'),
+        client.from('unidad_medida').select('id, abreviatura'),
+      ]);
+
+      // Procesar presentaciones
+      final Map<int, String> presMap = {};
+      for (final item in (results[0] as List)) {
+        final id = item['id_presentacion'] as int?;
+        final desc = item['descripcion'] as String?;
+        if (id != null) {
+          presMap[id] = desc ?? '';
+        }
+      }
+
+      // Procesar unidades
+      final Map<int, String> unidMap = {};
+      for (final item in (results[1] as List)) {
+        final id = item['id'] as int?;
+        final abrev = item['abreviatura'] as String?;
+        if (id != null) {
+          unidMap[id] = abrev ?? '';
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          presentaciones = presMap;
+          unidadesAbrev = unidMap;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al cargar catálogos: $e');
+    }
+  }
+
+  Future<void> _cargarMasProductos() async {
+    if (cargandoMas || !hayMasProductos) return;
+    setState(() => cargandoMas = true);
+    await cargarDatos(append: true);
+    setState(() => cargandoMas = false);
+  }
+
+  Future<void> cargarDatos({bool append = false}) async {
+    if (!append) {
+      setState(() => cargando = true);
+    }
     final client = Supabase.instance.client;
 
-    // 1) Productos
-    // Filtrar por estado: disponibles (Comprado) o eliminados (Vendido/Removido)
-    var query = client
-        .from('producto')
-        .select(
-          'id_producto,nombre_producto,id_presentacion,fecha_vencimiento,tipo,medida,estado,fecha_agregado,precio_compra,precio_venta',
+    try {
+      // Usar la función RPC get_productos_agrupados
+      final String? estado = mostrarEliminados ? 'Vendido' : 'Disponible';
+
+      final data = await client.rpc(
+        'get_productos_agrupados',
+        params: {
+          'p_limit': _pageSize,
+          'p_cursor': append ? _cursor : null,
+          'p_estado': estado,
+          'p_categoria_ids': filtrosCategoriaIds.isNotEmpty
+              ? filtrosCategoriaIds
+              : null,
+          'p_busqueda': busqueda.isNotEmpty ? busqueda : null,
+        },
+      );
+
+      final List<ProductoGrupo> nuevosProductos = (data as List)
+          .map((json) => ProductoGrupo.fromJson(json))
+          .toList();
+
+      // Actualizar cursor para siguiente página
+      if (nuevosProductos.isNotEmpty) {
+        _cursor = nuevosProductos.last.codigo;
+      }
+
+      // Verificar si hay más productos
+      if (nuevosProductos.length < _pageSize) {
+        hayMasProductos = false;
+      }
+
+      if (mounted) {
+        setState(() {
+          if (append) {
+            productos.addAll(nuevosProductos);
+          } else {
+            productos = nuevosProductos;
+          }
+          cargando = false;
+        });
+
+        // Extraer categorías únicas de los productos cargados (solo en primera carga)
+        if (!append && categorias.isEmpty) {
+          final Map<String, int> catMap = {};
+          for (final p in productos) {
+            if (p.categoriaNombre != null &&
+                p.categoriaNombre!.isNotEmpty &&
+                p.categoriaId != null) {
+              catMap[p.categoriaNombre!] = p.categoriaId!;
+            }
+          }
+          final catList = catMap.keys.toList()..sort();
+          setState(() {
+            categorias = catList;
+            categoriasMap = catMap;
+          });
+          _initTabController();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error al cargar datos: $e');
+      if (mounted) {
+        setState(() => cargando = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar productos: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
-
-    if (mostrarEliminados) {
-      // Mostrar solo productos eliminados (Vendido o Removido)
-      query = query.inFilter('estado', ['Vendido', 'Removido']);
-    } else {
-      // Mostrar solo productos disponibles
-      query = query.eq('estado', 'Disponible');
+      }
     }
-
-    final resProd = await query.order('nombre_producto', ascending: true);
-
-    final dataProd = (resProd is List) ? resProd : <dynamic>[];
-
-    // 2) Presentaciones para mapear id_presentacion -> descripcion/unidad_medida
-    final resPres = await client
-        .from('presentacion')
-        .select('id_presentacion,descripcion,unidad_medida')
-        .order('id_presentacion', ascending: true);
-
-    final dataPres = (resPres is List) ? resPres : <dynamic>[];
-    final Map<int, Map<String, dynamic>> presMap = {};
-    for (final p in dataPres) {
-      final id = p['id_presentacion'] as int;
-      presMap[id] = {
-        'descripcion': p['descripcion'],
-        'unidad_medida': p['unidad_medida'],
-      };
-    }
-
-    // 3) Stock por tipo (conteo)
-    final Map<String, int> stock = {};
-    for (final item in dataProd) {
-      final tipo = item['tipo'] as String;
-      stock[tipo] = (stock[tipo] ?? 0) + 1;
-    }
-
-    setState(() {
-      productos = dataProd;
-      presentaciones = presMap;
-      stockPorTipo = stock;
-      cargando = false;
-    });
   }
 
   Future<void> eliminarProducto(
     BuildContext context,
-    Map<String, dynamic> producto,
+    ProductoGrupo producto,
   ) async {
-    final nombre = producto['nombre_producto'] as String;
-    final tipo = producto['tipo'] as String;
-    final medida = producto['medida']?.toString() ?? '';
-    final idPres = producto['id_presentacion'] as int;
-    final presentacion = presentaciones[idPres]?['descripcion'] ?? '—';
-    final unidad = presentaciones[idPres]?['unidad_medida'] ?? '';
-    final fechaStr = producto['fecha_vencimiento'] as String;
-    final fecha = DateTime.parse(fechaStr);
-    final stockGrupo = producto['_stock_grupo'] as int? ?? 1;
-    final tipoOriginal = producto['tipo'] as String;
-    final fechaVencimientoOriginal =
-        producto['fecha_vencimiento']?.toString().split('T').first ?? '';
-    final estadoOriginal = producto['estado'] as String? ?? 'Disponible';
-
-    bool eliminarTodos = true;
-    int cantidadEliminar = 1;
-    final cantidadController = TextEditingController(text: '1');
-    String estadoSeleccionado = 'Vendido'; // Vendido o Removido
+    final nombre = producto.nombreProducto;
+    final codigo = producto.codigo;
+    final presentacion = producto.presentacionDescripcion ?? '—';
+    final stockTexto = producto.stockTexto;
+    final fecha = producto.fechaVencimiento;
+    String estadoSeleccionado = 'Vendido';
 
     final resultado = await showDialog<Map<String, dynamic>?>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
-          builder: (context, setState) {
-            final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
-
+          builder: (context, setDialogState) {
             return AlertDialog(
               title: const Text('Confirmar eliminación'),
               content: SingleChildScrollView(
@@ -410,278 +518,64 @@ class _InventarioPageState extends State<ProductosScreen> {
                     const Divider(),
                     const SizedBox(height: 8),
                     _buildInfoRow('Nombre:', nombre),
-                    _buildInfoRow('Tipo:', tipo),
-                    _buildInfoRow('Presentación:', '$presentacion ($unidad)'),
-                    _buildInfoRow('Medida:', '$medida $unidad'),
-                    _buildInfoRow('Stock:', '$stockGrupo unidades'),
+                    _buildInfoRow('Código:', codigo),
+                    _buildInfoRow('Presentación:', presentacion),
+                    _buildInfoRow('Stock:', stockTexto),
                     _buildInfoRow(
-                      'Fecha de vencimiento:',
-                      fecha.toIso8601String().split('T').first,
+                      'Vencimiento:',
+                      fecha?.toIso8601String().split('T').first ?? 'Sin fecha',
                     ),
                     const SizedBox(height: 12),
                     const Divider(),
                     const SizedBox(height: 12),
-                    // Opciones de eliminación
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: isDarkMode
-                            ? Colors.grey[800]
-                            : Colors.orange.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isDarkMode
-                              ? Colors.grey[600]!
-                              : Colors.orange.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.warning_amber_rounded,
-                                color: isDarkMode
-                                    ? Colors.orange[300]
-                                    : Colors.orange[700],
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              const Expanded(
-                                child: Text(
-                                  'Opciones de eliminación',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          RadioListTile<bool>(
-                            title: const Text(
-                              'Eliminar todos los productos del grupo',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                            value: true,
-                            groupValue: eliminarTodos,
-                            onChanged: (value) {
-                              setState(() {
-                                eliminarTodos = value!;
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          RadioListTile<bool>(
-                            title: const Text(
-                              'Eliminar cantidad específica',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                            value: false,
-                            groupValue: eliminarTodos,
-                            onChanged: (value) {
-                              setState(() {
-                                eliminarTodos = value!;
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          if (!eliminarTodos) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              'Cantidad a eliminar (Máx: $stockGrupo)',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline),
-                                  onPressed: cantidadEliminar > 1
-                                      ? () {
-                                          setState(() {
-                                            cantidadEliminar--;
-                                            cantidadController.text =
-                                                cantidadEliminar.toString();
-                                          });
-                                        }
-                                      : null,
-                                  iconSize: 28,
-                                  color: isDarkMode
-                                      ? Colors.orange[300]
-                                      : Colors.orange,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 40,
-                                    minHeight: 40,
-                                  ),
-                                ),
-                                SizedBox(
-                                  width: 80,
-                                  child: TextField(
-                                    controller: cantidadController,
-                                    decoration: const InputDecoration(
-                                      border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 8,
-                                      ),
-                                      isDense: true,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    keyboardType: TextInputType.number,
-                                    onChanged: (value) {
-                                      final cantidad = int.tryParse(value) ?? 1;
-                                      setState(() {
-                                        cantidadEliminar = cantidad.clamp(
-                                          1,
-                                          stockGrupo,
-                                        );
-                                        cantidadController.text =
-                                            cantidadEliminar.toString();
-                                        cantidadController.selection =
-                                            TextSelection.fromPosition(
-                                              TextPosition(
-                                                offset: cantidadController
-                                                    .text
-                                                    .length,
-                                              ),
-                                            );
-                                      });
-                                    },
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.add_circle_outline),
-                                  onPressed: cantidadEliminar < stockGrupo
-                                      ? () {
-                                          setState(() {
-                                            cantidadEliminar++;
-                                            cantidadController.text =
-                                                cantidadEliminar.toString();
-                                          });
-                                        }
-                                      : null,
-                                  iconSize: 28,
-                                  color: isDarkMode
-                                      ? Colors.orange[300]
-                                      : Colors.orange,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 40,
-                                    minHeight: 40,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Divider(),
-                    const SizedBox(height: 12),
-                    // Selector de estado
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: isDarkMode
-                            ? Colors.grey[850]
-                            : Colors.grey.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isDarkMode
-                              ? Colors.grey[700]!
-                              : Colors.grey.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.label_outline,
-                                color: isDarkMode
-                                    ? Colors.grey[400]
-                                    : Colors.grey[700],
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Motivo de eliminación',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          RadioListTile<String>(
-                            title: const Text(
-                              'Vendido',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                            subtitle: const Text(
-                              'El producto fue vendido',
-                              style: TextStyle(fontSize: 11),
-                            ),
-                            value: 'Vendido',
-                            groupValue: estadoSeleccionado,
-                            onChanged: (value) {
-                              setState(() {
-                                estadoSeleccionado = value!;
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          RadioListTile<String>(
-                            title: const Text(
-                              'Removido',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                            subtitle: const Text(
-                              'El producto fue descartado o retirado',
-                              style: TextStyle(fontSize: 11),
-                            ),
-                            value: 'Removido',
-                            groupValue: estadoSeleccionado,
-                            onChanged: (value) {
-                              setState(() {
-                                estadoSeleccionado = value!;
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
+                    // Selector de motivo
                     const Text(
-                      'Esta acción no se puede deshacer.',
+                      'Motivo de eliminación:',
                       style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    RadioListTile<String>(
+                      title: const Text(
+                        'Vendido',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      subtitle: const Text(
+                        'El producto fue vendido',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                      value: 'Vendido',
+                      groupValue: estadoSeleccionado,
+                      onChanged: (value) =>
+                          setDialogState(() => estadoSeleccionado = value!),
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                    RadioListTile<String>(
+                      title: const Text(
+                        'Removido',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      subtitle: const Text(
+                        'El producto fue descartado',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                      value: 'Removido',
+                      groupValue: estadoSeleccionado,
+                      onChanged: (value) =>
+                          setDialogState(() => estadoSeleccionado = value!),
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Se eliminarán todos los productos con código: $codigo',
+                      style: const TextStyle(
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
-                        color: Colors.red,
+                        color: Colors.orange,
                       ),
                     ),
                   ],
@@ -693,14 +587,10 @@ class _InventarioPageState extends State<ProductosScreen> {
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context, {
-                      'confirmar': true,
-                      'eliminarTodos': eliminarTodos,
-                      'cantidad': cantidadEliminar,
-                      'estado': estadoSeleccionado,
-                    });
-                  },
+                  onPressed: () => Navigator.pop(context, {
+                    'confirmar': true,
+                    'estado': estadoSeleccionado,
+                  }),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
@@ -718,83 +608,238 @@ class _InventarioPageState extends State<ProductosScreen> {
       final estadoFinal = resultado['estado'] as String;
 
       try {
-        if (resultado['eliminarTodos'] == true) {
-          // Eliminar todos los productos del grupo con el mismo estado
-          // estadoOriginal ya garantiza que son productos disponibles
-          await Supabase.instance.client
-              .from('producto')
-              .update({'estado': estadoFinal})
-              .eq('tipo', tipoOriginal)
-              .eq('fecha_vencimiento', fechaVencimientoOriginal)
-              .eq('estado', estadoOriginal);
+        // Actualizar estado de todos los productos con este código
+        await Supabase.instance.client
+            .from('producto')
+            .update({'estado': estadoFinal})
+            .eq('codigo', codigo)
+            .eq('estado', 'Disponible');
 
-          await cargarDatos();
+        await cargarDatos();
 
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  '$stockGrupo producto(s) eliminado(s) correctamente',
-                ),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
-        } else {
-          // Eliminar solo una cantidad específica
-          final cantidad = resultado['cantidad'] as int;
-
-          // Obtener los IDs de los productos a eliminar con el mismo estado
-          // estadoOriginal ya garantiza que son productos disponibles
-          final productosGrupo = await Supabase.instance.client
-              .from('producto')
-              .select('id_producto')
-              .eq('tipo', tipoOriginal)
-              .eq('fecha_vencimiento', fechaVencimientoOriginal)
-              .eq('estado', estadoOriginal)
-              .limit(cantidad);
-
-          final listaProductos = productosGrupo as List;
-          final idsEliminar = listaProductos
-              .map((p) => p['id_producto'] as int)
-              .toList();
-
-          if (idsEliminar.isEmpty) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('No se encontraron productos para eliminar'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-            }
-            return;
-          }
-
-          // Eliminar solo los productos seleccionados
-          await Supabase.instance.client
-              .from('producto')
-              .update({'estado': estadoFinal})
-              .inFilter('id_producto', idsEliminar);
-
-          await cargarDatos();
-
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  '${idsEliminar.length} producto(s) eliminado(s) correctamente',
-                ),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Producto "$nombre" eliminado correctamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
         }
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error al eliminar productos: $e'),
+              content: Text('Error al eliminar: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> editarProducto(
+    BuildContext context,
+    ProductoGrupo producto,
+  ) async {
+    final nombreController = TextEditingController(
+      text: producto.nombreProducto,
+    );
+    final precioVentaController = TextEditingController(
+      text: producto.precioVenta?.toStringAsFixed(2) ?? '',
+    );
+    final precioCompraController = TextEditingController(
+      text: producto.precioCompra?.toStringAsFixed(2) ?? '',
+    );
+    String? categoriaSeleccionada = producto.categoriaNombre;
+    int? presentacionSeleccionada = producto.idPresentacion;
+
+    final resultado = await showDialog<Map<String, dynamic>?>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Editar producto'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Código: ${producto.codigo}',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
+                    // Nombre
+                    TextField(
+                      controller: nombreController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre del producto',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Precios en fila
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: precioCompraController,
+                            decoration: const InputDecoration(
+                              labelText: 'Precio compra',
+                              prefixText: 'C\$ ',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: precioVentaController,
+                            decoration: const InputDecoration(
+                              labelText: 'Precio venta',
+                              prefixText: 'C\$ ',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Categoría
+                    DropdownButtonFormField<String>(
+                      value: categoriaSeleccionada,
+                      decoration: const InputDecoration(
+                        labelText: 'Categoría',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: categorias
+                          .map(
+                            (cat) =>
+                                DropdownMenuItem(value: cat, child: Text(cat)),
+                          )
+                          .toList(),
+                      onChanged: (value) =>
+                          setDialogState(() => categoriaSeleccionada = value),
+                    ),
+                    const SizedBox(height: 12),
+                    // Presentación
+                    DropdownButtonFormField<int>(
+                      value: presentacionSeleccionada,
+                      decoration: const InputDecoration(
+                        labelText: 'Presentación',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: presentaciones.entries
+                          .map(
+                            (e) => DropdownMenuItem(
+                              value: e.key,
+                              child: Text(e.value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => setDialogState(
+                        () => presentacionSeleccionada = value,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Los cambios se aplicarán a todos los productos con este código.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.orange[700],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, {
+                    'confirmar': true,
+                    'nombre': nombreController.text.trim(),
+                    'precioVenta': double.tryParse(precioVentaController.text),
+                    'precioCompra': double.tryParse(
+                      precioCompraController.text,
+                    ),
+                    'categoriaId': categoriaSeleccionada,
+                    'presentacionId': presentacionSeleccionada,
+                  }),
+                  child: const Text('Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (resultado != null && resultado['confirmar'] == true) {
+      try {
+        final updates = <String, dynamic>{};
+
+        if (resultado['nombre'] != null &&
+            resultado['nombre'].toString().isNotEmpty) {
+          updates['nombre_producto'] = resultado['nombre'];
+        }
+        if (resultado['precioVenta'] != null) {
+          updates['precio_venta'] = resultado['precioVenta'];
+        }
+        if (resultado['precioCompra'] != null) {
+          updates['precio_compra'] = resultado['precioCompra'];
+        }
+        if (resultado['categoria'] != null) {
+          updates['categoria'] = resultado['categoria'];
+        }
+        if (resultado['presentacionId'] != null) {
+          updates['id_presentacion'] = resultado['presentacionId'];
+        }
+
+        if (updates.isEmpty) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('No hay cambios para guardar'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+
+        await Supabase.instance.client
+            .from('producto')
+            .update(updates)
+            .eq('codigo', producto.codigo);
+
+        await cargarDatos();
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Producto actualizado correctamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al actualizar: $e'),
               backgroundColor: Colors.red,
             ),
           );
@@ -822,457 +867,688 @@ class _InventarioPageState extends State<ProductosScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Agrupar productos por tipo y rango de vencimiento
-    final Map<String, List<dynamic>> gruposPorTipo = {};
-
-    // Primero agrupar todos los productos por tipo y estado
-    for (final p in productos) {
-      final tipo = p['tipo'] as String;
-      final estado = p['estado'] as String? ?? 'Disponible';
-      final clave = '${tipo}_$estado'; // Agrupar por tipo Y estado
-      if (!gruposPorTipo.containsKey(clave)) {
-        gruposPorTipo[clave] = [];
-      }
-      gruposPorTipo[clave]!.add(p);
-    }
-
-    // Ahora separar por rangos de vencimiento si hay diferencias > 60 días
-    final List<Map<String, dynamic>> productosAgrupados = [];
-
-    for (final tipo in gruposPorTipo.keys) {
-      final productosDelTipo = gruposPorTipo[tipo]!;
-
-      // Ordenar por fecha de vencimiento
-      productosDelTipo.sort((a, b) {
-        final fechaA = DateTime.parse(a['fecha_vencimiento'] as String);
-        final fechaB = DateTime.parse(b['fecha_vencimiento'] as String);
-        return fechaA.compareTo(fechaB);
-      });
-
-      // Crear grupos por rango de vencimiento
-      final List<List<dynamic>> rangosPorVencimiento = [];
-      List<dynamic> grupoActual = [productosDelTipo[0]];
-      DateTime fechaBaseGrupo = DateTime.parse(
-        productosDelTipo[0]['fecha_vencimiento'] as String,
-      );
-
-      for (int i = 1; i < productosDelTipo.length; i++) {
-        final producto = productosDelTipo[i];
-        final fechaProducto = DateTime.parse(
-          producto['fecha_vencimiento'] as String,
-        );
-        final diferenciaDias = fechaProducto.difference(fechaBaseGrupo).inDays;
-
-        if (diferenciaDias <= 60) {
-          // Mismo grupo
-          grupoActual.add(producto);
-        } else {
-          // Nuevo grupo
-          rangosPorVencimiento.add(grupoActual);
-          grupoActual = [producto];
-          fechaBaseGrupo = fechaProducto;
-        }
-      }
-      rangosPorVencimiento.add(grupoActual);
-
-      // Crear un representante para cada grupo
-      for (final grupo in rangosPorVencimiento) {
-        final representante = Map<String, dynamic>.from(grupo[0]);
-        representante['_stock_grupo'] = grupo.length;
-        representante['_fecha_min'] = grupo
-            .map((p) => DateTime.parse(p['fecha_vencimiento'] as String))
-            .reduce((a, b) => a.isBefore(b) ? a : b);
-        representante['_fecha_max'] = grupo
-            .map((p) => DateTime.parse(p['fecha_vencimiento'] as String))
-            .reduce((a, b) => a.isAfter(b) ? a : b);
-        productosAgrupados.add(representante);
-      }
-    }
-
-    // Crear mapa para compatibilidad con filtros
-    final Map<String, dynamic> productosPorTipo = {};
-    for (final p in productosAgrupados) {
-      final estado = p['estado'] as String? ?? 'Disponible';
-      final key = '${p['tipo']}_${p['fecha_vencimiento']}_$estado';
-      productosPorTipo[key] = p;
-    }
-
-    // Filtrar por búsqueda, presentación
-    var listaFiltrada = productosPorTipo.values.where((p) {
-      final nombre = p['nombre_producto']?.toString() ?? '';
-      final idPres = p['id_presentacion'] as int;
-      final presentacion = presentaciones[idPres]?['descripcion'] ?? '';
-
-      // Filtro de búsqueda
-      final cumpleBusqueda = nombre.toLowerCase().contains(
-        busqueda.toLowerCase(),
-      );
-
-      // Filtro de presentación
-      final cumplePresentacion =
-          filtrosPresentacion.isEmpty ||
-          filtrosPresentacion.contains(presentacion);
-
-      return cumpleBusqueda && cumplePresentacion;
-    }).toList();
-
-    // Ordenar
-    listaFiltrada.sort((a, b) {
-      switch (ordenarPor) {
-        case 'nombre':
-          return (a['nombre_producto'] as String).compareTo(
-            b['nombre_producto'] as String,
-          );
-        case 'vencimiento':
-          final fechaA = DateTime.parse(a['fecha_vencimiento'] as String);
-          final fechaB = DateTime.parse(b['fecha_vencimiento'] as String);
-          return fechaA.compareTo(fechaB);
-        case 'stock':
-          final stockA = a['_stock_grupo'] as int? ?? 1;
-          final stockB = b['_stock_grupo'] as int? ?? 1;
-          return stockB.compareTo(stockA); // Descendente
-        case 'agregado_reciente':
-          final fechaA = a['fecha_agregado'] != null
-              ? DateTime.parse(a['fecha_agregado'] as String)
-              : DateTime(1970);
-          final fechaB = b['fecha_agregado'] != null
-              ? DateTime.parse(b['fecha_agregado'] as String)
-              : DateTime(1970);
-          return fechaB.compareTo(fechaA); // Descendente (más reciente primero)
-        case 'agregado_antiguo':
-          final fechaA = a['fecha_agregado'] != null
-              ? DateTime.parse(a['fecha_agregado'] as String)
-              : DateTime(1970);
-          final fechaB = b['fecha_agregado'] != null
-              ? DateTime.parse(b['fecha_agregado'] as String)
-              : DateTime(1970);
-          return fechaA.compareTo(fechaB); // Ascendente (más antiguo primero)
-        default:
-          return 0;
-      }
-    });
-
-    return Scaffold(
-      body: Column(
+  Widget _buildBadge({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDark ? 0.2 : 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Barra de búsqueda y filtros
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Barra de búsqueda con botón de filtros
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        decoration: const InputDecoration(
-                          hintText: 'Buscar producto',
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                        ),
-                        onChanged: (value) => setState(() => busqueda = value),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Botón de filtros con badge
-                    Stack(
-                      children: [
-                        IconButton(
-                          onPressed: () => _mostrarFiltros(context),
-                          icon: const Icon(Icons.filter_list),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).colorScheme.primaryContainer,
-                            padding: const EdgeInsets.all(16),
-                          ),
-                        ),
-                        if (filtrosActivos > 0)
-                          Positioned(
-                            right: 4,
-                            top: 4,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 18,
-                                minHeight: 18,
-                              ),
-                              child: Text(
-                                '$filtrosActivos',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-                // Chips de filtros activos
-                if (filtrosPresentacion.isNotEmpty ||
-                    ordenarPor != 'nombre') ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ...filtrosPresentacion.map(
-                        (pres) => Chip(
-                          label: Text(pres),
-                          onDeleted: () {
-                            setState(() {
-                              filtrosPresentacion.remove(pres);
-                            });
-                          },
-                          deleteIcon: const Icon(Icons.close, size: 18),
-                        ),
-                      ),
-                      if (ordenarPor != 'nombre')
-                        Chip(
-                          label: Text('Orden: ${_getNombreOrden(ordenarPor)}'),
-                          onDeleted: () =>
-                              setState(() => ordenarPor = 'nombre'),
-                          deleteIcon: const Icon(Icons.close, size: 18),
-                        ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 12),
-                // Botón de agregar producto
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    await mostrarAgregarProducto(context, cargarDatos);
-                  },
-                  icon: const Icon(Icons.add_circle_outline, size: 20),
-                  label: const Text('Agregar producto'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
-                    ),
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 48),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Switch
-                SwitchListTile(
-                  title: Text(
-                    mostrarEliminados
-                        ? 'Mostrar solo productos inactivos'
-                        : 'Mostrar solo productos activos',
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                  value: mostrarEliminados,
-                  onChanged: (value) {
-                    setState(() {
-                      mostrarEliminados = value;
-                    });
-                    cargarDatos();
-                  },
-                  secondary: Icon(
-                    mostrarEliminados ? Icons.visibility_off : Icons.visibility,
-                    size: 20,
-                  ),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ],
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
             ),
-          ),
-          // Lista de productos
-          Expanded(
-            child: cargando
-                ? const Center(child: CircularProgressIndicator())
-                : Consumer<ThemeProvider>(
-                    builder: (context, themeProvider, child) {
-                      return ListView.builder(
-                        itemCount: listaFiltrada.length,
-                        itemBuilder: (context, index) {
-                          final p = listaFiltrada[index];
-                          final nombre = p['nombre_producto'] as String;
-                          final idPres = p['id_presentacion'] as int;
-                          final tipo = p['tipo'] as String;
-                          final medida = p['medida']?.toString() ?? '';
-                          final presentacion =
-                              presentaciones[idPres]?['descripcion'] ?? '—';
-                          final unidad =
-                              presentaciones[idPres]?['unidad_medida'] ?? '';
-                          final fechaStr = p['fecha_vencimiento'] as String;
-                          final fecha = DateTime.parse(fechaStr);
-                          final diasRestantes = fecha
-                              .difference(DateTime.now())
-                              .inDays;
-
-                          // Usar el stock del grupo si existe, sino usar el stock por tipo
-                          final stockGrupo = p['_stock_grupo'] as int? ?? 1;
-                          final fechaMin = p['_fecha_min'] as DateTime?;
-                          final fechaMax = p['_fecha_max'] as DateTime?;
-                          final estado = p['estado'] as String?;
-                          final precioCompra = p['precio_compra'] as num?;
-                          final precioVenta = p['precio_venta'] as num?;
-
-                          return Card(
-                            color: diasRestantes < 60
-                                ? (themeProvider.isDarkMode
-                                      ? Colors.orange[900]?.withOpacity(0.4)
-                                      : Colors.orange[100])
-                                : null,
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            child: ListTile(
-                              title: Text(
-                                nombre,
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('$presentacion • $tipo'),
-                                  Text(
-                                    'Medida: $medida $unidad • Stock: $stockGrupo',
-                                  ),
-                                  Row(
-                                    children: [
-                                      if (precioCompra != null)
-                                        Text(
-                                          'Compra: C\$ ${precioCompra.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.blue[700],
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      if (precioCompra != null &&
-                                          precioVenta != null)
-                                        const Text(
-                                          ' • ',
-                                          style: TextStyle(fontSize: 12),
-                                        ),
-                                      if (precioVenta != null)
-                                        Text(
-                                          'Venta: C\$ ${precioVenta.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.green[700],
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  if (mostrarEliminados && estado != null)
-                                    Container(
-                                      margin: const EdgeInsets.only(top: 4),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: estado == 'Vendido'
-                                            ? Colors.green.withOpacity(0.2)
-                                            : Colors.red.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: estado == 'Vendido'
-                                              ? Colors.green
-                                              : Colors.red,
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'Estado: $estado',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: estado == 'Vendido'
-                                              ? Colors.green[800]
-                                              : Colors.red[800],
-                                        ),
-                                      ),
-                                    ),
-                                  if (fechaMin != null &&
-                                      fechaMax != null &&
-                                      fechaMin != fechaMax)
-                                    Text(
-                                      'Rango de vencimiento: ${fechaMin.toIso8601String().split('T').first} - ${fechaMax.toIso8601String().split('T').first}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        'Vence: ${fecha.toIso8601String().split('T').first}',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                      Text(
-                                        diasRestantes < 60
-                                            ? '⚠️ $diasRestantes días'
-                                            : '$diasRestantes días',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: diasRestantes < 30
-                                              ? Colors.red
-                                              : Colors.grey,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (!mostrarEliminados) ...[
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () async {
-                                        await mostrarEditarProducto(
-                                          context,
-                                          p,
-                                          cargarDatos,
-                                        );
-                                      },
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete),
-                                      onPressed: () =>
-                                          eliminarProducto(context, p),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
           ),
         ],
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Filtrar productos según la tab seleccionada
+    List<ProductoGrupo> productosFiltrados = productos;
+    if (_selectedTabIndex > 0 && categorias.isNotEmpty) {
+      final categoriaSeleccionada = categorias[_selectedTabIndex - 1];
+      productosFiltrados = productos
+          .where((p) => p.categoriaNombre == categoriaSeleccionada)
+          .toList();
+    }
+
+    // Agrupar por categoría para mostrar
+    final Map<String, List<ProductoGrupo>> productosPorCategoria = {};
+    for (final p in productosFiltrados) {
+      final cat = p.categoria;
+      if (!productosPorCategoria.containsKey(cat)) {
+        productosPorCategoria[cat] = [];
+      }
+      productosPorCategoria[cat]!.add(p);
+    }
+
+    // Ordenar categorías alfabéticamente
+    final categoriasOrdenadas = productosPorCategoria.keys.toList()..sort();
+
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(
+            children: [
+              // Barra de búsqueda y filtros
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Barra de búsqueda con botón de filtros
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              hintText: 'Buscar producto',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                            ),
+                            onChanged: _onBusquedaChanged,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Botón de filtros con badge
+                        Stack(
+                          children: [
+                            IconButton(
+                              onPressed: () => _mostrarFiltros(context),
+                              icon: const Icon(Icons.filter_list),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.primaryContainer,
+                                padding: const EdgeInsets.all(16),
+                              ),
+                            ),
+                            if (filtrosActivos > 0)
+                              Positioned(
+                                right: 4,
+                                top: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 18,
+                                    minHeight: 18,
+                                  ),
+                                  child: Text(
+                                    '$filtrosActivos',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    // Chips de filtros activos
+                    if (filtrosCategoriaIds.isNotEmpty ||
+                        ordenarPor != 'nombre') ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ...filtrosCategoriaIds.map((catId) {
+                            // Buscar el nombre de la categoría por su ID
+                            final catName = categoriasMap.entries
+                                .firstWhere(
+                                  (e) => e.value == catId,
+                                  orElse: () =>
+                                      MapEntry('Categoría $catId', catId),
+                                )
+                                .key;
+                            return Chip(
+                              label: Text(catName),
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.secondaryContainer,
+                              onDeleted: () {
+                                setState(() {
+                                  filtrosCategoriaIds.remove(catId);
+                                });
+                                _resetYCargar();
+                              },
+                              deleteIcon: const Icon(Icons.close, size: 18),
+                            );
+                          }),
+                          if (ordenarPor != 'nombre')
+                            Chip(
+                              label: Text(
+                                'Orden: ${_getNombreOrden(ordenarPor)}',
+                              ),
+                              onDeleted: () {
+                                setState(() => ordenarPor = 'nombre');
+                                _resetYCargar();
+                              },
+                              deleteIcon: const Icon(Icons.close, size: 18),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // TabBar de categorías
+              if (_tabController != null && categorias.isNotEmpty)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Theme.of(context).dividerColor,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontWeight: FontWeight.normal,
+                      fontSize: 13,
+                    ),
+                    tabs: [
+                      const Tab(text: 'Todos'),
+                      ...categorias.map((cat) => Tab(text: cat)),
+                    ],
+                  ),
+                ),
+              // Botones de acción
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Column(
+                  children: [
+                    // Botón de agregar producto - navega a compras
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        context.pushNamed('compras');
+                      },
+                      icon: const Icon(Icons.add_circle_outline, size: 20),
+                      label: const Text('Agregar producto'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Switch
+                    SwitchListTile(
+                      title: Text(
+                        mostrarEliminados
+                            ? 'Mostrar solo productos inactivos'
+                            : 'Mostrar solo productos activos',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      value: mostrarEliminados,
+                      onChanged: (value) {
+                        setState(() {
+                          mostrarEliminados = value;
+                        });
+                        _resetYCargar();
+                      },
+                      secondary: Icon(
+                        mostrarEliminados
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        size: 20,
+                      ),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
+              ),
+              // Lista de productos
+              Expanded(
+                child: cargando
+                    ? const Center(child: CircularProgressIndicator())
+                    : Consumer<ThemeProvider>(
+                        builder: (context, themeProvider, child) {
+                          final colorScheme = Theme.of(context).colorScheme;
+                          final isDark = themeProvider.isDarkMode;
+
+                          // Si hay una categoría seleccionada (no "Todos"), mostrar lista plana
+                          if (_selectedTabIndex > 0) {
+                            return ListView.builder(
+                              controller: _scrollController,
+                              padding: const EdgeInsets.only(
+                                bottom: 16,
+                                top: 8,
+                              ),
+                              itemCount:
+                                  productosFiltrados.length +
+                                  (cargandoMas ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                if (index >= productosFiltrados.length) {
+                                  return const Padding(
+                                    padding: EdgeInsets.all(16),
+                                    child: Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  );
+                                }
+                                return _buildProductoCard(
+                                  context,
+                                  productosFiltrados[index],
+                                  colorScheme,
+                                  isDark,
+                                );
+                              },
+                            );
+                          }
+
+                          // Tab "Todos" - mostrar agrupado por categoría
+                          return ListView.builder(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.only(bottom: 16),
+                            itemCount:
+                                categoriasOrdenadas.length +
+                                (cargandoMas ? 1 : 0),
+                            itemBuilder: (context, catIndex) {
+                              // Mostrar indicador de carga al final
+                              if (catIndex >= categoriasOrdenadas.length) {
+                                return const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                );
+                              }
+                              final categoria = categoriasOrdenadas[catIndex];
+                              final productosCategoria =
+                                  productosPorCategoria[categoria]!;
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Separador de categoría
+                                  Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.fromLTRB(
+                                      12,
+                                      8,
+                                      12,
+                                      4,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.secondaryContainer
+                                          .withOpacity(0.5),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.category,
+                                          size: 18,
+                                          color: colorScheme.secondary,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          categoria,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: colorScheme.secondary,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          '${productosCategoria.length} items',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: colorScheme
+                                                .onSecondaryContainer,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Productos de esta categoría
+                                  ...productosCategoria.map(
+                                    (p) => _buildProductoCard(
+                                      context,
+                                      p,
+                                      colorScheme,
+                                      isDark,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductoCard(
+    BuildContext context,
+    ProductoGrupo p,
+    ColorScheme colorScheme,
+    bool isDark,
+  ) {
+    final nombre = p.nombreProducto;
+    final codigo = p.codigo;
+    final fecha = p.fechaVencimiento;
+    final diasRestantes = p.diasParaVencer;
+    final stock = p.stock;
+    final estado = p.estado;
+    final precioCompra = p.precioCompra;
+    final precioVenta = p.precioVenta;
+    final stockTexto = p.stockTexto;
+    final presentacion = p.presentacionFormateada;
+    final esGranel = p.esGranel;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: (fecha != null && diasRestantes < 30)
+              ? Colors.red.withOpacity(0.5)
+              : (fecha != null && diasRestantes < 60)
+              ? Colors.orange.withOpacity(0.5)
+              : colorScheme.outlineVariant,
+          width: (fecha != null && diasRestantes < 60) ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Fila 1: Nombre + Precio
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  nombre,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Badge de Stock (estilo similar a Precio)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: stock > 5
+                      ? Colors.blue[600]
+                      : stock > 0
+                      ? Colors.orange[600]
+                      : Colors.red[600],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'Stock',
+                      style: TextStyle(fontSize: 9, color: Colors.white70),
+                    ),
+                    Text(
+                      stockTexto,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Badge de Precio
+              if (precioVenta != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green[600],
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Precio',
+                        style: TextStyle(fontSize: 9, color: Colors.green[100]),
+                      ),
+                      Text(
+                        'C\$${precioVenta.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // Fila 2: Presentación (si existe)
+          if (presentacion.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(
+                  esGranel ? Icons.scale : Icons.inventory_2_outlined,
+                  size: 14,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    presentacion,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // Fila 3: Código del producto
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(
+                Icons.qr_code,
+                size: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  'Código: $codigo',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurfaceVariant,
+                    fontFamily: 'monospace',
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+
+          // Fila 4: Precio compra (si existe) + Estado (si eliminado)
+          if (precioCompra != null || mostrarEliminados) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (precioCompra != null) ...[
+                  Icon(
+                    Icons.shopping_cart_outlined,
+                    size: 12,
+                    color: Colors.blue[600],
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Costo: C\$${precioCompra.toStringAsFixed(2)}',
+                    style: TextStyle(fontSize: 11, color: Colors.blue[600]),
+                  ),
+                ],
+                const Spacer(),
+                if (mostrarEliminados)
+                  _buildBadge(
+                    icon: estado == 'Vendido'
+                        ? Icons.sell
+                        : Icons.delete_outline,
+                    label: estado,
+                    color: estado == 'Vendido' ? Colors.green : Colors.red,
+                    isDark: isDark,
+                  ),
+              ],
+            ),
+          ],
+
+          // Fila 4 (Footer): Vencimiento + Acciones
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // Vencimiento
+              if (fecha != null)
+                Expanded(
+                  child: _buildVencimientoCompacto(
+                    fecha,
+                    diasRestantes,
+                    isDark,
+                  ),
+                )
+              else
+                const Expanded(child: SizedBox()),
+
+              // Acciones
+              if (!mostrarEliminados) ...[
+                InkWell(
+                  onTap: () => editarProducto(context, p),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(
+                      Icons.edit_outlined,
+                      size: 20,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: () => eliminarProducto(context, p),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(
+                      Icons.delete_outline,
+                      size: 20,
+                      color: colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVencimientoCompacto(
+    DateTime fecha,
+    int diasRestantes,
+    bool isDark,
+  ) {
+    Color color;
+    String texto;
+    IconData icon;
+
+    if (diasRestantes < 0) {
+      color = Colors.red;
+      icon = Icons.warning;
+      texto = 'Vencido hace ${-diasRestantes}d';
+    } else if (diasRestantes == 0) {
+      color = Colors.red;
+      icon = Icons.warning;
+      texto = 'Vence hoy';
+    } else if (diasRestantes <= 30) {
+      color = Colors.red;
+      icon = Icons.schedule;
+      texto = '${fecha.day}/${fecha.month}/${fecha.year} ($diasRestantes días)';
+    } else if (diasRestantes <= 60) {
+      color = Colors.orange;
+      icon = Icons.schedule;
+      texto = '${fecha.day}/${fecha.month}/${fecha.year} ($diasRestantes días)';
+    } else {
+      color = Colors.grey;
+      icon = Icons.event;
+      texto = '${fecha.day}/${fecha.month}/${fecha.year} ($diasRestantes días)';
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            texto,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:abari/models/producto_db.dart';
 import 'package:abari/models/payment_method.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -26,69 +25,57 @@ class ProveedorCompra {
 
 /// Item de producto dentro de una compra
 class ProductoCompraItem {
-  final int?
-  idProductoBase; // Puede ser null si es un producto totalmente nuevo
+  final int? idProductoBase; // Puede ser null si es un producto totalmente nuevo
   final int idPresentacion;
+  final int? idUnidadMedida;
   final String nombre;
-  final String tipo;
-  final String medida;
-  final String fechaVencimiento; // YYYY-MM-DD
+  final String codigo;
+  final double cantidadProducto; // cantidad del producto (ej: 500g)
+  final String? fechaVencimiento; // YYYY-MM-DD
   final double precioCompra;
   final double precioVenta;
-  final int cantidad;
+  final int stock; // cuántas unidades se compran
+  final String? categoria;
 
   const ProductoCompraItem({
     this.idProductoBase,
     required this.idPresentacion,
+    this.idUnidadMedida,
     required this.nombre,
-    required this.tipo,
-    required this.medida,
-    required this.fechaVencimiento,
+    required this.codigo,
+    required this.cantidadProducto,
+    this.fechaVencimiento,
     required this.precioCompra,
     required this.precioVenta,
-    required this.cantidad,
+    required this.stock,
+    this.categoria,
   });
 
   ProductoCompraItem copyWith({
     int? idProductoBase,
     int? idPresentacion,
+    int? idUnidadMedida,
     String? nombre,
-    String? tipo,
-    String? medida,
+    String? codigo,
+    double? cantidadProducto,
     String? fechaVencimiento,
     double? precioCompra,
     double? precioVenta,
-    int? cantidad,
+    int? stock,
+    String? categoria,
   }) {
     return ProductoCompraItem(
       idProductoBase: idProductoBase ?? this.idProductoBase,
       idPresentacion: idPresentacion ?? this.idPresentacion,
+      idUnidadMedida: idUnidadMedida ?? this.idUnidadMedida,
       nombre: nombre ?? this.nombre,
-      tipo: tipo ?? this.tipo,
-      medida: medida ?? this.medida,
+      codigo: codigo ?? this.codigo,
+      cantidadProducto: cantidadProducto ?? this.cantidadProducto,
       fechaVencimiento: fechaVencimiento ?? this.fechaVencimiento,
       precioCompra: precioCompra ?? this.precioCompra,
       precioVenta: precioVenta ?? this.precioVenta,
-      cantidad: cantidad ?? this.cantidad,
-    );
-  }
-
-  factory ProductoCompraItem.fromProductoDB(
-    ProductoDB producto, {
-    required int cantidad,
-    required double precioCompra,
-    required double precioVenta,
-  }) {
-    return ProductoCompraItem(
-      idProductoBase: producto.idProducto,
-      idPresentacion: producto.idPresentacion,
-      nombre: producto.nombreProducto,
-      tipo: producto.tipo,
-      medida: producto.medida,
-      fechaVencimiento: producto.fechaVencimiento,
-      precioCompra: precioCompra,
-      precioVenta: precioVenta,
-      cantidad: cantidad,
+      stock: stock ?? this.stock,
+      categoria: categoria ?? this.categoria,
     );
   }
 }
@@ -142,13 +129,13 @@ class CompraProvider extends ChangeNotifier {
   double get totalCosto {
     return _productos.fold(
       0.0,
-      (sum, p) => sum + (p.precioCompra * p.cantidad),
+      (sum, p) => sum + (p.precioCompra * p.stock),
     );
   }
 
   /// Total de venta esperable (usando precioVenta)
   double get totalVentaEsperable {
-    return _productos.fold(0.0, (sum, p) => sum + (p.precioVenta * p.cantidad));
+    return _productos.fold(0.0, (sum, p) => sum + (p.precioVenta * p.stock));
   }
 
   /// Ganancia esperable
@@ -348,20 +335,37 @@ class CompraProvider extends ChangeNotifier {
 
       // 2. Para cada producto en la compra, crear N unidades en tabla producto
       for (final item in _productos) {
-        if (item.cantidad <= 0) continue;
+        if (item.stock <= 0) continue;
 
         // Construimos la lista de filas a insertar en producto
+        // Estructura: estado, id_producto, nombre_producto, id_presentacion, 
+        // fecha_vencimiento, codigo, cantidad, precio_venta, precio_compra, 
+        // fecha_agregado, id_unidad_medida, categoria
         final List<Map<String, dynamic>> filasProducto = List.generate(
-          item.cantidad,
-          (_) => {
-            'nombre_producto': item.nombre,
-            'id_presentacion': item.idPresentacion,
-            'fecha_vencimiento': item.fechaVencimiento,
-            'tipo': item.tipo,
-            'medida': item.medida,
-            'estado': 'Disponible',
-            'precio_venta': item.precioVenta,
-            'precio_compra': item.precioCompra,
+          item.stock,
+          (_) {
+            final Map<String, dynamic> fila = {
+              'nombre_producto': item.nombre,
+              'id_presentacion': item.idPresentacion,
+              'codigo': item.codigo,
+              'cantidad': item.cantidadProducto,
+              'estado': 'Disponible',
+              'precio_venta': item.precioVenta,
+              'precio_compra': item.precioCompra,
+            };
+            
+            // Campos opcionales
+            if (item.fechaVencimiento != null && item.fechaVencimiento!.isNotEmpty) {
+              fila['fecha_vencimiento'] = item.fechaVencimiento;
+            }
+            if (item.idUnidadMedida != null) {
+              fila['id_unidad_medida'] = item.idUnidadMedida;
+            }
+            if (item.categoria != null && item.categoria!.isNotEmpty) {
+              fila['categoria'] = item.categoria;
+            }
+            
+            return fila;
           },
         );
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,10 +13,52 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('ABARI')),
-      drawer: const AppDrawer(),
-      body: child,
+    final currentLocation = GoRouterState.of(context).uri.toString();
+    final isHome = currentLocation == '/home';
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        if (isHome) {
+          // En home, preguntar si quiere salir
+          final shouldExit = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('¿Salir de la aplicación?'),
+              content: const Text('¿Estás seguro de que deseas salir?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Salir'),
+                ),
+              ],
+            ),
+          );
+          if (shouldExit == true) {
+            // Cerrar la app correctamente
+            SystemNavigator.pop();
+          }
+        } else {
+          // En otras pantallas, volver al home
+          context.go('/home');
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('ABARI')),
+        drawer: const AppDrawer(),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 0),
+            child: child,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -28,10 +71,22 @@ class AppDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Drawer(
       child: ListView(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(10),
         children: [
           const DrawerHeader(
-            child: Text('Menú Principal', style: TextStyle(fontSize: 18)),
+            //padding: EdgeInsets.zero,
+            //margin: EdgeInsets.zero,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Text(
+                'Menú Principal',
+                style: TextStyle(
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                ),
+              ),
+            ),
           ),
 
           _buildSection("Principal", [
@@ -46,10 +101,10 @@ class AppDrawer extends StatelessWidget {
 
           const Divider(),
 
-          _buildSection("Recursos humanos", [
+          _buildSection("Recursos Humanos", [
             ('Proveedores', '/proveedores', Icons.corporate_fare),
-            ('Clientes', '/clientes', Icons.verified_user),
-            ('Empleados', '/empleados', Icons.person),
+            ('Clientes', '/clientes', Icons.people),
+            ('Personal', '/empleados', Icons.badge),
           ], context),
 
           const Divider(),

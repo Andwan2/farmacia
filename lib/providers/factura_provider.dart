@@ -40,6 +40,17 @@ class FacturaProvider extends ChangeNotifier {
   bool get clientesCargados => _clientesCargados;
   int get formKey => _formKey;
 
+  /// Obtiene un mapa de código -> cantidad en carrito
+  Map<String, int> get cantidadesPorCodigo {
+    final Map<String, int> cantidades = {};
+    for (var producto in _productos) {
+      // Para productos a granel, convertir a int (se usa solo para mostrar en UI)
+      cantidades[producto.presentacion] =
+          (cantidades[producto.presentacion] ?? 0) + producto.cantidad.toInt();
+    }
+    return cantidades;
+  }
+
   double get total {
     return _productos.fold(
       0.0,
@@ -65,16 +76,31 @@ class FacturaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setCliente(String cliente) {
+  void setCliente(String cliente, {int? clienteId}) {
     _cliente = cliente;
-    // Buscar el ID del cliente
-    if (_clientes.isNotEmpty) {
-      final clienteObj = _clientes.firstWhere(
-        (c) => c.nombreCliente == cliente,
-        orElse: () => _clientes.first,
-      );
-      _clienteId = clienteObj.idCliente;
+    if (clienteId != null) {
+      _clienteId = clienteId;
+    } else if (_clientes.isNotEmpty) {
+      // Buscar el ID del cliente si existe
+      try {
+        final clienteObj = _clientes.firstWhere(
+          (c) => c.nombreCliente == cliente,
+        );
+        _clienteId = clienteObj.idCliente;
+      } catch (_) {
+        // Cliente no encontrado, será creado al guardar
+        _clienteId = null;
+      }
     }
+    notifyListeners();
+  }
+
+  // Datos del cliente nuevo (si aplica)
+  String? _telefonoClienteNuevo;
+  String? get telefonoClienteNuevo => _telefonoClienteNuevo;
+
+  void setDatosClienteNuevo({String? telefono}) {
+    _telefonoClienteNuevo = telefono;
     notifyListeners();
   }
 
@@ -85,18 +111,51 @@ class FacturaProvider extends ChangeNotifier {
   }
 
   // Métodos para productos
-  void agregarProducto(ProductoDB producto, {int cantidad = 1}) {
-    _productos.add(
-      ProductoFactura(
-        idProducto: producto.idProducto,
-        cantidad: cantidad,
-        nombre: producto.nombreProducto,
-        presentacion: producto.tipo,
-        medida: producto.medida,
-        fechaVencimiento: producto.fechaVencimiento,
-        precio: producto.precioVenta ?? 0.0,
-      ),
+  void agregarProducto(
+    ProductoDB producto, {
+    double cantidad = 1,
+    double stockMaximo = 0,
+    bool esGranel = false,
+  }) {
+    // Buscar si ya existe un producto con el mismo código
+    final indexExistente = _productos.indexWhere(
+      (p) => p.presentacion == producto.codigo,
     );
+
+    if (indexExistente != -1) {
+      // Si existe, actualizar la cantidad
+      final existente = _productos[indexExistente];
+      _productos[indexExistente] = ProductoFactura(
+        idProducto: existente.idProducto,
+        cantidad: existente.cantidad + cantidad,
+        nombre: existente.nombre,
+        presentacion: existente.presentacion,
+        medida: existente.medida,
+        fechaVencimiento: existente.fechaVencimiento,
+        precio: existente.precio,
+        precioCompra: existente.precioCompra,
+        stockMaximo: existente.stockMaximo,
+        esGranel: existente.esGranel,
+        unidadMedida: existente.unidadMedida,
+      );
+    } else {
+      // Si no existe, agregar nuevo
+      _productos.add(
+        ProductoFactura(
+          idProducto: producto.idProducto,
+          cantidad: cantidad,
+          nombre: producto.nombreProducto,
+          presentacion: producto.codigo,
+          medida: producto.cantidad.toString(),
+          fechaVencimiento: producto.fechaVencimiento ?? '',
+          precio: producto.precioVenta ?? 0.0,
+          precioCompra: producto.precioCompra ?? 0.0,
+          stockMaximo: stockMaximo,
+          esGranel: esGranel,
+          unidadMedida: producto.abreviaturaUnidad,
+        ),
+      );
+    }
     notifyListeners();
   }
 
@@ -107,7 +166,33 @@ class FacturaProvider extends ChangeNotifier {
     }
   }
 
-  void actualizarCantidad(int index, int cantidad) {
+  /// Actualiza la cantidad de un producto por su código
+  void actualizarCantidadPorCodigo(String codigo, double nuevaCantidad) {
+    final index = _productos.indexWhere((p) => p.presentacion == codigo);
+    if (index != -1) {
+      if (nuevaCantidad <= 0) {
+        _productos.removeAt(index);
+      } else {
+        final producto = _productos[index];
+        _productos[index] = ProductoFactura(
+          idProducto: producto.idProducto,
+          cantidad: nuevaCantidad,
+          nombre: producto.nombre,
+          presentacion: producto.presentacion,
+          medida: producto.medida,
+          fechaVencimiento: producto.fechaVencimiento,
+          precio: producto.precio,
+          precioCompra: producto.precioCompra,
+          stockMaximo: producto.stockMaximo,
+          esGranel: producto.esGranel,
+          unidadMedida: producto.unidadMedida,
+        );
+      }
+      notifyListeners();
+    }
+  }
+
+  void actualizarCantidad(int index, double cantidad) {
     if (index >= 0 && index < _productos.length && cantidad > 0) {
       final producto = _productos[index];
       _productos[index] = ProductoFactura(
@@ -118,6 +203,10 @@ class FacturaProvider extends ChangeNotifier {
         medida: producto.medida,
         fechaVencimiento: producto.fechaVencimiento,
         precio: producto.precio,
+        precioCompra: producto.precioCompra,
+        stockMaximo: producto.stockMaximo,
+        esGranel: producto.esGranel,
+        unidadMedida: producto.unidadMedida,
       );
       notifyListeners();
     }
@@ -125,12 +214,13 @@ class FacturaProvider extends ChangeNotifier {
 
   void limpiarFactura() {
     _fecha = DateTime.now();
-    _metodoPago = '';
-    _metodoPagoId = null;
+    //_metodoPago = '';
+    //_metodoPagoId = null;
     _cliente = '';
     _clienteId = null;
-    _empleado = '';
-    _empleadoId = null;
+    _telefonoClienteNuevo = null;
+    // _empleado = '';
+    // _empleadoId = null;
     _productos.clear();
     _formKey++; // Incrementar key para forzar reconstrucción
     notifyListeners();
@@ -199,14 +289,14 @@ class FacturaProvider extends ChangeNotifier {
   }
 
   // Cargar clientes desde la base de datos
-  Future<void> cargarClientes() async {
+  Future<void> cargarClientes({bool forzar = false}) async {
     print('============================================');
     print('cargarClientes INICIADO');
     print('_isLoadingClientes: $_isLoadingClientes');
     print('_clientesCargados: $_clientesCargados');
     print('============================================');
 
-    if (_isLoadingClientes || _clientesCargados) {
+    if (_isLoadingClientes || (_clientesCargados && !forzar)) {
       print('⚠️ SALIENDO - Ya está cargando o ya fue cargado');
       return;
     }
@@ -271,14 +361,33 @@ class FacturaProvider extends ChangeNotifier {
   }
 
   // Guardar venta en la base de datos
-  Future<String?> guardarVenta() async {
+  Future<String?> guardarVenta({String? telefonoClienteNuevo}) async {
     print('============================================');
     print('GUARDANDO VENTA');
     print('============================================');
 
     try {
-      // 1. Verificar que tenemos todos los IDs necesarios
-      if (_clienteId == null) {
+      // 1. Si el cliente no existe, crearlo primero
+      int? clienteIdFinal = _clienteId;
+
+      if (clienteIdFinal == null && _cliente.isNotEmpty) {
+        print('👤 Creando nuevo cliente: $_cliente');
+        final nuevoCliente = await Supabase.instance.client
+            .from('cliente')
+            .insert({
+              'nombre_cliente': _cliente,
+              'numero_telefono': telefonoClienteNuevo ?? _telefonoClienteNuevo,
+            })
+            .select('id_cliente')
+            .single();
+
+        clienteIdFinal = nuevoCliente['id_cliente'] as int;
+        _clienteId = clienteIdFinal;
+        print('✅ Cliente creado con ID: $clienteIdFinal');
+      }
+
+      // 2. Verificar que tenemos todos los IDs necesarios
+      if (clienteIdFinal == null) {
         return 'Error: ID de cliente no encontrado';
       }
       if (_empleadoId == null) {
@@ -291,20 +400,43 @@ class FacturaProvider extends ChangeNotifier {
       // 2. Verificar stock disponible para cada tipo de producto
       print('📦 Verificando stock disponible...');
       for (var producto in _productos) {
-        final stockDisponible = await Supabase.instance.client
-            .from('producto')
-            .select('id_producto')
-            .eq('tipo', producto.presentacion)
-            .eq('estado', 'Disponible')
-            .count(CountOption.exact);
+        if (producto.esGranel) {
+          // Para productos a granel: verificar campo cantidad
+          final stockResponse = await Supabase.instance.client
+              .from('producto')
+              .select('cantidad')
+              .eq('codigo', producto.presentacion)
+              .eq('estado', 'Disponible');
 
-        final count = stockDisponible.count;
-        print(
-          '   • ${producto.presentacion}: ${producto.cantidad} requeridos, $count disponibles',
-        );
+          final stockTotal = (stockResponse as List).fold<double>(
+            0.0,
+            (sum, p) => sum + ((p['cantidad'] as num?)?.toDouble() ?? 0.0),
+          );
 
-        if (count < producto.cantidad) {
-          return 'Stock insuficiente para ${producto.presentacion}. Disponibles: $count, Requeridos: ${producto.cantidad}';
+          print(
+            '   • ${producto.presentacion} (granel): ${producto.cantidad} ${producto.unidadMedida} requeridos, $stockTotal disponibles',
+          );
+
+          if (stockTotal < producto.cantidad) {
+            return 'Stock insuficiente para ${producto.presentacion}. Disponibles: ${stockTotal.toStringAsFixed(1)} ${producto.unidadMedida}, Requeridos: ${producto.cantidad.toStringAsFixed(1)} ${producto.unidadMedida}';
+          }
+        } else {
+          // Para productos regulares: contar registros
+          final stockDisponible = await Supabase.instance.client
+              .from('producto')
+              .select('id_producto')
+              .eq('codigo', producto.presentacion)
+              .eq('estado', 'Disponible')
+              .count(CountOption.exact);
+
+          final count = stockDisponible.count;
+          print(
+            '   • ${producto.presentacion}: ${producto.cantidad.toInt()} requeridos, $count disponibles',
+          );
+
+          if (count < producto.cantidad.toInt()) {
+            return 'Stock insuficiente para ${producto.presentacion}. Disponibles: $count, Requeridos: ${producto.cantidad.toInt()}';
+          }
         }
       }
 
@@ -312,67 +444,179 @@ class FacturaProvider extends ChangeNotifier {
 
       // 3. Insertar en tabla venta
       print('💾 Insertando venta...');
+      final datosVenta = {
+        'fecha': _fecha.toIso8601String().split('T')[0],
+        'total': total,
+        'id_cliente': clienteIdFinal,
+        'id_empleado': _empleadoId,
+        'payment_method_id': _metodoPagoId,
+      };
+      print('📋 Datos a insertar: $datosVenta');
+
       final ventaResponse = await Supabase.instance.client
           .from('venta')
-          .insert({
-            'fecha': _fecha.toIso8601String().split(
-              'T',
-            )[0], // Solo la fecha YYYY-MM-DD
-            'total': total,
-            'id_cliente': _clienteId,
-            'id_empleado': _empleadoId,
-            'payment_method_id': _metodoPagoId,
-          })
-          .select('id_venta')
+          .insert(datosVenta)
+          .select('id_venta, fecha, total, id_cliente, id_empleado')
           .single();
+
+      print('📋 Respuesta de inserción: $ventaResponse');
 
       final idVenta = ventaResponse['id_venta'] as int;
       print('✅ Venta creada con ID: $idVenta');
 
-      // 4. Para cada tipo de producto, seleccionar productos individuales y marcarlos como vendidos
+      // Esperar un momento para asegurar que la BD se sincronice
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Verificar que la venta existe
+      final verificacion = await Supabase.instance.client
+          .from('venta')
+          .select('id_venta, fecha, total')
+          .eq('id_venta', idVenta)
+          .maybeSingle();
+      print('🔍 Verificación de venta existente: $verificacion');
+
+      if (verificacion == null) {
+        print(
+          '❌ ERROR CRÍTICO: La venta con ID $idVenta NO existe después de insertarla',
+        );
+        print('❌ Esto indica un problema con la base de datos o permisos');
+        return 'Error: La venta no se guardó correctamente en la base de datos';
+      }
+
+      print('✅ Venta verificada correctamente en la base de datos');
+
+      // 4. Para cada tipo de producto, procesar según si es a granel o no
       print('🔄 Procesando productos...');
       for (var producto in _productos) {
         print(
-          '   📦 Procesando: ${producto.presentacion} x${producto.cantidad}',
+          '   📦 Procesando: ${producto.presentacion} x${producto.cantidadFormateada} ${producto.unidadTexto}',
         );
 
-        // Seleccionar N productos disponibles de este tipo (FIFO por fecha_vencimiento)
-        final productosDisponibles = await Supabase.instance.client
-            .from('producto')
-            .select('id_producto')
-            .eq('tipo', producto.presentacion)
-            .eq('estado', 'Disponible')
-            .order('fecha_vencimiento', ascending: true)
-            .limit(producto.cantidad);
+        if (producto.esGranel) {
+          // PRODUCTOS A GRANEL: Reducir el campo cantidad
+          var cantidadRestante = producto.cantidad;
 
-        final idsProductos = (productosDisponibles as List)
-            .map((p) => p['id_producto'] as int)
-            .toList();
+          // Obtener productos a granel ordenados por fecha de vencimiento
+          final productosGranel = await Supabase.instance.client
+              .from('producto')
+              .select('id_producto, cantidad')
+              .eq('codigo', producto.presentacion)
+              .eq('estado', 'Disponible')
+              .order('fecha_vencimiento', ascending: true);
 
-        print('      • IDs seleccionados: $idsProductos');
+          final List<int> idsProductosAfectados = [];
 
-        // Actualizar estado a 'Vendido'
-        await Supabase.instance.client
-            .from('producto')
-            .update({'estado': 'Vendido'})
-            .inFilter('id_producto', idsProductos);
+          for (var p in productosGranel) {
+            if (cantidadRestante <= 0) break;
 
-        print(
-          '      ✅ ${idsProductos.length} productos marcados como Vendidos',
-        );
+            final idProducto = p['id_producto'] as int;
+            final cantidadActual = (p['cantidad'] as num?)?.toDouble() ?? 0.0;
 
-        // Insertar en producto_en_venta
-        final productosEnVenta = idsProductos
-            .map(
-              (idProducto) => {'id_producto': idProducto, 'id_venta': idVenta},
-            )
-            .toList();
+            if (cantidadActual <= cantidadRestante) {
+              // Consumir todo este producto y marcarlo como vendido
+              await Supabase.instance.client
+                  .from('producto')
+                  .update({'estado': 'Vendido', 'cantidad': 0})
+                  .eq('id_producto', idProducto);
 
-        await Supabase.instance.client
-            .from('producto_en_venta')
-            .insert(productosEnVenta);
+              cantidadRestante -= cantidadActual;
+              idsProductosAfectados.add(idProducto);
+              print(
+                '      • Producto $idProducto: consumido completamente (${cantidadActual.toStringAsFixed(1)} ${producto.unidadMedida})',
+              );
+            } else {
+              // Reducir parcialmente este producto
+              final nuevaCantidad = cantidadActual - cantidadRestante;
+              await Supabase.instance.client
+                  .from('producto')
+                  .update({'cantidad': nuevaCantidad})
+                  .eq('id_producto', idProducto);
 
-        print('      ✅ Relaciones creadas en producto_en_venta');
+              idsProductosAfectados.add(idProducto);
+              print(
+                '      • Producto $idProducto: reducido de ${cantidadActual.toStringAsFixed(1)} a ${nuevaCantidad.toStringAsFixed(1)} ${producto.unidadMedida}',
+              );
+              cantidadRestante = 0;
+            }
+          }
+
+          // Insertar en producto_en_venta (solo los productos afectados) con precios históricos
+          print(
+            '      📊 Precios granel: venta=${producto.precio}, compra=${producto.precioCompra}',
+          );
+          final productosEnVenta = idsProductosAfectados
+              .map(
+                (idProducto) => {
+                  'id_producto': idProducto,
+                  'id_venta': idVenta,
+                  'precio_historico': producto.precio,
+                  'costo_historico': producto.precioCompra,
+                },
+              )
+              .toList();
+
+          if (productosEnVenta.isNotEmpty) {
+            print('      📦 Insertando granel: $productosEnVenta');
+            await Supabase.instance.client
+                .from('producto_en_venta')
+                .insert(productosEnVenta);
+          }
+
+          print('      ✅ Producto a granel procesado con precios históricos');
+        } else {
+          // PRODUCTOS REGULARES: Marcar N productos como vendidos
+          final productosDisponibles = await Supabase.instance.client
+              .from('producto')
+              .select('id_producto')
+              .eq('codigo', producto.presentacion)
+              .eq('estado', 'Disponible')
+              .order('fecha_vencimiento', ascending: true)
+              .limit(producto.cantidad.toInt());
+
+          final idsProductos = (productosDisponibles as List)
+              .map((p) => p['id_producto'] as int)
+              .toList();
+
+          print('      • IDs seleccionados: $idsProductos');
+
+          if (idsProductos.isNotEmpty) {
+            // Actualizar estado a 'Vendido'
+            await Supabase.instance.client
+                .from('producto')
+                .update({'estado': 'Vendido'})
+                .inFilter('id_producto', idsProductos);
+
+            print(
+              '      ✅ ${idsProductos.length} productos marcados como Vendidos',
+            );
+
+            // Insertar en producto_en_venta con precios históricos
+            print(
+              '      📊 Precios: venta=${producto.precio}, compra=${producto.precioCompra}',
+            );
+            final productosEnVenta = idsProductos
+                .map(
+                  (idProducto) => {
+                    'id_producto': idProducto,
+                    'id_venta': idVenta,
+                    'precio_historico': producto.precio,
+                    'costo_historico': producto.precioCompra,
+                  },
+                )
+                .toList();
+
+            print('      📦 Insertando: $productosEnVenta');
+            await Supabase.instance.client
+                .from('producto_en_venta')
+                .insert(productosEnVenta);
+
+            print(
+              '      ✅ Relaciones creadas en producto_en_venta con precios históricos',
+            );
+          } else {
+            print('      ⚠️ No se encontraron productos disponibles');
+          }
+        }
       }
 
       print('============================================');

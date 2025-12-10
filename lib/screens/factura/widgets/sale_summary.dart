@@ -20,7 +20,7 @@ class SaleSummary extends StatelessWidget {
       builder: (context, provider, child) {
         final subtotal = provider.total / 1.16;
         final cantidadProductos = provider.productos.length;
-        final cantidadTotal = provider.productos.fold<int>(
+        final cantidadTotal = provider.productos.fold<double>(
           0,
           (sum, producto) => sum + producto.cantidad,
         );
@@ -112,89 +112,83 @@ class SaleSummary extends StatelessWidget {
                     const SizedBox(height: 32),
 
                     // Botones de acción
-                    Row(
+                    Column(
                       children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => _showResetConfirmation(context),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              side: BorderSide(
-                                color: Theme.of(context).colorScheme.error,
-                                width: 2,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
+                        OutlinedButton(
+                          onPressed: () => _showResetConfirmation(context),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.error,
+                              width: 2,
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.refresh,
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Reiniciar',
-                                  style: textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                                ),
-                              ],
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: isValid ? onConfirm : null,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.onPrimary,
-                              disabledBackgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest,
-                              disabledForegroundColor: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.refresh,
+                                color: Theme.of(context).colorScheme.error,
                               ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Reiniciar',
+                                style: textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: isValid ? onConfirm : null,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onPrimary,
+                            disabledBackgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
+                            disabledForegroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.save,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.save,
+                                color: isValid
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Guardar',
+                                style: textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
                                   color: isValid
                                       ? Theme.of(context).colorScheme.onPrimary
                                       : Theme.of(
                                           context,
                                         ).colorScheme.onSurfaceVariant,
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Guardar',
-                                  style: textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: isValid
-                                        ? Theme.of(
-                                            context,
-                                          ).colorScheme.onPrimary
-                                        : Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
