@@ -1,19 +1,19 @@
-import 'package:farmacia_desktop/screens/empleados.dart';
-import 'package:farmacia_desktop/screens/factura/factura_screen.dart';
-import 'package:farmacia_desktop/screens/home_screen.dart';
+import 'package:farmacia_roa/screens/empleados.dart';
+import 'package:farmacia_roa/screens/factura/factura_screen.dart';
+import 'package:farmacia_roa/screens/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:farmacia_desktop/screens/login_screen.dart';
-import 'package:farmacia_desktop/screens/productos.dart';
-import 'package:farmacia_desktop/screens/proveedores.dart';
-import 'package:farmacia_desktop/screens/clientes.dart';
-import 'package:farmacia_desktop/screens/ventas.dart';
-import 'package:farmacia_desktop/screens/reporte_venta_screen.dart';
-import 'package:farmacia_desktop/screens/reporte_compra_screen.dart';
-import 'package:farmacia_desktop/screens/compras.dart';
-import 'package:farmacia_desktop/screens/about.dart';
-import 'package:farmacia_desktop/widgets/app_shell.dart';
+import 'package:farmacia_roa/screens/login_screen.dart';
+import 'package:farmacia_roa/screens/productos.dart';
+import 'package:farmacia_roa/screens/proveedores.dart';
+import 'package:farmacia_roa/screens/clientes.dart';
+import 'package:farmacia_roa/screens/ventas.dart';
+import 'package:farmacia_roa/screens/reporte_venta_screen.dart';
+import 'package:farmacia_roa/screens/reporte_compra_screen.dart';
+import 'package:farmacia_roa/screens/compras.dart';
+import 'package:farmacia_roa/screens/about.dart';
+import 'package:farmacia_roa/widgets/app_shell.dart';
 
 final GoRouter router = GoRouter(
   initialLocation: '/login',

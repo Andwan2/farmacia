@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:farmacia_desktop/modal/agregar_empleado_modal.dart';
-import 'package:farmacia_desktop/modal/editar_empleado_modal.dart';
+import 'package:farmacia_roa/modal/agregar_empleado_modal.dart';
+import 'package:farmacia_roa/modal/editar_empleado_modal.dart';
 
 class EmpleadosScreen extends StatefulWidget {
   const EmpleadosScreen({super.key});

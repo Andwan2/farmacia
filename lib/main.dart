@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:farmacia_desktop/router.dart';
-import 'package:farmacia_desktop/providers/theme_provider.dart';
+import 'package:farmacia_roa/router.dart';
+import 'package:farmacia_roa/providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
-    url: 'https://bezhfrzxsvglxcftwxsj.supabase.co',
+    url: 'https://xnqfsagvjhjlgktggqbg.supabase.co',
     anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlemhmcnp4c3ZnbHhjZnR3eHNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MjM3OTQsImV4cCI6MjA3OTA5OTc5NH0.A1O7KFRTonnbapM2zP5T_V6zfyzIv4-4C_T273v1vW0',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhucWZzYWd2amhqbGdrdGdncWJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NjE0MDEsImV4cCI6MjA4ODEzNzQwMX0.DGlqRJr_bkQjxs9co0fuyRjRqN-loU0SrEH_W2L-7pI',
   );
   runApp(
     ChangeNotifierProvider(
