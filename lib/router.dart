@@ -1,19 +1,19 @@
+import 'package:farmacia_roa/screens/empleados.dart';
+import 'package:farmacia_roa/screens/factura/factura_screen.dart';
+import 'package:farmacia_roa/screens/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-import 'package:farmacia_desktop/screens/login_screen.dart';
-import 'package:farmacia_desktop/screens/home_screen.dart';
-import 'package:farmacia_desktop/screens/inventario_screen.dart';
-import 'package:farmacia_desktop/screens/ventas_registrar_screen.dart';
-import 'package:farmacia_desktop/screens/compras_registrar_screen.dart';
-import 'package:farmacia_desktop/screens/proveedores_screen.dart';
-import 'package:farmacia_desktop/screens/clientes_screen.dart';
-import 'package:farmacia_desktop/screens/empleados_screen.dart';
-import 'package:farmacia_desktop/screens/reportes_ventas_screen.dart';
-import 'package:farmacia_desktop/screens/detalle_ventas_screen.dart';
-import 'package:farmacia_desktop/screens/reportes_compras_screen.dart';
-import 'package:farmacia_desktop/screens/detalle_compras_screen.dart';
+import 'package:farmacia_roa/screens/login_screen.dart';
+import 'package:farmacia_roa/screens/productos.dart';
+import 'package:farmacia_roa/screens/proveedores.dart';
+import 'package:farmacia_roa/screens/clientes.dart';
+import 'package:farmacia_roa/screens/ventas.dart';
+import 'package:farmacia_roa/screens/reporte_venta_screen.dart';
+import 'package:farmacia_roa/screens/reporte_compra_screen.dart';
+import 'package:farmacia_roa/screens/compras.dart';
+import 'package:farmacia_roa/screens/about.dart';
+import 'package:farmacia_roa/widgets/app_shell.dart';
 
 final GoRouter router = GoRouter(
   initialLocation: '/login',
@@ -35,59 +35,52 @@ final GoRouter router = GoRouter(
       builder: (BuildContext context, GoRouterState state) =>
           const LoginScreen(),
     ),
-    GoRoute(
-      path: '/home',
-      builder: (BuildContext context, GoRouterState state) =>
-          const HomeScreen(),
-    ),
-    // Inventario
-    GoRoute(path: '/inventario', builder: (_, __) => const InventarioScreen()),
-    // Ventas
-    GoRoute(path: '/venta', builder: (_, __) => const VentasRegistrarScreen()),
-    // Compras
-    GoRoute(
-      path: '/compra',
-      builder: (_, __) => const ComprasRegistrarScreen(),
-    ),
-    // Proveedores
-    GoRoute(path: '/proveedores', builder: (_, _) => const ProveedoresScreen()),
-    // Clientes
-    GoRoute(path: '/clientes', builder: (_, __) => const ClientesScreen()),
-    // Empleados
-    GoRoute(path: '/empleados', builder: (_, __) => const EmpleadosScreen()),
-    //reportes
-    GoRoute(
-      path: '/reporteVenta',
-      builder: (_, __) => const ReporteVentasScreen(),
-    ),
-    GoRoute(
-      path: '/detalleVenta:id',
-      builder: (context, state) {
-        final id = state.pathParameters['id'];
-        if (id == null) {
-          return const Scaffold(
-            body: Center(child: Text('ID de venta no válido')),
-          );
-        }
-        return DetalleVentaScreen(idVenta: id);
-      },
-    ),
-
-    GoRoute(
-      path: '/reporteCompra',
-      builder: (context, state) => const ReporteComprasScreen(),
-    ),
-    GoRoute(
-      path: '/detalleCompra:id',
-      builder: (context, state) {
-        final id = state.pathParameters['id'];
-        if (id == null || id == 'null') {
-          return const Scaffold(
-            body: Center(child: Text('ID de compra no válido')),
-          );
-        }
-        return DetalleCompraScreen(idCompra: id);
-      },
+    ShellRoute(
+      builder: (context, state, child) => AppShell(child: child),
+      routes: [
+        GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
+        GoRoute(
+          path: '/productos',
+          builder: (context, state) => const ProductosScreen(),
+        ),
+        GoRoute(
+          path: '/empleados',
+          builder: (context, state) => const EmpleadosScreen(),
+        ),
+        GoRoute(
+          path: '/proveedores',
+          builder: (context, state) => const ProveedoresScreen(),
+        ),
+        GoRoute(
+          path: '/clientes',
+          builder: (context, state) => const ClientesScreen(),
+        ),
+        GoRoute(
+          path: '/ventas',
+          builder: (context, state) => const VentasScreen(),
+        ),
+        GoRoute(
+          path: '/reporteVenta',
+          builder: (context, state) => const ReportesVentasScreen(),
+        ),
+        GoRoute(
+          path: '/reporteCompra',
+          builder: (context, state) => const ReportesComprasScreen(),
+        ),
+        GoRoute(
+          path: '/compras',
+          builder: (context, state) => const ComprasScreen(),
+        ),
+        GoRoute(
+          path: '/about',
+          builder: (context, state) => const AboutScreen(),
+        ),
+        GoRoute(
+          path: FacturaScreen.pathName,
+          name: FacturaScreen.routeName,
+          builder: (context, state) => const FacturaScreen(),
+        ),
+      ],
     ),
   ],
   //ESTO HACE COSAS QUE SOLO GPT SABE
@@ -114,8 +107,10 @@ final GoRouter router = GoRouter(
               icon: Icon(Icons.home),
               tooltip: "Inicio",
             ),
-            Text('Ha ocurrido un error, parece que la ruta no existe. Presiona el boton para volver al inicio.'),
-          ]
+            Text(
+              'Ha ocurrido un error, parece que la ruta no existe. Presiona el boton para volver al inicio.',
+            ),
+          ],
         ),
       ),
     );
