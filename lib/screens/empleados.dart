@@ -26,7 +26,8 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     final response = await Supabase.instance.client
         .from('empleado')
         .select(
-          'id_empleado, nombre_empleado, telefono, cargo_empleado(cargo)',
+          // Selecciona los campos reales de la tabla Empleado y la relación con Cargo_Empleado
+          'id_empleado, nombre_empleado, telefono, id_cargo_empleado, cargo_empleado(cargo), id_usuarios',
         );
 
     setState(() {
@@ -41,7 +42,10 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
       filtrados = empleados.where((e) {
         final nombre = e['nombre_empleado']?.toLowerCase() ?? '';
         final cargo = e['cargo_empleado']?['cargo']?.toLowerCase() ?? '';
-        return nombre.contains(query) || cargo.contains(query);
+        final telefono = e['telefono']?.toLowerCase() ?? '';
+        return nombre.contains(query) ||
+            cargo.contains(query) ||
+            telefono.contains(query);
       }).toList();
     });
   }

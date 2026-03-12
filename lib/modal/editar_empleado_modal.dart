@@ -6,14 +6,18 @@ Future<void> mostrarEditarEmpleado(
   Map<String, dynamic> empleado,
   VoidCallback onSuccess,
 ) async {
-  final nombreController = TextEditingController(text: empleado['nombre_empleado'] ?? '');
-  final telefonoController = TextEditingController(text: empleado['telefono'] ?? '');
-  int? idCargoSeleccionado = empleado['id_cargo'] as int?;
+  final nombreController = TextEditingController(
+    text: empleado['nombre_empleado'] ?? '',
+  );
+  final telefonoController = TextEditingController(
+    text: empleado['telefono'] ?? '',
+  );
+  int? idCargoSeleccionado = empleado['id_cargo_empleado'] as int?;
 
   // Cargar cargos para el dropdown
   final cargos = await Supabase.instance.client
       .from('cargo_empleado')
-      .select('id_cargo, cargo');
+      .select('id_cargo_empleado, cargo');
 
   showDialog(
     context: context,
@@ -38,7 +42,7 @@ Future<void> mostrarEditarEmpleado(
                 value: idCargoSeleccionado,
                 items: cargos.map<DropdownMenuItem<int>>((cargo) {
                   return DropdownMenuItem<int>(
-                    value: cargo['id_cargo'] as int,
+                    value: cargo['id_cargo_empleado'] as int,
                     child: Text(cargo['cargo'] as String),
                   );
                 }).toList(),
@@ -60,7 +64,9 @@ Future<void> mostrarEditarEmpleado(
 
               if (nombre.isEmpty || idCargoSeleccionado == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Nombre y cargo son obligatorios')),
+                  const SnackBar(
+                    content: Text('Nombre y cargo son obligatorios'),
+                  ),
                 );
                 return;
               }
@@ -70,7 +76,7 @@ Future<void> mostrarEditarEmpleado(
                   .update({
                     'nombre_empleado': nombre,
                     'telefono': telefono.isEmpty ? null : telefono,
-                    'id_cargo': idCargoSeleccionado,
+                    'id_cargo_empleado': idCargoSeleccionado,
                   })
                   .eq('id_empleado', empleado['id_empleado']);
 

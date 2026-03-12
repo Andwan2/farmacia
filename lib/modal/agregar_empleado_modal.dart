@@ -9,9 +9,10 @@ Future<void> mostrarAgregarEmpleado(
   final telefonoController = TextEditingController();
   int? idCargoSeleccionado;
 
+  // Cargar cargos para el dropdown
   final cargos = await Supabase.instance.client
       .from('cargo_empleado')
-      .select('id_cargo, cargo');
+      .select('id_cargo_empleado, cargo');
 
   showDialog(
     context: context,
@@ -34,8 +35,8 @@ Future<void> mostrarAgregarEmpleado(
               value: idCargoSeleccionado,
               items: cargos.map<DropdownMenuItem<int>>((cargo) {
                 return DropdownMenuItem<int>(
-                  value: cargo['id_cargo'],
-                  child: Text(cargo['cargo']),
+                  value: cargo['id_cargo_empleado'] as int,
+                  child: Text(cargo['cargo'] as String),
                 );
               }).toList(),
               onChanged: (value) => idCargoSeleccionado = value,
@@ -55,16 +56,19 @@ Future<void> mostrarAgregarEmpleado(
 
               if (nombre.isEmpty || idCargoSeleccionado == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Nombre y cargo son obligatorios')),
+                  const SnackBar(
+                    content: Text('Nombre y cargo son obligatorios'),
+                  ),
                 );
                 return;
               }
 
               await Supabase.instance.client.from('empleado').insert({
-                'id_empleado': DateTime.now().millisecondsSinceEpoch,
                 'nombre_empleado': nombre,
                 'telefono': telefono.isEmpty ? null : telefono,
-                'id_cargo': idCargoSeleccionado,
+                'id_cargo_empleado': idCargoSeleccionado,
+                // ⚠️ Recuerda: también necesitas asignar un id_usuarios válido (UUID existente en tu tabla Usuarios)
+                'id_usuarios': Supabase.instance.client.auth.currentUser?.id,
               });
 
               Navigator.pop(context);
